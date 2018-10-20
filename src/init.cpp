@@ -1127,8 +1127,7 @@ void SetupServerArgs() {
         "is ignored unless -rpcallowip is also passed. Port is optional and "
         "overrides -rpcport. Use [host]:port notation for IPv6. This option "
         "can be specified multiple times (default: 127.0.0.1 and ::1 i.e., "
-        "localhost, or if -rpcallowip has been specified, 0.0.0.0 and :: i.e., "
-        "all addresses)",
+        "localhost)",
         ArgsManager::ALLOW_ANY | ArgsManager::NETWORK_ONLY, OptionsCategory::RPC);
     gArgs.AddArg("-rpccookiefile=<loc>",
                  "Location of the auth cookie. Relative paths will be prefixed "
