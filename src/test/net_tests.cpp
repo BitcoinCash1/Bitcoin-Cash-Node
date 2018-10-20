@@ -214,6 +214,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(!addr.IsValid());
     BOOST_REQUIRE(addr.IsIPv4());
 
+    BOOST_CHECK(addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "0.0.0.0");
 
@@ -222,6 +223,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(!addr.IsValid());
     BOOST_REQUIRE(addr.IsIPv4());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "255.255.255.255");
 
@@ -230,6 +232,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(addr.IsValid());
     BOOST_REQUIRE(addr.IsIPv4());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "12.34.56.78");
 
@@ -238,6 +241,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(!addr.IsValid());
     BOOST_REQUIRE(addr.IsIPv6());
 
+    BOOST_CHECK(addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "::");
 
@@ -246,6 +250,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(addr.IsValid());
     BOOST_REQUIRE(addr.IsIPv6());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "1122:3344:5566:7788:9900:aabb:ccdd:eeff");
 
@@ -254,6 +259,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(addr.IsValid());
     BOOST_REQUIRE(addr.IsTor());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "6hzph5hv6337r6p2.onion");
 
@@ -263,6 +269,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(addr.IsValid());
     BOOST_REQUIRE(addr.IsTor());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(!addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), torv3_addr);
 
@@ -287,6 +294,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_basic) {
     BOOST_REQUIRE(!addr.IsValid()); // "internal" is considered invalid
     BOOST_REQUIRE(addr.IsInternal());
 
+    BOOST_CHECK(!addr.IsBindAny());
     BOOST_CHECK(addr.IsAddrV1Compatible());
     BOOST_CHECK_EQUAL(addr.ToString(), "esffpvrt3wpeaygy.internal");
 

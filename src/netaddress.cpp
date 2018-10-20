@@ -278,6 +278,14 @@ CNetAddr::CNetAddr(const struct in6_addr &ipv6Addr, const uint32_t scope) {
     scopeId = scope;
 }
 
+bool CNetAddr::IsBindAny() const {
+    if (!IsIPv4() && !IsIPv6()) {
+        return false;
+    }
+
+    return std::all_of(m_addr.begin(), m_addr.end(), [](uint8_t b) { return b == 0; });
+}
+
 bool CNetAddr::IsIPv4() const {
     return m_net == NET_IPV4;
 }
