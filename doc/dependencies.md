@@ -19,7 +19,7 @@ These dependencies are required:
 | HarfBuzz-NG |  |  |  |  |  |  |  |
 | help2man |  |  |  |  |  | Manpages | Optional, used for building manpages |
 | jemalloc | [5.2.1](https://github.com/jemalloc/jemalloc/releases) |  |  |  |  |
-| libevent | [2.1.8-stable](https://github.com/libevent/libevent/releases) | 2.0.22 | No |  |  |  Networking       | OS independent asynchronous networking |
+| libevent | [2.1.11-stable](https://github.com/libevent/libevent/releases) | 2.0.22 | No |  |  |  Networking       | OS independent asynchronous networking |
 | libjpeg |  |  |  |  | Yes |  |  |
 | libpng |  |  |  |  | Yes |  |  |
 | MiniUPnPc | [2.0.20180203](http://miniupnp.free.fr/files) | 1.5 | No |  |  | UPnP Support     | Firewall-jumping support |
