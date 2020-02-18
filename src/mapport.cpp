@@ -38,9 +38,10 @@ static std::thread g_upnp_thread;
 
 using namespace std::chrono_literals;
 static constexpr auto PORT_MAPPING_REANNOUNCE_PERIOD{20min};
+static constexpr auto PORT_MAPPING_RETRY_PERIOD{5min};
 
-static void ThreadMapPort()
-{
+static bool ProcessUpnp() {
+    bool ret = false;
     std::string port = strprintf("%u", GetListenPort());
     const char * multicastif = nullptr;
     const char * minissdpdpath = nullptr;
@@ -89,12 +90,15 @@ static void ThreadMapPort()
                                     strDesc.c_str(), "TCP", 0, "0");
 
             if (r != UPNPCOMMAND_SUCCESS) {
-                LogPrintf("AddPortMapping(%s, %s, %s) failed with code %d (%s)\n", port, port, lanaddr, r,
-                          strupnperror(r));
+                ret = false;
+                LogPrintf("AddPortMapping(%s, %s, %s) failed with code %d (%s)\n",
+                          port, port, lanaddr, r, strupnperror(r));
             } else {
+                ret = true;
                 LogPrintf("UPnP Port Mapping successful.\n");
             }
         } while (g_upnp_interrupt.sleep_for(PORT_MAPPING_REANNOUNCE_PERIOD));
+        g_upnp_interrupt.reset();
 
         r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", 0);
         LogPrintf("UPNP_DeletePortMapping() returned: %d\n", r);
@@ -107,25 +111,32 @@ static void ThreadMapPort()
             FreeUPNPUrls(&urls);
         }
     }
+
+    return ret;
 }
 
-void StartMapPort()
-{
+static void ThreadMapPort() {
+    do {
+        if (ProcessUpnp()) {
+            return;
+        }
+    } while (g_upnp_interrupt.sleep_for(PORT_MAPPING_RETRY_PERIOD));
+}
+
+void StartMapPort() {
     if (!g_upnp_thread.joinable()) {
         assert(!g_upnp_interrupt);
         g_upnp_thread = std::thread(util::TraceThread, "upnp", ThreadMapPort);
     }
 }
 
-void InterruptMapPort()
-{
+void InterruptMapPort() {
     if(g_upnp_thread.joinable()) {
         g_upnp_interrupt();
     }
 }
 
-void StopMapPort()
-{
+void StopMapPort() {
     if(g_upnp_thread.joinable()) {
         g_upnp_thread.join();
         g_upnp_interrupt.reset();
@@ -133,16 +144,13 @@ void StopMapPort()
 }
 
 #else
-void StartMapPort()
-{
+void StartMapPort() {
   // Intentionally left blank.
 }
-void InterruptMapPort()
-{
+void InterruptMapPort() {
   // Intentionally left blank.
 }
-void StopMapPort()
-{
+void StopMapPort() {
   // Intentionally left blank.
 }
 #endif
