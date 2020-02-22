@@ -103,14 +103,7 @@ namespace {
         }
         void startShutdown() override { StartShutdown(); }
         bool shutdownRequested() override { return ShutdownRequested(); }
-        void mapPort(bool use_upnp) override {
-            if (use_upnp) {
-                StartMapPort();
-            } else {
-                InterruptMapPort();
-                StopMapPort();
-            }
-        }
+        void mapPort(bool use_upnp) override { StartMapPort(use_upnp); }
         void setupServerArgs() override { return SetupServerArgs(); }
         bool getProxy(Network net, proxyType &proxy_info) override {
             return GetProxy(net, proxy_info);
