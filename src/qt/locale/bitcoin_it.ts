@@ -126,7 +126,7 @@
     <message>
       <location line="+1"/>
       <source>There was an error trying to save the address list to %1. Please try again.</source>
-      <translation>Si è verificato un errore tentando di salvare la lista degli indirizzi su %1. Per favore, riprova.</translation>
+      <translation>Si è verificato un errore provando a salvare l'elenco degli indirizzi in %1. Sei pregato di riprovare.</translation>
     </message>
   </context>
   <context>
@@ -177,17 +177,17 @@
     <message>
       <location filename="../askpassphrasedialog.cpp" line="+41"/>
       <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-      <translation>Inserisci la nuova passphrase per il portafoglio.&lt;br/&gt;Per favore, utilizza una passphrase di &lt;b&gt;almeno dieci caratteri casuali&lt;/b&gt; oppure &lt;b&gt;otto o più parole&lt;/b&gt;.</translation>
+      <translation>Inserisci la nuova passphrase nel portafoglio.&lt;br/&gt;Per favore, utilizza una passphrase di &lt;b&gt;almeno dieci caratteri casuali&lt;/b&gt; oppure &lt;b&gt;otto o più parole&lt;/b&gt;.</translation>
     </message>
     <message>
       <location line="+5"/>
       <source>Encrypt wallet</source>
-      <translation>Cifra il portafoglio</translation>
+      <translation>Cripta il portafoglio</translation>
     </message>
     <message>
       <location line="+3"/>
       <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-      <translation>Questa operazione necessita della passphrase per sbloccare il portafoglio.</translation>
+      <translation>Questa operazione necessita della passphrase del tuo portafoglio per sbloccarlo.</translation>
     </message>
     <message>
       <location line="+6"/>
@@ -197,12 +197,12 @@
     <message>
       <location line="+3"/>
       <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-      <translation>Quest'operazione necessita della passphrase per decifrare il portafoglio.</translation>
+      <translation>Questa operazione necessita della passphrase del tuo portafoglio per decriptarlo.</translation>
     </message>
     <message>
       <location line="+6"/>
       <source>Decrypt wallet</source>
-      <translation>Decifra il portafoglio</translation>
+      <translation>Decripta il portafoglio</translation>
     </message>
     <message>
       <location line="+3"/>
@@ -212,7 +212,7 @@
     <message>
       <location line="+1"/>
       <source>Enter the old passphrase and new passphrase to the wallet.</source>
-      <translation>Inserisci la vecchia e la nuova passphrase per il portafoglio.</translation>
+      <translation>Inserisci la vecchia e la nuova passphrase nel portafoglio.</translation>
     </message>
     <message>
       <location line="+48"/>
