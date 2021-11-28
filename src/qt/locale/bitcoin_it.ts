@@ -76,17 +76,17 @@
     <message>
       <location line="+6"/>
       <source>Sending Addresses</source>
-      <translation>Indirizzi di invio</translation>
+      <translation>Indirizzi d'Invio</translation>
     </message>
     <message>
       <location line="+3"/>
       <source>Receiving Addresses</source>
-      <translation>Indirizzi di ricezione</translation>
+      <translation>Indirizzi di Ricezione</translation>
     </message>
     <message>
       <location line="+8"/>
       <source>These are your Bitcoin Cash addresses for sending payments. Always check the amount and the receiving address before sending coins.</source>
-      <translation>Questi sono i tuoi indirizzi Bitcoin Cash per inviare i pagamenti. Controlla sempre l'importo e l'indirizzo di ricezione prima di inviare i fondi.</translation>
+      <translation>Questi sono i tuoi indirizzi Bitcoin Cash per inviare pagamenti. Controlla sempre l'importo e l'indirizzo di ricezione prima di inviare i fondi.</translation>
     </message>
     <message>
       <location line="+8"/>
@@ -96,7 +96,7 @@
     <message>
       <location line="+9"/>
       <source>&amp;Copy Address</source>
-      <translation>&amp;Copia l'indirizzo</translation>
+      <translation>&amp;Copia Indirizzo</translation>
     </message>
     <message>
       <location line="+1"/>
@@ -111,7 +111,7 @@
     <message>
       <location line="+181"/>
       <source>Export Address List</source>
-      <translation>Esporta Lista Indirizzi</translation>
+      <translation>Esporta Elenco degli Indirizzi</translation>
     </message>
     <message>
       <location line="+1"/>
