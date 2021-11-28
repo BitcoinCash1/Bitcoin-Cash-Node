@@ -6,7 +6,7 @@
     <message>
       <location filename="../forms/addressbookpage.ui" line="+37"/>
       <source>Right-click to edit address or label</source>
-      <translation>Premi con il tasto destro del mouse per modificare l'indirizzo o l'etichetta</translation>
+      <translation>Clicca con il tasto destro per modificare l'indirizzo o l'etichetta</translation>
     </message>
     <message>
       <location line="+27"/>
@@ -36,17 +36,17 @@
     <message>
       <location line="-53"/>
       <source>Delete the currently selected address from the list</source>
-      <translation>Rimuovi l'indirizzo attualmente selezionato dalla lista</translation>
+      <translation>Elimina l'indirizzo attualmente selezionato dall'elenco</translation>
     </message>
     <message>
       <location line="-71"/>
       <source>Enter address or label to search</source>
-      <translation>Inserisci un indirizzo o un'etichetta da cercare</translation>
+      <translation>Inserisci indirizzo o etichetta da cercare</translation>
     </message>
     <message>
       <location line="+101"/>
       <source>Export the data in the current tab to a file</source>
-      <translation>Esporta i dati nella scheda attuale su un file</translation>
+      <translation>Esporta i dati della scheda attuale su un file</translation>
     </message>
     <message>
       <location line="+3"/>
@@ -526,22 +526,22 @@
     <message>
       <location line="+11"/>
       <source>Tabs toolbar</source>
-      <translation>Barra degli strumenti</translation>
+      <translation>Barra degli strumenti delle schede</translation>
     </message>
     <message>
       <location line="-176"/>
       <source>Show the list of used sending addresses and labels</source>
-      <translation>Mostra la lista degli indirizzi di invio e delle etichette utilizzati</translation>
+      <translation>Mostra l'elenco degli indirizzi d'invio e le etichette usati</translation>
     </message>
     <message>
       <location line="+5"/>
       <source>Show the list of used receiving addresses and labels</source>
-      <translation>Mostra la lista degli indirizzi di ricezione e delle etichette utilizzati</translation>
+      <translation>Mostra l'elenco degli indirizzi di ricezione e le etichette usati</translation>
     </message>
     <message>
       <location line="+11"/>
       <source>&amp;Command-line options</source>
-      <translation>Opzioni della riga di &amp;comando</translation>
+      <translation>&amp;Opzioni della riga di comando</translation>
     </message>
     <message numerus="yes">
       <location line="+545"/>
@@ -559,7 +559,7 @@
     <message>
       <location line="+2"/>
       <source>Processing blocks on disk...</source>
-      <translation>Processando i blocchi su disco...</translation>
+      <translation>Elaborando i blocchi su disco...</translation>
     </message>
     <message numerus="yes">
       <location line="+19"/>
@@ -3955,7 +3955,7 @@ Nota:  Siccome la commissione è calcolata in base ai byte, una commissione di &
     <message>
       <location line="+2"/>
       <source>Export the data in the current tab to a file</source>
-      <translation>Esporta i dati nella scheda attuale su un file</translation>
+      <translation>Esporta i dati della scheda attuale su un file</translation>
     </message>
     <message>
       <location line="+242"/>
@@ -4343,7 +4343,7 @@ Nota:  Siccome la commissione è calcolata in base ai byte, una commissione di &
     <message>
       <location line="+4"/>
       <source>The specified config file %s does not exist</source>
-      <translation type="unfinished"/>
+      <translation>Il file di configurazione %s specificato non esiste</translation>
     </message>
     <message>
       <location line="+1"/>
