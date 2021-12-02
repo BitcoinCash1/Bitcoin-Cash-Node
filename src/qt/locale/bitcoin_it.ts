@@ -182,7 +182,7 @@
     <message>
       <location line="+5"/>
       <source>Encrypt wallet</source>
-      <translation>Cripta il portafoglio</translation>
+      <translation>Cifra il portafoglio</translation>
     </message>
     <message>
       <location line="+3"/>
@@ -197,12 +197,12 @@
     <message>
       <location line="+3"/>
       <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-      <translation>Questa operazione necessita della passphrase del tuo portafoglio per decriptarlo.</translation>
+      <translation>Questa operazione necessita della passphrase del tuo portafoglio per decifrarlo.</translation>
     </message>
     <message>
       <location line="+6"/>
       <source>Decrypt wallet</source>
-      <translation>Decripta il portafoglio</translation>
+      <translation>Decifra il portafoglio</translation>
     </message>
     <message>
       <location line="+3"/>
@@ -212,7 +212,7 @@
     <message>
       <location line="+1"/>
       <source>Enter the old passphrase and new passphrase to the wallet.</source>
-      <translation>Inserisci la vecchia e la nuova passphrase nel portafoglio.</translation>
+      <translation>Inserisci la vecchia passphrase e la nuova per il portafoglio.</translation>
     </message>
     <message>
       <location line="+48"/>
@@ -290,7 +290,7 @@
       <location line="+46"/>
       <location line="+32"/>
       <source>Warning: The Caps Lock key is on!</source>
-      <translation>Attenzione: Il tasto blocco delle maiuscole è attivo!</translation>
+      <translation>Attenzione: Il Blocco Maiuscole è attivo!</translation>
     </message>
   </context>
   <context>
@@ -346,22 +346,22 @@
     <message>
       <location line="+37"/>
       <source>E&amp;xit</source>
-      <translation>&amp;Esci</translation>
+      <translation>E&amp;sci</translation>
     </message>
     <message>
       <location line="+1"/>
       <source>Quit application</source>
-      <translation>Chiudi applicazione</translation>
+      <translation>Esci dall'applicazione</translation>
     </message>
     <message>
       <location line="+4"/>
       <source>&amp;About %1</source>
-      <translation>&amp;Informazioni su %1</translation>
+      <translation>&amp;Info%1</translation>
     </message>
     <message>
       <location line="+2"/>
       <source>Show information about %1</source>
-      <translation>Mostra informazioni su %1</translation>
+      <translation>Mostra le informazioni su %1</translation>
     </message>
     <message>
       <location line="+5"/>
@@ -401,12 +401,12 @@
     <message>
       <location line="+7"/>
       <source>Sign messages with your Bitcoin Cash addresses to prove you own them</source>
-      <translation>Firma i messaggi con i tuoi indirizzi Bitcoin Cash per dimostrarne la proprietà</translation>
+      <translation>Firma i messaggi con i tuoi indirizzi di Bitcoin Cash per provare che li possiedi</translation>
     </message>
     <message>
       <location line="+5"/>
       <source>Verify messages to ensure they were signed with specified Bitcoin Cash addresses</source>
-      <translation>Verifica i messaggi per assicurare che siano siano stati firmato con gli indirizzi Bitcoin Cash specificati</translation>
+      <translation>Verifica i messaggi per assicurarti che siano stati firmati con gli indirizzi di Bitcoin Cash specificati</translation>
     </message>
     <message>
       <location line="+23"/>
@@ -421,7 +421,7 @@
     <message>
       <location line="+9"/>
       <source>Show the %1 help message to get a list with possible command-line options</source>
-      <translation>Mostra il messaggio di aiuto %1 per ottenere una lista di possibili opzioni per la riga di comando</translation>
+      <translation>Mostra il messaggio d'aiuto %1 per ottenere un elenco con le possibili opzioni della riga di comando</translation>
     </message>
     <message>
       <location line="+82"/>
@@ -441,7 +441,7 @@
     <message>
       <location line="+363"/>
       <source>Click to disable network activity.</source>
-      <translation>Premi per disabilitare le attività di rete.</translation>
+      <translation>Premi per disabilitare l'attività di rete.</translation>
     </message>
     <message>
       <location line="+2"/>
@@ -451,27 +451,27 @@
     <message>
       <location line="+1"/>
       <source>Click to enable network activity again.</source>
-      <translation>Premi per abilitare nuovamente le attività di rete.</translation>
+      <translation>Clicca per riabilitare l'attività di rete.</translation>
     </message>
     <message>
       <location line="+28"/>
       <source>Syncing Headers (%1%)...</source>
-      <translation>Sincronizzazione Header (%1%)...</translation>
+      <translation>Sincronizzando le Intestazioni (%1%)...</translation>
     </message>
     <message>
       <location line="+52"/>
       <source>Reindexing blocks on disk...</source>
-      <translation>Re-indicizzazione dei blocchi su disco...</translation>
+      <translation>Reindicizzando i blocchi su disco...</translation>
     </message>
     <message>
       <location line="+327"/>
       <source>Proxy is &lt;b&gt;enabled&lt;/b&gt;: %1</source>
-      <translation>Proxy &lt;b&gt;abilitato&lt;/b&gt;: %1</translation>
+      <translation>Il proxy è &lt;b&gt;abilitato&lt;/b&gt;: %1</translation>
     </message>
     <message>
       <location line="-1002"/>
       <source>Backup wallet to another location</source>
-      <translation>Effettua il backup del portafoglio in un'altra posizione</translation>
+      <translation>Fai il backup del portafoglio in un'altra posizione</translation>
     </message>
     <message>
       <location line="+5"/>
