@@ -66,7 +66,7 @@
     <message>
       <location line="+4"/>
       <source>Choose the address to receive coins with</source>
-      <translation>Scegli l'indirizzo sul quale ricevere i fondi</translation>
+      <translation>Scegli l'indirizzo con cui ricevere i fondi</translation>
     </message>
     <message>
       <location line="+7"/>
@@ -126,7 +126,7 @@
     <message>
       <location line="+1"/>
       <source>There was an error trying to save the address list to %1. Please try again.</source>
-      <translation>Si è verificato un errore provando a salvare l'elenco degli indirizzi in %1. Sei pregato di riprovare.</translation>
+      <translation>Si è verificato un errore provando a salvare l'elenco degli indirizzi in %1. Per favore, riprova.</translation>
     </message>
   </context>
   <context>
