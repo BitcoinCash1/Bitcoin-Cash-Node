@@ -85,7 +85,7 @@ it is recommended to consult with project maintainers about the desirability
 of the change, so you can be sure they are willing to spend the time required
 to review your work.
 
-### Merge Request Philosophy
+### Merge request philosophy
 
 Patchsets should always be focused. For example, a merge request could add a
 feature, fix a bug, or refactor code; but not a mixture. Please also avoid super
