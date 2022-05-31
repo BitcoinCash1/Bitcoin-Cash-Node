@@ -737,10 +737,16 @@ std::vector<uint8_t> CNetAddr::GetGroup(const std::vector<bool> &asmap) const {
 }
 
 std::vector<uint8_t> CNetAddr::GetAddrBytes() const {
+    std::vector<uint8_t> ret;
     if (IsAddrV1Compatible()) {
-        return SerializeV1Array();
+        const auto v1arr = SerializeV1Array();
+        ret.reserve(v1arr.size());
+        ret.assign(v1arr.begin(), v1arr.end());
+    } else {
+        ret.reserve(m_addr.size());
+        ret.assign(m_addr.begin(), m_addr.end());
     }
-    return std::vector<uint8_t>(m_addr.begin(), m_addr.end());
+    return ret;
 }
 
 uint64_t CNetAddr::GetHash() const {
