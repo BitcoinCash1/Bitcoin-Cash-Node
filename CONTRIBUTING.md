@@ -274,8 +274,6 @@ Here are some handy links for development practices aligned with Bitcoin Cash No
 
     - [Coverage](doc/coverage.md)
 
-    To run benchmarks, see [Benchmarking](doc/benchmarking.md).
-
 ## Working with The Bitcoin Cash Node Repository
 
 A typical workflow would be:
