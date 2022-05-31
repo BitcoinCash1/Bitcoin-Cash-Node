@@ -302,46 +302,52 @@ private:
     /**
      * Serialize in pre-ADDRv2/BIP155 format to an array.
      * Some addresses (e.g. TORv3) cannot be serialized in pre-BIP155 format.
-     * The returned vector is always V1_SERIALIZATION_SIZE bytes (16 bytes).
      */
-    std::vector<uint8_t> SerializeV1Array() const {
-        std::vector<uint8_t> ret;
-        ret.reserve(V1_SERIALIZATION_SIZE);
+    std::array<uint8_t, V1_SERIALIZATION_SIZE> SerializeV1Array() const {
+        std::array<uint8_t, V1_SERIALIZATION_SIZE> arr;
 
         switch (m_net) {
             case NET_IPV6:
-                ret.insert(ret.end(), m_addr.begin(), m_addr.end());
-                break;
-            case NET_IPV4:
-                ret.insert(ret.end(), IPV4_IN_IPV6_PREFIX.begin(), IPV4_IN_IPV6_PREFIX.end());
-                ret.insert(ret.end(), m_addr.begin(), m_addr.end());
-                break;
+                assert(m_addr.size() == arr.size());
+                std::memcpy(arr.data(), m_addr.data(), m_addr.size());
+                return arr;
+            case NET_IPV4: {
+                const size_t prefix_size = IPV4_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == arr.size());
+                std::memcpy(arr.data(), IPV4_IN_IPV6_PREFIX.data(), prefix_size);
+                std::memcpy(arr.data() + prefix_size, m_addr.data(), m_addr.size());
+                return arr;
+            }
             case NET_ONION:
                 if (m_addr.size() == ADDR_TORV3_SIZE) {
                     // Serialize TORv3 as all-zeros.
-                    ret.assign(V1_SERIALIZATION_SIZE, 0);
-                    break;
+                    arr.fill(0);
+                } else {
+                    const size_t prefix_size = TORV2_IN_IPV6_PREFIX.size();
+                    assert(prefix_size + m_addr.size() == arr.size());
+                    std::memcpy(arr.data(), TORV2_IN_IPV6_PREFIX.data(), prefix_size);
+                    std::memcpy(arr.data() + prefix_size, m_addr.data(), m_addr.size());
                 }
-                ret.insert(ret.end(), TORV2_IN_IPV6_PREFIX.begin(), TORV2_IN_IPV6_PREFIX.end());
-                ret.insert(ret.end(), m_addr.begin(), m_addr.end());
-                break;
-            case NET_INTERNAL:
-                ret.insert(ret.end(), INTERNAL_IN_IPV6_PREFIX.begin(), INTERNAL_IN_IPV6_PREFIX.end());
-                ret.insert(ret.end(), m_addr.begin(), m_addr.end());
-                break;
+                return arr;
+            case NET_INTERNAL: {
+                const size_t prefix_size = INTERNAL_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == arr.size());
+                std::memcpy(arr.data(), INTERNAL_IN_IPV6_PREFIX.data(), prefix_size);
+                std::memcpy(arr.data() + prefix_size, m_addr.data(), m_addr.size());
+                return arr;
+            }
             case NET_I2P:
             case NET_CJDNS:
                 // Serialize I2P and CJDNS as all-zeros.
-                ret.assign(V1_SERIALIZATION_SIZE, 0);
-                break;
+                arr.fill(0);
+                return arr;
             case NET_UNROUTABLE:
             case NET_MAX:
-                assert(false);
-                break; // prevent compiler warnings if using -Wimplicit-fallthrough
+                break;
         } // no default case, so the compiler can warn about missing cases
 
-        assert(ret.size() == V1_SERIALIZATION_SIZE);
-        return ret;
+        assert(false);
+        return arr; // not reached
     }
 
     /**
@@ -350,7 +356,7 @@ private:
     template <typename Stream>
     void SerializeV1Stream(Stream &s) const {
         // We write the contents "as if" it were a direct array (fixed size, no compactsize preamble).
-        s << MakeSpan(SerializeV1Array());
+        s << SerializeV1Array();
     }
 
     /**
