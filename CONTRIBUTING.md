@@ -85,7 +85,7 @@ it is recommended to consult with project maintainers about the desirability
 of the change, so you can be sure they are willing to spend the time required
 to review your work.
 
-### Merge Request Philosophy
+### Merge request philosophy
 
 Patchsets should always be focused. For example, a merge request could add a
 feature, fix a bug, or refactor code; but not a mixture. Please also avoid super
@@ -274,8 +274,6 @@ Here are some handy links for development practices aligned with Bitcoin Cash No
 
     - [Coverage](doc/coverage.md)
 
-    To run benchmarks, see [Benchmarking](doc/benchmarking.md).
-
 ## Working with The Bitcoin Cash Node Repository
 
 A typical workflow would be:
@@ -325,6 +323,13 @@ If you are looking for a useful task to contribute to the project, a good place
 to start is the list of issues at [https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/issues](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/issues)
 
 Look for issues marked with a label 'good-first-issue'.
+
+## Bitcoin Cash Node documentation
+
+Find the complete project documentation at [https://docs.bitcoincashnode.org/](https://docs.bitcoincashnode.org/).
+The documentation here is published automatically as part of the development
+release pipeline. See [Publishing documentation](doc/publishing-documentation.md)
+for further details and especially if you plan to work on the documentation.
 
 ## Copyright
 
