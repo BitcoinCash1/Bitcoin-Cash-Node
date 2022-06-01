@@ -326,7 +326,10 @@ Look for issues marked with a label 'good-first-issue'.
 
 ## Bitcoin Cash Node documentation
 
-Find the complete project documentation at [https://docs.bitcoincashnode.org/](https://docs.bitcoincashnode.org/). The documentation here is published automatically as part of the development release pipeline. See [Publishing documentation](doc/publishing-documentation.md) for further details and especially if you plan to work on the documentation.
+Find the complete project documentation at [https://docs.bitcoincashnode.org/](https://docs.bitcoincashnode.org/).
+The documentation here is published automatically as part of the development
+release pipeline. See [Publishing documentation](doc/publishing-documentation.md)
+for further details and especially if you plan to work on the documentation.
 
 ## Copyright
 
