@@ -62,7 +62,7 @@ Make sure you install all the build requirements mentioned above.
 Then, install the toolchain and some additional dependencies:
 
 ```bash
-sudo apt-get install autoconf automake curl g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf gperf pkg-config libtool
+sudo apt-get install autoconf automake curl g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf gperf pkg-config libtool bison
 ```
 
 To build executables for ARM:
@@ -91,7 +91,7 @@ Make sure you install all the build requirements mentioned above.
 Then, install the toolchain and some additional dependencies:
 
 ```bash
-sudo apt-get install autoconf automake curl gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gperf pkg-config libtool
+sudo apt-get install autoconf automake curl gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gperf pkg-config libtool bison
 ```
 
 To build executables for AArch64:
