@@ -134,6 +134,24 @@ can help inspire confidence:
 - Patience for reviewers
 - Appreciation for reviews.
 
+#### Approval of paid merge requests
+
+1. Contributors are welcome to submit merge requests, but they should not
+   expect to be paid for MRs in general, unless...
+
+2. If a contributor expects to be paid for an MR, they should get explicit
+   approval from maintainers before conducting the work. The approval must
+   be documented directly in the issue or MR in the form of maximum
+   approved hours for the work. For example `<Developer> approved for
+   maximum 5 hours on this MR.` In line with maintainers' discretion to
+   close any MR when it does not meet the needs of the project, approval
+   for pay may also be revoked if the work deviates from expectations.
+
+3. Regular contributors in good standing may be informed by maintainers of
+   their trusted status, which grants them the privilege to start paid work
+   without prior approval each time. This status may be revoked at the
+   discretion of the maintainers.
+
 ### Expectations of maintainers
 
 These are guidelines for the normal and expected process for handling merge
