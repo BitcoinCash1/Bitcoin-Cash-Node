@@ -419,7 +419,7 @@ private:
 
         if (SetNetFromBIP155Network(bip155_net, address_size)) {
             m_addr.resize(address_size);
-            s >> MakeSpan(m_addr);
+            s >> Span{m_addr};
 
             if (m_net != NET_IPV6) {
                 return;
@@ -504,7 +504,8 @@ public:
             // serialized form.
             uint8_t dummy[12] = {0};
             READWRITE(dummy);
-            READWRITE(MakeSpan(obj.netmask).first(4));
+            READWRITE(MakeUInt8Span(obj.netmask).first(4));
+            // TODO: replace the above with READWRITE(Span{obj.netmask}.first(4)); MakeUInt8Span is currently only needed due to a Clang bug: https://bugs.llvm.org/show_bug.cgi?id=39663 / https://stackoverflow.com/a/53619324/1678468
         } else {
             READWRITE(obj.netmask);
         }

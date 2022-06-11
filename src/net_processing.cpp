@@ -4022,7 +4022,7 @@ bool PeerLogicValidation::ProcessMessages(const Config &config, CNode *pfrom,
     const uint256 &hash = msg.GetMessageHash();
     if (std::memcmp(hash.data(), hdr.pchChecksum, CMessageHeader::CHECKSUM_SIZE) != 0) {
         LogPrint(BCLog::NET, "%s(%s, %u bytes): CHECKSUM ERROR expected %s was %s from peer=%d\n", __func__,
-                 SanitizeString(msg_type), nMessageSize, HexStr(MakeSpan(hash).first(CMessageHeader::CHECKSUM_SIZE)),
+                 SanitizeString(msg_type), nMessageSize, HexStr(Span{hash}.first(CMessageHeader::CHECKSUM_SIZE)),
                  HexStr(hdr.pchChecksum), pfrom->GetId());
         if (m_banman) {
             m_banman->Discourage(pfrom->addr);

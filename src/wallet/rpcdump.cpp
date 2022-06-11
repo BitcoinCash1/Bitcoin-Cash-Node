@@ -31,7 +31,7 @@ static std::string EncodeDumpString(const std::string &str) {
     std::stringstream ret;
     for (const uint8_t c : str) {
         if (c <= 32 || c >= 128 || c == '%') {
-            ret << '%' << HexStr(Span<const uint8_t>(&c, 1));
+            ret << '%' << HexStr({&c, 1});
         } else {
             ret << c;
         }

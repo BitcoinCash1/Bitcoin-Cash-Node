@@ -212,24 +212,15 @@ public:
     template <typename O> friend class Span;
 };
 
-// MakeSpan helps constructing a Span of the right type automatically.
-/** MakeSpan for arrays: */
-template <typename A, std::size_t N>
-constexpr Span<A> MakeSpan(A (&a)[N]) {
-    return Span<A>(a, N);
-}
-/** MakeSpan for temporaries / rvalue references, only supporting const output. */
-template <typename V>
-constexpr auto MakeSpan(V &&v) ->
-    typename std::enable_if_t<!std::is_lvalue_reference_v<V>,
-                              Span<const typename std::remove_pointer_t<decltype(v.data())>>> {
-    return std::forward<V>(v);
-}
-/** MakeSpan for (lvalue) references, supporting mutable output. */
-template <typename V>
-constexpr auto MakeSpan(V &v) -> Span<typename std::remove_pointer_t<decltype(v.data())>> {
-    return v;
-}
+// Deduction guides for Span
+// For the pointer/size based and iterator based constructor:
+template <typename T, typename EndOrSize> Span(T*, EndOrSize) -> Span<T>;
+// For the array constructor:
+template <typename T, std::size_t N> Span(T (&)[N]) -> Span<T>;
+// For the temporaries/rvalue references constructor, only supporting const output.
+template <typename T> Span(T&&) -> Span<std::enable_if_t<!std::is_lvalue_reference_v<T>, const std::remove_pointer_t<decltype(std::declval<T&&>().data())>>>;
+// For (lvalue) references, supporting mutable output.
+template <typename T> Span(T&) -> Span<std::remove_pointer_t<decltype(std::declval<T&>().data())>>;
 
 // Helper functions to safely cast to uint8_t pointers.
 inline uint8_t *UInt8Cast(char *c) {
@@ -251,8 +242,8 @@ constexpr auto UInt8SpanCast(Span<T> s) -> Span<typename std::remove_pointer_t<d
     return {UInt8Cast(s.data()), s.size()};
 }
 
-/** Like MakeSpan, but for (const) uint8_t member types only. Only works for (un)signed char containers. */
+/** Like the Span constructor, but for (const) uint8_t member types only. Only works for (un)signed char containers. */
 template <typename V>
-constexpr auto MakeUInt8Span(V &&v) -> decltype(UInt8SpanCast(MakeSpan(std::forward<V>(v)))) {
-    return UInt8SpanCast(MakeSpan(std::forward<V>(v)));
+constexpr auto MakeUInt8Span(V&& v) -> decltype(UInt8SpanCast(Span{std::forward<V>(v)})) {
+    return UInt8SpanCast(Span{std::forward<V>(v)});
 }

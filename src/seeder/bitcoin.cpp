@@ -63,7 +63,7 @@ void CSeederNode::EndMessage() {
                     offsetof(CMessageHeader, nMessageSize),
                 &nSize, sizeof(nSize));
     if (vSend.GetVersion() >= INIT_PROTO_VERSION) {
-        uint256 hash = Hash(MakeSpan(vSend).subspan(nMessageStart));
+        uint256 hash = Hash(Span{vSend}.subspan(nMessageStart));
         unsigned int nChecksum = 0;
         std::memcpy(&nChecksum, &hash, sizeof(nChecksum));
         assert(nMessageStart - nHeaderStart >=
@@ -268,7 +268,7 @@ bool CSeederNode::ProcessMessages() {
             break;
         }
         if (vRecv.GetVersion() >= INIT_PROTO_VERSION) {
-            uint256 hash = Hash(MakeSpan(vRecv).first(nMessageSize));
+            uint256 hash = Hash(Span{vRecv}.first(nMessageSize));
             if (std::memcmp(hash.begin(), hdr.pchChecksum,
                             CMessageHeader::CHECKSUM_SIZE) != 0) {
                 continue;

@@ -2901,7 +2901,7 @@ void CConnman::PushMessage(CNode *pnode, CSerializedNetMsg &&msg) {
 
     std::vector<uint8_t> serializedHeader;
     serializedHeader.reserve(CMessageHeader::HEADER_SIZE);
-    uint256 hash = Hash(MakeSpan(msg.data).first(nMessageSize));
+    uint256 hash = Hash(Span{msg.data}.first(nMessageSize));
     CMessageHeader hdr(config->GetChainParams().NetMagic(), msg.m_type.c_str(), nMessageSize);
     memcpy(hdr.pchChecksum, hash.begin(), CMessageHeader::CHECKSUM_SIZE);
 

@@ -203,9 +203,8 @@ void SerializeHDKeypaths(Stream &s,
                          const std::map<CPubKey, KeyOriginInfo> &hd_keypaths,
                          uint8_t type) {
     for (auto keypath_pair : hd_keypaths) {
-        SerializeToVector(s, type, MakeSpan(keypath_pair.first));
-        WriteCompactSize(s, (keypath_pair.second.path.size() + 1) *
-                                sizeof(uint32_t));
+        SerializeToVector(s, type, Span{keypath_pair.first});
+        WriteCompactSize(s, (keypath_pair.second.path.size() + 1) * sizeof(uint32_t));
         s << keypath_pair.second.fingerprint;
         for (const auto &path : keypath_pair.second.path) {
             s << path;
