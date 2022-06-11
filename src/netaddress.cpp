@@ -273,7 +273,7 @@ CNetAddr::CNetAddr(const struct in_addr &ipv4Addr) {
 
 CNetAddr::CNetAddr(const struct in6_addr &ipv6Addr, const uint32_t scope) {
     static_assert(sizeof(ipv6Addr) == ADDR_IPV6_SIZE, "struct in6_addr must be exactly ADDR_IPV6_SIZE bytes (16)");
-    SetLegacyIPv6(Span<const uint8_t>(reinterpret_cast<const uint8_t *>(&ipv6Addr), ADDR_IPV6_SIZE));
+    SetLegacyIPv6({reinterpret_cast<const uint8_t *>(&ipv6Addr), ADDR_IPV6_SIZE});
     scopeId = scope;
 }
 
@@ -387,7 +387,7 @@ bool CNetAddr::IsLocal() const {
 
     // IPv6 loopback (::1/128)
     constexpr uint8_t pchLocal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-    if (IsIPv6() && MakeSpan(m_addr) == MakeSpan(pchLocal)) {
+    if (IsIPv6() && Span{m_addr} == Span{pchLocal}) {
         return true;
     }
 
@@ -408,7 +408,7 @@ bool CNetAddr::IsValid() const
 {
     // unspecified IPv6 address (::/128)
     constexpr uint8_t ipNone6[16] = {};
-    if (IsIPv6() && MakeSpan(m_addr) == MakeSpan(ipNone6)) {
+    if (IsIPv6() && Span{m_addr} == Span{ipNone6}) {
         return false;
     }
 
@@ -615,13 +615,13 @@ uint32_t CNetAddr::GetLinkedIPv4() const {
         return ReadBE32(m_addr.data());
     } else if (IsRFC6052() || IsRFC6145()) {
         // mapped IPv4, SIIT translated IPv4: the IPv4 address is the last 4 bytes of the address
-        return ReadBE32(MakeSpan(m_addr).last(ADDR_IPV4_SIZE).data());
+        return ReadBE32(Span{m_addr}.last(ADDR_IPV4_SIZE).data());
     } else if (IsRFC3964()) {
         // 6to4 tunneled IPv4: the IPv4 address is in bytes 2-6
-        return ReadBE32(MakeSpan(m_addr).subspan(2, ADDR_IPV4_SIZE).data());
+        return ReadBE32(Span{m_addr}.subspan(2, ADDR_IPV4_SIZE).data());
     } else if (IsRFC4380()) {
         // Teredo tunneled IPv4: the IPv4 address is in the last 4 bytes of the address, but bitflipped
-        return ~ReadBE32(MakeSpan(m_addr).last(ADDR_IPV4_SIZE).data());
+        return ~ReadBE32(Span{m_addr}.last(ADDR_IPV4_SIZE).data());
     }
     assert(false);
 }
