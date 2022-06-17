@@ -30,9 +30,9 @@ bool CheckTxInputs(const CTransaction &tx, CValidationState &state,
 } // namespace Consensus
 
 /**
- * Context dependent validity checks for non coinbase transactions. This
- * doesn't check the validity of the transaction against the UTXO set, but
- * simply characteristic that are suceptible to change over time such as feature
+ * Context-dependent validity checks for transactions. This doesn't check the
+ * validity of the transaction against the UTXO set, but simply characteristics
+ * that are susceptible to change over time such as feature
  * activation/deactivation and CLTV.
  */
 bool ContextualCheckTransaction(const Consensus::Params &params,
