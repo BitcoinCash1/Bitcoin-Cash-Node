@@ -40,7 +40,4 @@ search_and_report_if_found "std::filesystem" \
    "Use of std::filesystem detected. This is a problem on OSX 10.14 (gitian build). Use boost::filesystem instead." \
    "*.cpp" "*.h"
 
-search_and_report_if_found "std::variant" \
-   "Use of std::variant detected. This is a problem on OSX 10.14 (gitian build). Use boost::variant instead." \
-   "*.cpp" "*.h"
 exit "${EXIT_CODE}"
