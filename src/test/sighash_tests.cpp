@@ -162,35 +162,6 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
             BOOST_CHECK(shreg == shref);
         }
 
-        // Make sure replay protection works as expected.
-        uint256 shrep = SignatureHash(scriptCode, CTransaction(txTo), nIn,
-                                      sigHashType, Amount::zero(), nullptr,
-                                      SCRIPT_ENABLE_SIGHASH_FORKID);
-        uint32_t newForkValue = 0xff0000 | ((nHashType >> 8) ^ 0xdead);
-        uint256 manualshrep = SignatureHash(
-            scriptCode, CTransaction(txTo), nIn,
-            sigHashType.withForkValue(newForkValue), Amount::zero());
-        BOOST_CHECK(shrep != manualshrep);
-
-        // Replay protection works even if the hash is of the form 0xffxxxx
-        uint256 shrepff = SignatureHash(
-            scriptCode, CTransaction(txTo), nIn,
-            sigHashType.withForkValue(newForkValue), Amount::zero(), nullptr,
-            SCRIPT_ENABLE_SIGHASH_FORKID);
-        uint256 manualshrepff = SignatureHash(
-            scriptCode, CTransaction(txTo), nIn,
-            sigHashType.withForkValue(newForkValue ^ 0xdead), Amount::zero());
-        BOOST_CHECK(shrepff != manualshrepff);
-
-        uint256 shrepabcdef = SignatureHash(
-            scriptCode, CTransaction(txTo), nIn,
-            sigHashType.withForkValue(0xabcdef), Amount::zero(), nullptr,
-            SCRIPT_ENABLE_SIGHASH_FORKID);
-        uint256 manualshrepabcdef =
-            SignatureHash(scriptCode, CTransaction(txTo), nIn,
-                          sigHashType.withForkValue(0xff1342), Amount::zero());
-        BOOST_CHECK(shrepabcdef != manualshrepabcdef);
-
 #if defined(PRINT_SIGHASH_JSON)
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << txTo;
@@ -247,7 +218,6 @@ BOOST_AUTO_TEST_CASE(sighash_from_data) {
             sigHashType = SigHashType(test[3].get_int());
             sigHashRegHex = test[4].get_str();
             sigHashOldHex = test[5].get_str();
-            sigHashRepHex = test[6].get_str();
 
             CDataStream stream(ParseHex(raw_tx), SER_NETWORK, PROTOCOL_VERSION);
             stream >> tx;
@@ -270,11 +240,6 @@ BOOST_AUTO_TEST_CASE(sighash_from_data) {
         uint256 shold = SignatureHash(scriptCode, *tx, nIn, sigHashType,
                                       Amount::zero(), nullptr, 0);
         BOOST_CHECK_MESSAGE(shold.GetHex() == sigHashOldHex, strTest);
-
-        uint256 shrep = SignatureHash(
-            scriptCode, *tx, nIn, sigHashType.withForkValue(0xff0000 | (sigHashType.getForkValue() ^ 0xdead)),
-            Amount::zero(), nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
-        BOOST_CHECK_MESSAGE(shrep.GetHex() == sigHashRepHex, strTest);
     }
 }
 
