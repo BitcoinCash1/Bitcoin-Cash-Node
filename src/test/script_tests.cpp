@@ -1181,21 +1181,21 @@ BOOST_AUTO_TEST_CASE(script_build) {
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK FORKID", SCRIPT_ENABLE_SIGHASH_FORKID, false,
                     TEST_AMOUNT)
-            .PushSigECDSA(keys.key0, SigHashType().withForkId(), 32, 32,
+            .PushSigECDSA(keys.key0, SigHashType().withFork(), 32, 32,
                           TEST_AMOUNT));
 
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK INVALID AMOUNT", SCRIPT_ENABLE_SIGHASH_FORKID, false,
                     TEST_AMOUNT)
-            .PushSigECDSA(keys.key0, SigHashType().withForkId(), 32, 32,
+            .PushSigECDSA(keys.key0, SigHashType().withFork(), 32, 32,
                           TEST_AMOUNT + SATOSHI)
             .SetScriptError(ScriptError::EVAL_FALSE));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK INVALID FORKID", SCRIPT_VERIFY_STRICTENC, false,
                     TEST_AMOUNT)
-            .PushSigECDSA(keys.key0, SigHashType().withForkId(), 32, 32,
+            .PushSigECDSA(keys.key0, SigHashType().withFork(), 32, 32,
                           TEST_AMOUNT)
             .SetScriptError(ScriptError::ILLEGAL_FORKID));
 
@@ -1627,18 +1627,18 @@ BOOST_AUTO_TEST_CASE(script_build) {
             .SetScriptError(ScriptError::EVAL_FALSE));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1) << OP_CHECKSIG,
-                    "Schnorr P2PK with forkID",
+                    "Schnorr P2PK with fork sig",
                     SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID)
-            .PushSigSchnorr(keys.key1, SigHashType().withForkId()));
+            .PushSigSchnorr(keys.key1, SigHashType().withFork()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1) << OP_CHECKSIG,
-                    "Schnorr P2PK with non-forkID sig",
+                    "Schnorr P2PK with non-fork sig",
                     SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID)
             .PushSigSchnorr(keys.key1)
             .SetScriptError(ScriptError::MUST_USE_FORKID));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1) << OP_CHECKSIG,
-                    "Schnorr P2PK with cheater forkID bit",
+                    "Schnorr P2PK with cheater fork bit",
                     SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID)
             .PushSigSchnorr(keys.key1)
             .EditPush(64, "01", "41")
@@ -2787,7 +2787,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     auto const context = std::nullopt;
 
     // Single signature case:
-    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withForkId(), context));
+    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(), context));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
     BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
@@ -2796,7 +2796,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     SignatureData scriptSigCopy = scriptSig;
 
     // Signing again will give a different, valid signature:
-    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withForkId(), context));
+    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(), context));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined.scriptSig == scriptSigCopy.scriptSig ||
@@ -2807,14 +2807,14 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     pkSingle << ToByteVector(keys[0].GetPubKey()) << OP_CHECKSIG;
     BOOST_CHECK(keystore.AddCScript(pkSingle));
     scriptPubKey = GetScriptForDestination(CScriptID(pkSingle));
-    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withForkId(), context));
+    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(), context));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
     BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
     combined = CombineSignatures(txFrom.vout[0], txTo, empty, scriptSig);
     BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
     scriptSigCopy = scriptSig;
-    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withForkId(), context));
+    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(), context));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined.scriptSig == scriptSigCopy.scriptSig ||
@@ -2823,7 +2823,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     // Hardest case:  Multisig 2-of-3
     scriptPubKey = GetScriptForMultisig(2, pubkeys);
     BOOST_CHECK(keystore.AddCScript(scriptPubKey));
-    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withForkId(), context));
+    BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(), context));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
     BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
@@ -2832,20 +2832,20 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
 
     // A couple of partially-signed versions:
     std::vector<uint8_t> sig1;
-    uint256 hash1 = SignatureHash(scriptPubKey, CTransaction(txTo), 0, SigHashType().withForkId(), Amount::zero());
+    uint256 hash1 = SignatureHash(scriptPubKey, CTransaction(txTo), 0, SigHashType().withFork(), Amount::zero());
     BOOST_CHECK(keys[0].SignECDSA(hash1, sig1));
     sig1.push_back(SIGHASH_ALL | SIGHASH_FORKID);
     std::vector<uint8_t> sig2;
     uint256 hash2 = SignatureHash(
         scriptPubKey, CTransaction(txTo), 0,
-        SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),
+        SigHashType().withBaseType(BaseSigHashType::NONE).withFork(),
         Amount::zero());
     BOOST_CHECK(keys[1].SignECDSA(hash2, sig2));
     sig2.push_back(SIGHASH_NONE | SIGHASH_FORKID);
     std::vector<uint8_t> sig3;
     uint256 hash3 = SignatureHash(
         scriptPubKey, CTransaction(txTo), 0,
-        SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId(),
+        SigHashType().withBaseType(BaseSigHashType::SINGLE).withFork(),
         Amount::zero());
     BOOST_CHECK(keys[2].SignECDSA(hash3, sig3));
     sig3.push_back(SIGHASH_SINGLE | SIGHASH_FORKID);

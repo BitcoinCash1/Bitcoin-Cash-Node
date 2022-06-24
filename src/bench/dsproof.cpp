@@ -44,7 +44,7 @@ static void DoubleSpendProofCreate(benchmark::State &state) {
     std::optional<CTxOut> commonTxOut;
 
     // Sign transactions properly
-    const SigHashType sigHashType = SigHashType().withForkId();
+    const SigHashType sigHashType = SigHashType().withFork();
     FlatSigningProvider keyStore;
     keyStore.pubkeys.emplace(privKey.GetPubKey().GetID(), privKey.GetPubKey());
     keyStore.keys.emplace(privKey.GetPubKey().GetID(), privKey);

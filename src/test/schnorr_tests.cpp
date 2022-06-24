@@ -106,14 +106,14 @@ BOOST_AUTO_TEST_CASE(opcodes_random_flags) {
     for (int i = 0; i < 4096; i++) {
         uint32_t flags = lcg.next();
 
-        const bool hasForkId = (flags & SCRIPT_ENABLE_SIGHASH_FORKID) != 0;
+        const bool hasFork = (flags & SCRIPT_ENABLE_SIGHASH_FORKID) != 0;
         const bool hasNullFail = (flags & SCRIPT_VERIFY_NULLFAIL) != 0;
 
         // Prepare 65-byte transaction sigs with right hashtype byte.
         valtype DER64_with_hashtype =
-            SignatureWithHashType(DER64, SigHashType().withForkId(hasForkId));
+            SignatureWithHashType(DER64, SigHashType().withFork(hasFork));
         valtype Zero64_with_hashtype =
-            SignatureWithHashType(Zero64, SigHashType().withForkId(hasForkId));
+            SignatureWithHashType(Zero64, SigHashType().withFork(hasFork));
 
         // Test CHECKSIG & CHECKDATASIG with he non-DER sig, which can fail from
         // encoding, otherwise upon verification.

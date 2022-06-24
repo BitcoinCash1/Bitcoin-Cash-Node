@@ -2854,7 +2854,7 @@ bool CWallet::SignTransaction(CMutableTransaction &tx) {
             mi->second.tx->vout[input.prevout.GetN()].scriptPubKey;
         const Amount amount = mi->second.tx->vout[input.prevout.GetN()].nValue;
         SignatureData sigdata;
-        SigHashType sigHashType = SigHashType().withForkId();
+        SigHashType sigHashType = SigHashType().withFork();
 
         auto const context = std::nullopt; // No introspection for wallet coins (wallet cannot sign smart contracts)
 
@@ -3397,7 +3397,7 @@ CreateTransactionResult CWallet::CreateTransaction(
         }
 
         if (sign) {
-            SigHashType sigHashType = SigHashType().withForkId();
+            SigHashType sigHashType = SigHashType().withFork();
             unsigned int nIn = 0;
             for (const auto &coin : selected_coins) {
                 const CScript &scriptPubKey = coin.txout.scriptPubKey;

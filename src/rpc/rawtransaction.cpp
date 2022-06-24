@@ -894,7 +894,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
     }
 
     SigHashType sigHashType = ParseSighashString(hashType);
-    if (!sigHashType.hasForkId()) {
+    if (!sigHashType.hasFork()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
                            "Signature must use SIGHASH_FORKID");
     }

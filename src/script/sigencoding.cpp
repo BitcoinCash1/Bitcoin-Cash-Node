@@ -218,13 +218,13 @@ static bool CheckSighashEncoding(const valtype &vchSig, uint32_t flags,
             return set_error(serror, ScriptError::SIG_HASHTYPE);
         }
 
-        bool usesForkId = GetHashType(vchSig).hasForkId();
-        bool forkIdEnabled = flags & SCRIPT_ENABLE_SIGHASH_FORKID;
-        if (!forkIdEnabled && usesForkId) {
+        bool usesFork = GetHashType(vchSig).hasFork();
+        bool forkEnabled = flags & SCRIPT_ENABLE_SIGHASH_FORKID;
+        if (!forkEnabled && usesFork) {
             return set_error(serror, ScriptError::ILLEGAL_FORKID);
         }
 
-        if (forkIdEnabled && !usesForkId) {
+        if (forkEnabled && !usesFork) {
             return set_error(serror, ScriptError::MUST_USE_FORKID);
         }
     }

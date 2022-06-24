@@ -120,7 +120,7 @@ void Check(const std::string &prv, const std::string &pub, int flags,
                     BOOST_CHECK_MESSAGE(
                         SignSignature(Merge(keys_priv, script_provider),
                                       spks[n], spend, 0, 1 * COIN,
-                                      SigHashType().withForkId(), null_context),
+                                      SigHashType().withFork(), null_context),
                         prv);
                 }
             }

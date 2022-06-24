@@ -580,7 +580,7 @@ static Amount AmountFromValue(const UniValue &value) {
 }
 
 static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
-    SigHashType sigHashType = SigHashType().withForkId();
+    SigHashType sigHashType = SigHashType().withFork();
 
     if ((flagStr.size() > 0) && !findSigHashFlags(sigHashType, flagStr)) {
         throw std::runtime_error("unknown sighash flag/sign option");

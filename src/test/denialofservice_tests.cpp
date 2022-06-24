@@ -522,7 +522,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans) {
         tx.vout[0].nValue = 1 * CENT;
         tx.vout[0].scriptPubKey =
             GetScriptForDestination(key.GetPubKey().GetID());
-        BOOST_CHECK(SignSignature(keystore, *txPrev, tx, 0, SigHashType().withForkId(), null_context));
+        BOOST_CHECK(SignSignature(keystore, *txPrev, tx, 0, SigHashType().withFork(), null_context));
 
         LOCK(internal::g_cs_orphans);
         internal::AddOrphanTx(MakeTransactionRef(tx), i);
@@ -543,7 +543,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans) {
         for (size_t j = 0; j < tx.vin.size(); j++) {
             tx.vin[j].prevout = COutPoint(txPrev->GetId(), j);
         }
-        BOOST_CHECK(SignSignature(keystore, *txPrev, tx, 0, SigHashType().withForkId(), null_context));
+        BOOST_CHECK(SignSignature(keystore, *txPrev, tx, 0, SigHashType().withFork(), null_context));
         // Re-use same signature for other inputs
         // (they don't have to be valid for this test)
         for (unsigned int j = 1; j < tx.vin.size(); j++) {
