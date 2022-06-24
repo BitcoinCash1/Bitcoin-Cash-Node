@@ -77,7 +77,7 @@ static void CleanupScriptCode(CScript &scriptCode,
                               uint32_t flags) {
     // Drop the signature in scripts when SIGHASH_FORKID is not used.
     SigHashType sigHashType = GetHashType(vchSig);
-    if (!(flags & SCRIPT_ENABLE_SIGHASH_FORKID) || !sigHashType.hasForkId()) {
+    if (!(flags & SCRIPT_ENABLE_SIGHASH_FORKID) || !sigHashType.hasFork()) {
         FindAndDelete(scriptCode, CScript(vchSig));
     }
 }
@@ -1699,7 +1699,7 @@ uint256 SignatureHash(const CScript &scriptCode, const T &txTo,
                       const PrecomputedTransactionData *cache, uint32_t flags) {
     assert(nIn < txTo.vin.size());
 
-    if (sigHashType.hasForkId() && (flags & SCRIPT_ENABLE_SIGHASH_FORKID)) {
+    if (sigHashType.hasFork() && (flags & SCRIPT_ENABLE_SIGHASH_FORKID)) {
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;

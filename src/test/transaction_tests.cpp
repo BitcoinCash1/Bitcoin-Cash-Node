@@ -372,7 +372,7 @@ static void CreateCreditAndSpend(const CKeyStore &keystore,
     inputm.vout[0].scriptPubKey = CScript();
 
     auto const context = std::nullopt;
-    bool ret = SignSignature(keystore, *output, inputm, 0, SigHashType().withForkId(), context);
+    bool ret = SignSignature(keystore, *output, inputm, 0, SigHashType().withFork(), context);
 
     BOOST_CHECK_EQUAL(ret, success);
     CDataStream ssin(SER_NETWORK, PROTOCOL_VERSION);
@@ -930,7 +930,7 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         noppyScriptPubKey << OP_IF << OP_NOP10 << OP_ENDIF << OP_1;
         funding_tx_1.vout[0].scriptPubKey = noppyScriptPubKey;
         std::vector<uint8_t> fundingVchSig;
-        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_1), 0, SigHashType().withForkId(), m_coinbase_txns[0]->vout[0].nValue);
+        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_1), 0, SigHashType().withFork(), m_coinbase_txns[0]->vout[0].nValue);
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_1.vin[0].scriptSig << fundingVchSig;
@@ -954,7 +954,7 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         noppyScriptPubKey << OP_IF << OP_NOP10 << OP_ENDIF << OP_1;
         funding_tx_2.vout[0].scriptPubKey = noppyScriptPubKey;
         std::vector<uint8_t> fundingVchSig;
-        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_2), 0, SigHashType().withForkId(), m_coinbase_txns[0]->vout[0].nValue);
+        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_2), 0, SigHashType().withFork(), m_coinbase_txns[0]->vout[0].nValue);
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_2.vin[0].scriptSig << fundingVchSig;

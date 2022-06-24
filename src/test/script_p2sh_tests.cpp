@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(sign) {
     for (int i = 0; i < 8; i++) {
         BOOST_CHECK_MESSAGE(SignSignature(keystore, CTransaction(txFrom),
                                           txTo[i], 0,
-                                          SigHashType().withForkId(), null_context),
+                                          SigHashType().withFork(), null_context),
                             strprintf("SignSignature %d", i));
     }
 
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(set) {
     for (int i = 0; i < 4; i++) {
         BOOST_CHECK_MESSAGE(SignSignature(keystore, CTransaction(txFrom),
                                           txTo[i], 0,
-                                          SigHashType().withForkId(), null_context),
+                                          SigHashType().withFork(), null_context),
                             strprintf("SignSignature %d", i));
         BOOST_CHECK_MESSAGE(IsStandardTx(CTransaction(txTo[i]), reason), strprintf("txTo[%d].IsStandard", i));
     }
@@ -400,11 +400,11 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard) {
 
     auto const null_context = std::nullopt; //It is Ok to have a null context here.
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0,
-                              SigHashType().withForkId(), null_context));
+                              SigHashType().withFork(), null_context));
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 1,
-                              SigHashType().withForkId(), null_context));
+                              SigHashType().withFork(), null_context));
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 2,
-                              SigHashType().withForkId(), null_context));
+                              SigHashType().withFork(), null_context));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

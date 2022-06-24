@@ -3187,21 +3187,21 @@
     "0x41 0x048282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f5150811f8a8098557dfe45e8256e830b60ace62d613ac2f7b17bed31b6eaff6e26caf CHECKSIG",
     "SIGHASH_FORKID,STRICTENC",
     "OK",
-    "Schnorr P2PK with forkID"
+    "Schnorr P2PK with fork sig"
 ],
 [
     "0x41 0x3cf1b3f60b74d0821039f7dc7c21abe3119b9d94ae13f5e5258a8269bee9dfc51c84dbb3ba3eff82de61046f6cfef22ea5cf4a46e3776a5fb35d743aea310f6701",
     "0x41 0x048282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f5150811f8a8098557dfe45e8256e830b60ace62d613ac2f7b17bed31b6eaff6e26caf CHECKSIG",
     "SIGHASH_FORKID,STRICTENC",
     "MISSING_FORKID",
-    "Schnorr P2PK with non-forkID sig"
+    "Schnorr P2PK with non-fork sig"
 ],
 [
     "0x41 0x3cf1b3f60b74d0821039f7dc7c21abe3119b9d94ae13f5e5258a8269bee9dfc51c84dbb3ba3eff82de61046f6cfef22ea5cf4a46e3776a5fb35d743aea310f6741",
     "0x41 0x048282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f5150811f8a8098557dfe45e8256e830b60ace62d613ac2f7b17bed31b6eaff6e26caf CHECKSIG",
     "SIGHASH_FORKID,STRICTENC",
     "EVAL_FALSE",
-    "Schnorr P2PK with cheater forkID bit"
+    "Schnorr P2PK with cheater fork bit"
 ],
 [
     "0x09 0x300602010702010701 0x21 0x03a7bcb86f12d0635c850b6f0c945e4b4fcb400092a74b8d7e83275eb562d9fbb6",

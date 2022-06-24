@@ -4300,7 +4300,7 @@ static UniValue walletprocesspsbt(const Config &config,
 
     // Get the sighash type
     SigHashType nHashType = ParseSighashString(request.params[2]);
-    if (!nHashType.hasForkId()) {
+    if (!nHashType.hasFork()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
                            "Signature must use SIGHASH_FORKID");
     }
@@ -4426,7 +4426,7 @@ static UniValue walletcreatefundedpsbt(const Config &config,
     // Fill transaction with out data but don't sign
     bool bip32derivs =
         request.params[4].isNull() ? false : request.params[4].get_bool();
-    FillPSBT(pwallet, psbtx, SigHashType().withForkId(), false, bip32derivs);
+    FillPSBT(pwallet, psbtx, SigHashType().withFork(), false, bip32derivs);
 
     // Serialize the PSBT
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);

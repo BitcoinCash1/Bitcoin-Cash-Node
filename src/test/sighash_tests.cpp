@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
 #if defined(PRINT_SIGHASH_JSON)
     std::cout << "[\n";
     std::cout << "\t[\"raw_transaction, script, input_index, hashType, "
-                 "signature_hash (regular), signature_hash(no forkid), "
+                 "signature_hash (regular), signature_hash(no fork), "
                  "signature_hash(replay protected)\"],\n";
 #endif
 
@@ -151,10 +151,10 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
                                       sigHashType, Amount::zero(), nullptr, 0);
         BOOST_CHECK(shold == shref);
 
-        // Check the impact of the forkid flag.
+        // Check the impact of the fork flag.
         uint256 shreg = SignatureHash(scriptCode, CTransaction(txTo), nIn,
                                       sigHashType, Amount::zero());
-        if (sigHashType.hasForkId()) {
+        if (sigHashType.hasFork()) {
             BOOST_CHECK(nHashType & SIGHASH_FORKID);
             BOOST_CHECK(shreg != shref);
         } else {
