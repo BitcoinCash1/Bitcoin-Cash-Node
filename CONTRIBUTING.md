@@ -292,6 +292,10 @@ Here are some handy links for development practices aligned with Bitcoin Cash No
 
     - [Coverage](doc/coverage.md)
 
+    To run HTML documenation generation locally, you'll need the `mkdocs` and `mkdocs-material` Python packages as covered in:
+
+    - [Publishing documentation](doc/publishing-documentation.md)
+
 ## Working with The Bitcoin Cash Node Repository
 
 A typical workflow would be:
