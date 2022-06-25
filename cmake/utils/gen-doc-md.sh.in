@@ -17,6 +17,7 @@ find . \( \
   -o -path './contrib/*.md' \
   -o -path './depends/*.md' \
   -o -path './share/*.md' \
+  -o -path './share/examples/*' \
   -o -path './src/*.md' \
   -o -path './test/*.md' \
   -o -path './doc/*.md' \
