@@ -15,7 +15,7 @@ While all documents in the git tree are published, they need to be
 manually added to the navigation menu.
 
 To do this, add it to the appropriate subsection under the `nav:` section
-of `/doc/mkdocs.yml`.
+of `/doc/mkdocs.yml.in`.
 
 ## Testing changes locally
 
