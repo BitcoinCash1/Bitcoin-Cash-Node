@@ -273,8 +273,6 @@ class BlockSigChecksTest(BitcoinTestFramework):
 
         self.log.info("Try sending 8000-sigcheck block (limit: {})".format(
             EXCESSIVEBLOCKSIZE // BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO))
-        # redundant, but just to mirror the following test...
-        node.setexcessiveblock(EXCESSIVEBLOCKSIZE)
         badblock = self.build_block(
             tip, submittxes_2[:40], nTime=tip.nTime + 8)
         check_for_ban_on_rejected_block(
@@ -282,7 +280,13 @@ class BlockSigChecksTest(BitcoinTestFramework):
 
         self.log.info("Bump the excessiveblocksize limit by 1 byte, and send another block with same txes (new sigchecks limit: {})".format(
             (EXCESSIVEBLOCKSIZE + 1) // BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO))
-        node.setexcessiveblock(EXCESSIVEBLOCKSIZE + 1)
+        self.stop_node(0)
+        self.extra_args = [['-acceptnonstdtxn=1',
+                            "-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE + 1),
+                            "-blockmaxsize={}".format(MAXGENERATEDBLOCKSIZE)]]
+        self.start_node(0)
+        node.add_p2p_connection(P2PDataStore())
+        self.sync_all()
         tip = self.build_block(
             tip, submittxes_2[:40], nTime=tip.nTime + 9)
         # It should succeed now since limit should be 8000.

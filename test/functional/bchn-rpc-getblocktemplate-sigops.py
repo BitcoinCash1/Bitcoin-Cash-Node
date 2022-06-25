@@ -80,18 +80,14 @@ class GetBlockTemplateSigopsTest(BitcoinTestFramework):
         self.assert_case("when above the DEFAULT_EXCESSIVE_BLOCK_SIZE", 1, target_size)
 
         # When at the upper boundary
-        self.reinit_node(1, [])
         upper_boundary = MAX_EXCESSIVE_BLOCK_SIZE
-        self.nodes[1].setexcessiveblock(upper_boundary)
+        self.reinit_node(1, ["-excessiveblocksize=" + str(upper_boundary)])
         self.assert_case("when at the upper boundary", 1, upper_boundary)
 
         # When somewhere below upper boundary
         target_size = int(upper_boundary * 0.67)
-        self.nodes[1].setexcessiveblock(target_size)
+        self.reinit_node(1, ["-excessiveblocksize=" + str(target_size)])
         self.assert_case("when somewhere below the upper boundary", 1, target_size)
-
-        # reset to default before exit
-        self.nodes[1].setexcessiveblock(DEFAULT_EXCESSIVE_BLOCK_SIZE)
 
 
 if __name__ == '__main__':
