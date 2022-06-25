@@ -61,4 +61,4 @@ Windows | `%APPDATA%\Bitcoin\` | `C:\Users\username\AppData\Roaming\Bitcoin\bitc
 Linux | `$HOME/.bitcoin/` | `/home/username/.bitcoin/bitcoin.conf`
 macOS | `$HOME/Library/Application Support/Bitcoin/` | `/Users/username/Library/Application Support/Bitcoin/bitcoin.conf`
 
-You can find an example bitcoin.conf file in [share/examples/bitcoin.conf](../share/examples/bitcoin.conf).
+You can find an example bitcoin.conf file at [share/examples/bitcoin.conf](../share/examples/bitcoin.conf).

@@ -216,6 +216,7 @@ nav:
       - Responsible disclosure: DISCLOSURE_POLICY.md
   - Miscellaneous:
       - List of files: doc/files.md
+      - bitcoin.conf Configuration File: doc/bitcoin-conf.md
       - Init scripts: doc/init.md
       - Tor support: doc/tor.md
       - Traffic reduction: doc/reduce-traffic.md
