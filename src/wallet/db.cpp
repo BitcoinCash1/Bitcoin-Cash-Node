@@ -13,8 +13,6 @@
 #include <util/system.h>
 #include <wallet/walletutil.h>
 
-#include <boost/thread.hpp> // boost::this_thread::interruption_point() (mingw)
-
 #include <cstdint>
 #ifndef WIN32
 #include <sys/stat.h>
@@ -186,8 +184,6 @@ bool BerkeleyEnvironment::Open(bool retry) {
         return true;
     }
 
-    boost::this_thread::interruption_point();
-
     fs::path pathIn = strPath;
     TryCreateDirectories(pathIn);
     if (!LockDirectory(pathIn, ".walletlock")) {
@@ -268,8 +264,6 @@ bool BerkeleyEnvironment::Open(bool retry) {
 //! place-holder for g_dbenvs emplace
 BerkeleyEnvironment::BerkeleyEnvironment() {
     Reset();
-
-    boost::this_thread::interruption_point();
 
     LogPrint(BCLog::DB, "BerkeleyEnvironment::MakeMock\n");
 
@@ -879,7 +873,6 @@ bool BerkeleyBatch::PeriodicFlush(BerkeleyDatabase &database) {
         }
 
         if (nRefCount == 0) {
-            boost::this_thread::interruption_point();
             std::map<std::string, int>::iterator mi =
                 env->mapFileUseCount.find(strFile);
             if (mi != env->mapFileUseCount.end()) {

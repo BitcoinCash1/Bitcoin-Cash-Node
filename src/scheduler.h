@@ -8,12 +8,13 @@
 
 //
 // NOTE:
-// boost::thread / boost::chrono should be ported to
-// std::thread / std::chrono when we support C++11.
+// boost::chrono should be ported to std::chrono when we support C++11.
 //
 #include <boost/chrono/chrono.hpp>
 #include <boost/thread.hpp>
 
+#include <functional>
+#include <list>
 #include <map>
 
 //
@@ -25,13 +26,10 @@
 // CScheduler* s = new CScheduler();
 // s->scheduleFromNow(doSomething, 11); // Assuming a: void doSomething() { }
 // s->scheduleFromNow(std::bind(Class::func, this, argument), 3);
-// boost::thread* t = new boost::thread(std::bind(CScheduler::serviceQueue, s));
+// std::thread t = std::thread(CScheduler::serviceQueue, s);
 //
 // ... then at program shutdown, clean up the thread running serviceQueue:
-// t->interrupt();
-// t->join();
-// delete t;
-// delete s; // Must be done after thread is interrupted/joined.
+// t.join();
 //
 
 class CScheduler {
@@ -65,8 +63,7 @@ public:
 
     // To keep things as simple as possible, there is no unschedule.
 
-    // Services the queue 'forever'. Should be run in a thread, and interrupted
-    // using boost::interrupt_thread
+    // Services the queue 'forever'. Should be run in a thread.
     void serviceQueue();
 
     // Tell any threads running serviceQueue to stop as soon as they're done

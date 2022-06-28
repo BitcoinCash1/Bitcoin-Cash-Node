@@ -115,7 +115,7 @@ static bool CheckWarmup(HTTPRequest *req) {
     return true;
 }
 
-static bool rest_headers(Config &config, HTTPRequest *req,
+static bool rest_headers(const std::any& context, Config &config, HTTPRequest *req,
                          const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -279,17 +279,17 @@ static bool rest_block(const Config &config, HTTPRequest *req,
     }
 }
 
-static bool rest_block_extended(Config &config, HTTPRequest *req,
+static bool rest_block_extended(const std::any& context, Config &config, HTTPRequest *req,
                                 const std::string &strURIPart) {
     return rest_block(config, req, strURIPart, true);
 }
 
-static bool rest_block_notxdetails(Config &config, HTTPRequest *req,
+static bool rest_block_notxdetails(const std::any& context, Config &config, HTTPRequest *req,
                                    const std::string &strURIPart) {
     return rest_block(config, req, strURIPart, false);
 }
 
-static bool rest_chaininfo(Config &config, HTTPRequest *req,
+static bool rest_chaininfo(const std::any& context, Config &config, HTTPRequest *req,
                            const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -301,6 +301,7 @@ static bool rest_chaininfo(Config &config, HTTPRequest *req,
     switch (rf) {
         case RetFormat::JSON: {
             JSONRPCRequest jsonRequest;
+            jsonRequest.context = context;
             jsonRequest.params.setArray();
             UniValue chainInfoObject = getblockchaininfo(config, jsonRequest);
             std::string strJSON = UniValue::stringify(chainInfoObject) + "\n";
@@ -315,7 +316,7 @@ static bool rest_chaininfo(Config &config, HTTPRequest *req,
     }
 }
 
-static bool rest_mempool_info(Config &config, HTTPRequest *req,
+static bool rest_mempool_info(const std::any& context, Config &config, HTTPRequest *req,
                               const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -340,7 +341,7 @@ static bool rest_mempool_info(Config &config, HTTPRequest *req,
     }
 }
 
-static bool rest_mempool_contents(Config &config, HTTPRequest *req,
+static bool rest_mempool_contents(const std::any& context, Config &config, HTTPRequest *req,
                                   const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -365,7 +366,7 @@ static bool rest_mempool_contents(Config &config, HTTPRequest *req,
     }
 }
 
-static bool rest_tx(Config &config, HTTPRequest *req,
+static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
                     const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -431,7 +432,7 @@ static bool rest_tx(Config &config, HTTPRequest *req,
     }
 }
 
-static bool rest_getutxos(Config &config, HTTPRequest *req,
+static bool rest_getutxos(const std::any& context, Config &config, HTTPRequest *req,
                           const std::string &strURIPart) {
     if (!CheckWarmup(req)) {
         return false;
@@ -650,7 +651,7 @@ static bool rest_getutxos(Config &config, HTTPRequest *req,
 
 static const struct {
     const char *prefix;
-    bool (*handler)(Config &config, HTTPRequest *req,
+    bool (*handler)(const std::any& context, Config &config, HTTPRequest *req,
                     const std::string &strReq);
 } uri_prefixes[] = {
     {"/rest/tx/", rest_tx},
@@ -663,10 +664,10 @@ static const struct {
     {"/rest/getutxos", rest_getutxos},
 };
 
-void StartREST() {
-    for (size_t i = 0; i < std::size(uri_prefixes); ++i) {
-        RegisterHTTPHandler(uri_prefixes[i].prefix, false,
-                            uri_prefixes[i].handler);
+void StartREST(const std::any& context) {
+    for (const auto& up : uri_prefixes) {
+        auto handler = [context, up](Config& config, HTTPRequest* req, const std::string& prefix) { return up.handler(context, config, req, prefix); };
+        RegisterHTTPHandler(up.prefix, false, handler);
     }
 }
 

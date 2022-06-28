@@ -64,8 +64,6 @@
 #include <walletinitinterface.h>
 #include <warnings.h>
 
-#include <boost/thread.hpp>
-
 #if ENABLE_ZMQ
 #include <zmq/zmqnotificationinterface.h>
 #include <zmq/zmqrpc.h>
@@ -80,6 +78,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <thread>
 
 #ifdef ENABLE_WALLET
 #include <db_cxx.h> // DbEnv::version
@@ -190,7 +189,9 @@ public:
 static std::unique_ptr<CCoinsViewErrorCatcher> pcoinscatcher;
 static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
 
-static boost::thread_group threadGroup;
+static std::thread schedulerThread;
+static std::thread loadBlockThread;
+
 static CScheduler scheduler;
 
 void Interrupt() {
@@ -247,9 +248,15 @@ void Shutdown(NodeContext &node) {
     StopTorControl();
 
     // After everything has been shut down, but before things get flushed, stop
-    // the CScheduler/checkqueue threadGroup
-    threadGroup.interrupt_all();
-    threadGroup.join_all();
+    // the scheduler and load block threads
+    scheduler.stop();
+    if (schedulerThread.joinable()) {
+        schedulerThread.join();
+    }
+    if (loadBlockThread.joinable()) {
+        loadBlockThread.join();
+    }
+
     StopScriptCheckWorkerThreads();
 
     // After the threads that potentially access these pointers have been
@@ -1409,7 +1416,8 @@ static bool InitSanityCheck() {
 }
 
 static bool AppInitServers(Config &config,
-                           HTTPRPCRequestProcessor &httpRPCRequestProcessor) {
+                           HTTPRPCRequestProcessor &httpRPCRequestProcessor,
+                           NodeContext& node) {
     RPCServerSignals::OnStarted(&OnRPCStarted);
     RPCServerSignals::OnStopped(&OnRPCStopped);
     if (!InitHTTPServer(config)) {
@@ -1423,12 +1431,13 @@ static bool AppInitServers(Config &config,
     }
 
     StartRPC();
+    node.rpc_interruption_point = RpcInterruptionPoint;
 
-    if (!StartHTTPRPC(httpRPCRequestProcessor)) {
+    if (!StartHTTPRPC(httpRPCRequestProcessor, &node)) {
         return false;
     }
     if (gArgs.GetBoolArg("-rest", DEFAULT_REST_ENABLE)) {
-        StartREST();
+        StartREST(&node);
     }
 
     StartHTTPServer();
@@ -2150,10 +2159,8 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
     }
 
     // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop =
-        std::bind(&CScheduler::serviceQueue, &scheduler);
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>,
-                                        "scheduler", serviceLoop));
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    schedulerThread = std::thread(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop);
 
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
     GetMainSignals().RegisterWithMempoolSignals(g_mempool);
@@ -2211,7 +2218,7 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
      */
     if (gArgs.GetBoolArg("-server", false)) {
         uiInterface.InitMessage_connect(SetRPCWarmupStatus);
-        if (!AppInitServers(config, httpRPCRequestProcessor)) {
+        if (!AppInitServers(config, httpRPCRequestProcessor, node)) {
             return InitError(
                 _("Unable to start HTTP server. See debug log for details."));
         }
@@ -2742,8 +2749,7 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
         vImportFiles.push_back(strFile);
     }
 
-    threadGroup.create_thread(
-        std::bind(&ThreadImport, std::ref(config), vImportFiles));
+    loadBlockThread = std::thread(&ThreadImport, std::ref(config), vImportFiles);
 
     // Wait for genesis block to be processed
     {

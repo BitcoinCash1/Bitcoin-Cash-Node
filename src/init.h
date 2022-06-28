@@ -18,10 +18,6 @@ class CWallet;
 class HTTPRPCRequestProcessor;
 class RPCServer;
 
-namespace boost {
-class thread_group;
-} // namespace boost
-
 /** Interrupt threads */
 void Interrupt();
 void Shutdown(NodeContext &node);

@@ -93,9 +93,9 @@ BOOST_AUTO_TEST_CASE(manythreads) {
 
     // As soon as these are created they will start running and servicing the
     // queue
-    boost::thread_group microThreads;
+    std::vector<std::thread> microThreads;
     for (int i = 0; i < 5; i++) {
-        microThreads.create_thread(
+        microThreads.emplace_back(
             std::bind(&CScheduler::serviceQueue, &microTasks));
     }
 
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(manythreads) {
 
     // More threads and more tasks:
     for (int i = 0; i < 5; i++) {
-        microThreads.create_thread(
+        microThreads.emplace_back(
             std::bind(&CScheduler::serviceQueue, &microTasks));
     }
 
@@ -124,7 +124,9 @@ BOOST_AUTO_TEST_CASE(manythreads) {
     // Drain the task queue then exit threads
     microTasks.stop(true);
     // ... wait until all the threads are done
-    microThreads.join_all();
+    for (auto &thread : microThreads) {
+        thread.join();
+    }
 
     int counterSum = 0;
     for (int i = 0; i < 10; i++) {
@@ -194,9 +196,9 @@ BOOST_AUTO_TEST_CASE(singlethreadedscheduler_ordered) {
     // if the queues only permit execution of one task at once then
     // the extra threads should effectively be doing nothing
     // if they don't we'll get out of order behaviour
-    boost::thread_group threads;
+    std::vector<std::thread> threads;
     for (int i = 0; i < 5; ++i) {
-        threads.create_thread(std::bind(&CScheduler::serviceQueue, &scheduler));
+        threads.emplace_back(std::bind(&CScheduler::serviceQueue, &scheduler));
     }
 
     // these are not atomic, if SinglethreadedSchedulerClient prevents
@@ -222,7 +224,9 @@ BOOST_AUTO_TEST_CASE(singlethreadedscheduler_ordered) {
 
     // finish up
     scheduler.stop(true);
-    threads.join_all();
+    for (auto &thread : threads) {
+        thread.join();
+    }
 
     BOOST_CHECK_EQUAL(counter1, 100);
     BOOST_CHECK_EQUAL(counter2, 100);

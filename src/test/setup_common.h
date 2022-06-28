@@ -115,7 +115,7 @@ struct BasicTestingSetupWithDeadlockExceptions : BasicTestingSetup, EnableDeadlo
  * Included are data directory, coins database, script check threads setup.
  */
 struct TestingSetup : public BasicTestingSetup {
-    boost::thread_group threadGroup;
+    std::thread schedulerThread;
     CScheduler scheduler;
 
     explicit TestingSetup(

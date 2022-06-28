@@ -53,8 +53,6 @@
 #include <validationinterface.h>
 #include <warnings.h>
 
-#include <boost/thread.hpp> // boost::this_thread::interruption_point() (mingw)
-
 #include <algorithm>
 #include <atomic>
 #include <future>
@@ -2995,8 +2993,6 @@ bool CChainState::ActivateBestChain(const Config &config,
     CBlockIndex *pindexNewTip = nullptr;
     int nStopAtHeight = gArgs.GetArg("-stopatheight", DEFAULT_STOPATHEIGHT);
     do {
-        boost::this_thread::interruption_point();
-
         if (GetMainSignals().CallbacksPending() > 10) {
             // Block until the validation queue drains. This should largely
             // never happen in normal operation, however may happen during
@@ -4859,7 +4855,6 @@ bool CVerifyDB::VerifyDB(const Config &config, CCoinsView *coinsview,
     LogPrintfToBeContinued("[0%%]...");
     for (pindex = ::ChainActive().Tip(); pindex && pindex->pprev;
          pindex = pindex->pprev) {
-        boost::this_thread::interruption_point();
         int percentageDone =
             std::max(1, std::min(99, (int)(((double)(::ChainActive().Height() -
                                                      pindex->nHeight)) /
@@ -4957,7 +4952,6 @@ bool CVerifyDB::VerifyDB(const Config &config, CCoinsView *coinsview,
     // check level 4: try reconnecting blocks
     if (nCheckLevel >= 4) {
         while (pindex != ::ChainActive().Tip()) {
-            boost::this_thread::interruption_point();
             uiInterface.ShowProgress(
                 _("Verifying blocks..."),
                 std::max(
@@ -4980,6 +4974,7 @@ bool CVerifyDB::VerifyDB(const Config &config, CCoinsView *coinsview,
                              pindex->nHeight, pindex->GetBlockHash().ToString(),
                              FormatStateMessage(state));
             }
+            if (ShutdownRequested()) return true;
         }
     }
 
@@ -5215,7 +5210,7 @@ bool LoadGenesisBlock(const CChainParams &chainparams) {
     return g_chainstate.LoadGenesisBlock(chainparams);
 }
 
-bool LoadExternalBlockFile(const Config &config, FILE *fileIn,
+void LoadExternalBlockFile(const Config &config, FILE *fileIn,
                            FlatFilePos *dbp) {
     // Map of disk positions for blocks with unknown parent (only used for
     // reindex)
@@ -5233,8 +5228,7 @@ bool LoadExternalBlockFile(const Config &config, FILE *fileIn,
                              CLIENT_VERSION);
         uint64_t nRewind = blkdat.GetPos();
         while (!blkdat.eof()) {
-            boost::this_thread::interruption_point();
-
+            if (ShutdownRequested()) return;
             blkdat.SetPos(nRewind);
             // Start one byte further next time, in case of failure.
             nRewind++;
@@ -5374,8 +5368,6 @@ bool LoadExternalBlockFile(const Config &config, FILE *fileIn,
         LogPrintf("Loaded %i blocks from external file in %dms\n", nLoaded,
                   GetTimeMillis() - nStart);
     }
-
-    return nLoaded > 0;
 }
 
 void CChainState::CheckBlockIndex(const Consensus::Params &consensusParams) {
