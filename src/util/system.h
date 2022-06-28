@@ -23,8 +23,7 @@
 #include <tinyformat.h>
 #include <util/time.h>
 
-#include <boost/thread/condition_variable.hpp> // for boost::thread_interrupted
-
+#include <any>
 #include <cstdint>
 #include <exception>
 #include <map>
@@ -370,9 +369,6 @@ template <typename Callable> void TraceThread(const char* name,  Callable func)
         LogPrintf("%s thread start\n", name);
         func();
         LogPrintf("%s thread exit\n", name);
-    } catch (const boost::thread_interrupted &) {
-        LogPrintf("%s thread interrupt\n", name);
-        throw;
     } catch (const std::exception &e) {
         PrintExceptionContinue(&e, name);
         throw;
@@ -401,6 +397,18 @@ inline void insert(Tdst &dst, const Tsrc &src) {
 template <typename TsetT, typename Tsrc>
 inline void insert(std::set<TsetT> &dst, const Tsrc &src) {
     dst.insert(src.begin(), src.end());
+}
+
+/**
+ * Helper function to access the contained object of a std::any instance.
+ * Returns a pointer to the object if passed instance has a value and the type
+ * matches, nullptr otherwise.
+ */
+template<typename T>
+T* AnyPtr(const std::any& any) noexcept
+{
+    T* const* ptr = std::any_cast<T*>(&any);
+    return ptr ? *ptr : nullptr;
 }
 
 #ifdef WIN32

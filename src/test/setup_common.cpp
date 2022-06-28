@@ -175,7 +175,7 @@ TestingSetup::TestingSetup(const std::string &chainName)
 
     // We have to run a scheduler thread to prevent ActivateBestChain
     // from blocking due to queue overrun.
-    threadGroup.create_thread(std::bind(&CScheduler::serviceQueue, &scheduler));
+    schedulerThread = std::thread(&CScheduler::serviceQueue, &scheduler);
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
     rpc::RegisterSubmitBlockCatcher();
 
@@ -206,8 +206,10 @@ TestingSetup::TestingSetup(const std::string &chainName)
 }
 
 TestingSetup::~TestingSetup() {
-    threadGroup.interrupt_all();
-    threadGroup.join_all();
+    scheduler.stop();
+    if (schedulerThread.joinable()) {
+        schedulerThread.join();
+    }
     StopScriptCheckWorkerThreads();
     GetMainSignals().FlushBackgroundCallbacks();
     rpc::UnregisterSubmitBlockCatcher();

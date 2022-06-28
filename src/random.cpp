@@ -512,17 +512,10 @@ void LockingCallbackOpenSSL(int mode, int i, const char *file,
 /**
  * A note on the use of noexcept in the seeding functions below:
  *
- * None of the RNG code should ever throw any exception, with the sole exception
- * of MilliSleep in SeedSleep, which can (and does) support interruptions which
- * cause a boost::thread_interrupted to be thrown.
+ * None of the RNG code should ever throw any exception.
  *
- * This means that SeedSleep, and all functions that invoke it are throwing.
- * However, we know that GetRandBytes() and GetStrongRandBytes() never trigger
- * this sleeping logic, so they are noexcept. The same is true for all the
- * GetRand*() functions that use GetRandBytes() indirectly.
- *
- * TODO: After moving away from interruptible boost-based thread management,
- * everything can become noexcept here.
+ * TODO: Now that we have moved away from interruptable boost-based thread
+ * management, everything can become noexcept here.
  */
 
 static void SeedTimestamp(CSHA512 &hasher) noexcept {

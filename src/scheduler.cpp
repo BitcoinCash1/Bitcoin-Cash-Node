@@ -50,10 +50,6 @@ void CScheduler::serviceQueue() {
                         // time of the event
                         break;
                     }
-                } catch (const boost::thread_interrupted &) {
-                    // We need to make sure we don't ignore this, or the thread
-                    // won't end
-                    throw;
                 } catch (...) {
                     // Some boost versions have a bug that can cause a time
                     // prior to system boot (or wake from sleep) to throw an

@@ -492,8 +492,6 @@ DBErrors WalletBatch::LoadWallet(CWallet *pwallet) {
             }
         }
         pcursor->close();
-    } catch (const boost::thread_interrupted &) {
-        throw;
     } catch (...) {
         result = DBErrors::CORRUPT;
     }
@@ -589,8 +587,6 @@ DBErrors WalletBatch::FindWalletTx(std::vector<TxId> &txIds,
             }
         }
         pcursor->close();
-    } catch (const boost::thread_interrupted &) {
-        throw;
     } catch (...) {
         result = DBErrors::CORRUPT;
     }

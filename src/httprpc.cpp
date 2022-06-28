@@ -278,7 +278,7 @@ static bool checkCORS(HTTPRequest *req) {
     return false;
 }
 
-bool HTTPRPCRequestProcessor::ProcessHTTPRequest(HTTPRequest *req) {
+bool HTTPRPCRequestProcessor::ProcessHTTPRequest(const std::any& context, HTTPRequest *req) {
     // First, check and/or set CORS headers
     if (checkCORS(req)) {
         return true;
@@ -300,6 +300,7 @@ bool HTTPRPCRequestProcessor::ProcessHTTPRequest(HTTPRequest *req) {
     const std::string &authHeader = *authHeaderOpt;
 
     JSONRPCRequest jreq;
+    jreq.context = context;
     if (!RPCAuthorized(authHeader, jreq.authUser)) {
         LogPrintf("ThreadRPCServer incorrect password attempt from %s\n",
                   req->GetPeer().ToString());
@@ -381,16 +382,15 @@ static bool InitRPCAuthentication() {
     return true;
 }
 
-bool StartHTTPRPC(HTTPRPCRequestProcessor &httpRPCRequestProcessor) {
+bool StartHTTPRPC(HTTPRPCRequestProcessor &httpRPCRequestProcessor, const std::any& context) {
     LogPrint(BCLog::RPC, "Starting HTTP RPC server\n");
     if (!InitRPCAuthentication()) {
         return false;
     }
 
-    const std::function<bool(Config &, HTTPRequest *, const std::string &)>
-        &rpcFunction =
-            std::bind(&HTTPRPCRequestProcessor::DelegateHTTPRequest,
-                      &httpRPCRequestProcessor, std::placeholders::_2);
+    auto rpcFunction = [context, &httpRPCRequestProcessor](Config &, HTTPRequest* request, const std::string&) {
+        return HTTPRPCRequestProcessor::DelegateHTTPRequest(context, &httpRPCRequestProcessor, request);
+    };
     RegisterHTTPHandler("/", true, rpcFunction);
     if (g_wallet_init_interface.HasWalletSupport()) {
         RegisterHTTPHandler("/wallet/", false, rpcFunction);

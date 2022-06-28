@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <any>
 #include <string>
 
 #include <univalue.h>
@@ -16,6 +17,7 @@ public:
     bool fHelp = false;
     std::string URI;
     std::string authUser;
+    std::any context;
 
     void parse(UniValue&& valRequest);
 };

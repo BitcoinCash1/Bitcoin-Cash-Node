@@ -20,6 +20,7 @@
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <rpc/server.h>
+#include <rpc/server_util.h>
 #include <rpc/util.h>
 #include <script/descriptor.h>
 #include <streams.h>
@@ -32,8 +33,6 @@
 #include <validation.h>
 #include <validationinterface.h>
 #include <warnings.h>
-
-#include <boost/thread/thread.hpp> // boost::thread::interrupt
 
 #include <cassert>
 #include <condition_variable>
@@ -1010,7 +1009,8 @@ static void ApplyStats(CCoinsStats &stats, CHashWriter &ss, const uint256 &hash,
 }
 
 //! Calculate statistics about the unspent transaction output set
-static bool GetUTXOStats(CCoinsView *view, CCoinsStats &stats) {
+static bool GetUTXOStats(CCoinsView *view, CCoinsStats &stats,
+                         const std::function<void()>& interruption_point) {
     std::unique_ptr<CCoinsViewCursor> pcursor(view->Cursor());
     assert(pcursor);
 
@@ -1024,7 +1024,7 @@ static bool GetUTXOStats(CCoinsView *view, CCoinsStats &stats) {
     uint256 prevkey;
     std::map<uint32_t, Coin> outputs;
     while (pcursor->Valid()) {
-        boost::this_thread::interruption_point();
+        interruption_point();
         COutPoint key;
         Coin coin;
         if (pcursor->GetKey(key) && pcursor->GetValue(coin)) {
@@ -1141,7 +1141,8 @@ static UniValue gettxoutsetinfo(const Config &config,
 
     CCoinsStats stats;
     FlushStateToDisk();
-    if (!GetUTXOStats(pcoinsdbview.get(), stats)) {
+    NodeContext& node = EnsureAnyNodeContext(request.context);
+    if (!GetUTXOStats(pcoinsdbview.get(), stats, node.rpc_interruption_point)) {
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Unable to read UTXO set");
     }
 
@@ -2281,7 +2282,8 @@ static bool FindScriptPubKey(std::atomic<int> &scan_progress,
                              const std::atomic<bool> &should_abort,
                              int64_t &count, CCoinsViewCursor *cursor,
                              const std::set<CScript> &needles,
-                             std::map<COutPoint, Coin> &out_results) {
+                             std::map<COutPoint, Coin> &out_results,
+                             std::function<void()>& interruption_point) {
     scan_progress = 0;
     count = 0;
     while (cursor->Valid()) {
@@ -2291,7 +2293,7 @@ static bool FindScriptPubKey(std::atomic<int> &scan_progress,
             return false;
         }
         if (++count % 8192 == 0) {
-            boost::this_thread::interruption_point();
+            interruption_point();
             if (should_abort) {
                 // allow to abort the scan via the abort reference
                 return false;
@@ -2502,8 +2504,9 @@ static UniValue scantxoutset(const Config &config,
             pcursor = std::unique_ptr<CCoinsViewCursor>(pcoinsdbview->Cursor());
             assert(pcursor);
         }
+        NodeContext& node = EnsureAnyNodeContext(request.context);
         bool res = FindScriptPubKey(g_scan_progress, g_should_abort_scan, count,
-                                    pcursor.get(), needles, coins);
+                                    pcursor.get(), needles, coins, node.rpc_interruption_point);
         UniValue::Object result;
         result.reserve(4);
         result.emplace_back("success", res);
