@@ -12,6 +12,7 @@
 #include <uint256.h>
 #include <util/system.h>
 
+#include <mutex>
 #include <shared_mutex>
 
 namespace {
@@ -82,11 +83,9 @@ static CSignatureCache signatureCache;
 void InitSignatureCache() {
     // nMaxCacheSize is unsigned. If -maxsigcachesize is set to zero,
     // setup_bytes creates the minimum possible cache (2 elements).
-    size_t nMaxCacheSize =
-        std::min(std::max(int64_t(0),
-                          gArgs.GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE)),
-                 MAX_MAX_SIG_CACHE_SIZE) *
-        (size_t(1) << 20);
+    size_t nMaxCacheSize = std::clamp(gArgs.GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE),
+                                      int64_t{0},
+                                      MAX_MAX_SIG_CACHE_SIZE) * (size_t{1} << 20);
     size_t nElems = signatureCache.setup_bytes(nMaxCacheSize);
     LogPrintf("Using %zu MiB out of %zu requested for signature cache, able to "
               "store %zu elements\n",
