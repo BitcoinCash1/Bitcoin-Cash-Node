@@ -12,8 +12,7 @@
 #include <uint256.h>
 #include <util/system.h>
 
-#include <boost/thread/locks.hpp>
-#include <boost/thread/shared_mutex.hpp>
+#include <shared_mutex>
 
 namespace {
 
@@ -27,7 +26,7 @@ class CSignatureCache {
     uint256 nonce;
     using map_type = CuckooCache::cache<CuckooCache::KeyOnly<uint256>, SignatureCacheHasher>;
     map_type setValid;
-    boost::shared_mutex cs_sigcache;
+    std::shared_mutex cs_sigcache;
 
     bool ready = false;
 
@@ -53,13 +52,13 @@ public:
 
     bool Get(const uint256 &entry, const bool erase) {
         assert(ready);
-        boost::shared_lock<boost::shared_mutex> lock(cs_sigcache);
+        std::shared_lock lock(cs_sigcache);
         return setValid.contains(entry, erase);
     }
 
     void Set(uint256 &entry) {
         assert(ready);
-        boost::unique_lock<boost::shared_mutex> lock(cs_sigcache);
+        std::unique_lock lock(cs_sigcache);
         setValid.insert(entry);
     }
     uint32_t setup_bytes(size_t n) {

@@ -6,13 +6,7 @@
 
 #include <sync.h>
 
-//
-// NOTE:
-// boost::chrono should be ported to std::chrono when we support C++11.
-//
-#include <boost/chrono/chrono.hpp>
-#include <boost/thread.hpp>
-
+#include <chrono>
 #include <functional>
 #include <list>
 #include <map>
@@ -41,8 +35,7 @@ public:
     typedef std::function<bool()> Predicate;
 
     // Call func at/after time t
-    void schedule(Function f, boost::chrono::system_clock::time_point t =
-                                  boost::chrono::system_clock::now());
+    void schedule(Function f, std::chrono::system_clock::time_point t = std::chrono::system_clock::now());
 
     // Convenience method: call f once deltaMilliSeconds from now
     void scheduleFromNow(Function f, int64_t deltaMilliSeconds);
@@ -59,7 +52,7 @@ public:
      * Iterates through items on taskQueue and reschedules them
      * to be delta_seconds sooner.
      */
-    void MockForward(boost::chrono::seconds delta_seconds);
+    void MockForward(std::chrono::seconds delta_seconds);
 
     // To keep things as simple as possible, there is no unschedule.
 
@@ -73,16 +66,16 @@ public:
 
     // Returns number of tasks waiting to be serviced, and first and last task
     // times
-    size_t getQueueInfo(boost::chrono::system_clock::time_point &first,
-                        boost::chrono::system_clock::time_point &last) const;
+    size_t getQueueInfo(std::chrono::system_clock::time_point &first,
+                        std::chrono::system_clock::time_point &last) const;
 
     // Returns true if there are threads actively running in serviceQueue()
     bool AreThreadsServicingQueue() const;
 
 private:
-    std::multimap<boost::chrono::system_clock::time_point, Function> taskQueue;
-    boost::condition_variable newTaskScheduled;
-    mutable boost::mutex newTaskMutex;
+    std::multimap<std::chrono::system_clock::time_point, Function> taskQueue;
+    std::condition_variable newTaskScheduled;
+    mutable std::mutex newTaskMutex;
     int nThreadsServicingQueue;
     bool stopRequested;
     bool stopWhenEmpty;

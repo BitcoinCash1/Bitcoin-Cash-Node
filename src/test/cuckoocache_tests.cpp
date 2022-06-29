@@ -13,6 +13,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <list>
 #include <thread>
