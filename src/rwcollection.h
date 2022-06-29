@@ -8,10 +8,10 @@
 #include <util/noncopyable.h>
 
 #include <boost/range/iterator.hpp>
-#include <boost/thread/locks.hpp>
-#include <boost/thread/shared_mutex.hpp>
 
 #include <iterator>
+#include <mutex>
+#include <shared_mutex>
 #include <type_traits>
 #include <utility>
 
@@ -64,22 +64,20 @@ public:
 template <typename T> class RWCollection {
 private:
     T collection GUARDED_BY(rwlock);
-    mutable boost::shared_mutex rwlock;
+    mutable std::shared_mutex rwlock;
 
 public:
     RWCollection() : collection() {}
 
-    typedef RWCollectionView<const T, boost::shared_lock<boost::shared_mutex>>
+    typedef RWCollectionView<const T, std::shared_lock<std::shared_mutex>>
         ReadView;
     ReadView getReadView() const {
-        return ReadView(boost::shared_lock<boost::shared_mutex>(rwlock),
-                        collection);
+        return ReadView(std::shared_lock(rwlock), collection);
     }
 
-    typedef RWCollectionView<T, boost::unique_lock<boost::shared_mutex>>
+    typedef RWCollectionView<T, std::unique_lock<std::shared_mutex>>
         WriteView;
     WriteView getWriteView() {
-        return WriteView(boost::unique_lock<boost::shared_mutex>(rwlock),
-                         collection);
+        return WriteView(std::unique_lock(rwlock), collection);
     }
 };

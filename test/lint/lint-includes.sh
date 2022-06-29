@@ -51,7 +51,6 @@ if [[ "${#INCLUDED_CPP_FILES[@]}" -ne 0 ]]; then
 fi
 
 EXPECTED_BOOST_INCLUDES=(
-    boost/chrono/chrono.hpp
     boost/date_time/posix_time/posix_time.hpp
     boost/filesystem.hpp
     boost/filesystem/fstream.hpp
@@ -66,9 +65,6 @@ EXPECTED_BOOST_INCLUDES=(
     boost/signals2/last_value.hpp
     boost/signals2/signal.hpp
     boost/test/unit_test.hpp
-    boost/thread.hpp
-    boost/thread/locks.hpp
-    boost/thread/shared_mutex.hpp
     boost/variant.hpp
     boost/variant/apply_visitor.hpp
     boost/variant/static_visitor.hpp
