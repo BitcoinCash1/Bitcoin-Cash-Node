@@ -175,8 +175,7 @@ class EnterMixin : public Base {
 
     bool TryEnter(const char *pszName, const char *pszFile, int nLine) {
         EnterCritical(pszName, pszFile, nLine, (void *)(Base::mutex()), true /* try */, recursive);
-        Base::try_lock();
-        if (!Base::owns_lock()) {
+        if (!Base::try_lock()) {
             LeaveCritical();
         }
         return Base::owns_lock();
