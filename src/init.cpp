@@ -829,6 +829,11 @@ void SetupServerArgs() {
     hidden_args.emplace_back("-zmqpubrawds=<address>");
 #endif
 
+    gArgs.AddArg("-allowunconnectedmining",
+                 strprintf("Set whether to allow the getblocktemplate RPC interface to work correctly even if the node "
+                           "is offline or otherwise not connected to any other nodes on the p2p network. (default: %d)",
+                           DEFAULT_ALLOW_UNCONNECTED_MINING),
+                 ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-checkblocks=<n>",
         strprintf("How many blocks to check at startup (default: %u, 0 = all)",
@@ -1934,6 +1939,9 @@ bool AppInitParameterInteraction(Config &config) {
 
     // process and save -gbtcheckvalidity arg (if specified)
     config.SetGBTCheckValidity(gArgs.GetBoolArg("-gbtcheckvalidity", DEFAULT_GBT_CHECK_VALIDITY));
+
+    // process and save -allowunconnectedmining arg (if specified)
+    config.SetAllowUnconnectedMining(gArgs.GetBoolArg("-allowunconnectedmining", DEFAULT_ALLOW_UNCONNECTED_MINING));
 
     // Sanity check argument for min fee for including tx in block
     // TODO: Harmonize which arguments need sanity checking and where that
