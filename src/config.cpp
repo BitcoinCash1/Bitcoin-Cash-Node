@@ -11,7 +11,9 @@
 #include <algorithm>
 
 GlobalConfig::GlobalConfig()
-    : useCashAddr(DEFAULT_USE_CASHADDR), nExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
+    : useCashAddr(DEFAULT_USE_CASHADDR), gbtCheckValidity(DEFAULT_GBT_CHECK_VALIDITY),
+      allowUnconnectedMining(DEFAULT_ALLOW_UNCONNECTED_MINING),
+      nExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
       // NB: The generated block size is normally set in init.cpp to use chain-specific
       //     defaults which are often smaller than the DEFAULT_EXCESSIVE_BLOCK_SIZE.
       nGeneratedBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),

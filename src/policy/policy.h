@@ -38,6 +38,12 @@ static constexpr Amount DEFAULT_BLOCK_MIN_TX_FEE_PER_KB(1000 * SATOSHI);
  */
 static constexpr bool DEFAULT_GBT_CHECK_VALIDITY = true;
 /**
+ * Default for -allowunconnectedmining, which determines whether we ensure
+ * that the node is connected to at least 1 peer for getblocktemplate[light]
+ * RPC.
+ */
+static constexpr bool DEFAULT_ALLOW_UNCONNECTED_MINING = false;
+/**
  * The maximum size for transactions we're willing to relay/mine.
  */
 static constexpr unsigned int MAX_STANDARD_TX_SIZE = 100000;

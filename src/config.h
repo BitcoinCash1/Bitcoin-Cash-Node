@@ -48,6 +48,9 @@ public:
 
     virtual void SetGBTCheckValidity(bool) = 0;
     virtual bool GetGBTCheckValidity() const = 0;
+
+    virtual void SetAllowUnconnectedMining(bool) = 0;
+    virtual bool GetAllowUnconnectedMining() const = 0;
 };
 
 class GlobalConfig final : public Config {
@@ -79,9 +82,14 @@ public:
     void SetGBTCheckValidity(bool b) override { gbtCheckValidity = b; }
     bool GetGBTCheckValidity() const override { return gbtCheckValidity; }
 
+    //! "Unconnected mining" (default false). If true, getblocktemplate[light] works even if not connected to any peers.
+    void SetAllowUnconnectedMining(bool b) override { allowUnconnectedMining = b; }
+    bool GetAllowUnconnectedMining() const override { return allowUnconnectedMining; }
+
 private:
     bool useCashAddr;
     bool gbtCheckValidity;
+    bool allowUnconnectedMining;
     Amount excessUTXOCharge;
     uint64_t nInvBroadcastRate;
     uint64_t nInvBroadcastInterval;
@@ -132,6 +140,9 @@ public:
 
     void SetGBTCheckValidity(bool) override {}
     bool GetGBTCheckValidity() const override { return false; }
+
+    void SetAllowUnconnectedMining(bool) override {}
+    bool GetAllowUnconnectedMining() const override { return false; }
 
 private:
     std::unique_ptr<CChainParams> chainParams;
