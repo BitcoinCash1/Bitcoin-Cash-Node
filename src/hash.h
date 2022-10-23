@@ -95,16 +95,16 @@ inline uint160 Hash160(const T1 &in1) {
     return result;
 }
 
-/** A writer stream (for serialization) that computes a 256-bit hash. */
-class CHashWriter {
-private:
-    CHash256 ctx;
+/** A generic writer stream (for serialization) that computes a hash given a HasherT. */
+template <typename HasherT>
+class GenericHashWriter {
+    HasherT ctx;
 
     const int nType;
     const int nVersion;
 
 public:
-    CHashWriter(int nTypeIn, int nVersionIn)
+    GenericHashWriter(int nTypeIn, int nVersionIn)
         : nType(nTypeIn), nVersion(nVersionIn) {}
 
     int GetType() const { return nType; }
@@ -130,23 +130,29 @@ public:
         return ReadLE64(result);
     }
 
-    template <typename T> CHashWriter &operator<<(const T &obj) {
+    template <typename T> GenericHashWriter &operator<<(const T &obj) {
         // Serialize to this stream
         ::Serialize(*this, obj);
         return (*this);
     }
 };
 
+/** A writer stream (for serialization) that computes a double sha-256 hash. */
+using CHashWriter = GenericHashWriter<CHash256>;
+
+/** A writer stream (for serialization) that computes a *single* sha-256 hash. */
+using Sha256SingleHashWriter = GenericHashWriter<CSHA256>;
+
 /**
  * Reads data from an underlying stream, while hashing the read data.
  */
-template <typename Source> class CHashVerifier : public CHashWriter {
-private:
+template <typename Source, typename HasherT>
+class GenericHashVerifier : public GenericHashWriter<HasherT> {
     Source *source;
 
 public:
-    explicit CHashVerifier(Source *source_)
-        : CHashWriter(source_->GetType(), source_->GetVersion()),
+    explicit GenericHashVerifier(Source *source_)
+        : GenericHashWriter<HasherT>(source_->GetType(), source_->GetVersion()),
           source(source_) {}
 
     void read(char *pch, size_t nSize) {
@@ -163,12 +169,20 @@ public:
         }
     }
 
-    template <typename T> CHashVerifier<Source> &operator>>(T &&obj) {
+    template <typename T> GenericHashVerifier &operator>>(T &&obj) {
         // Unserialize from this stream
         ::Unserialize(*this, obj);
         return (*this);
     }
 };
+
+// Type alias to support extant code which uses CHashVerifier to mean a sha256d verifier
+template <typename Source>
+using CHashVerifier = GenericHashVerifier<Source, CHash256>;
+
+// Support hash verification for sha256 *single* hashing
+template <typename Source>
+using Sha256SingleHashVerifier = GenericHashVerifier<Source, CSHA256>;
 
 /** Compute the 256-bit hash of an object's serialization. */
 template <typename T>

@@ -192,23 +192,35 @@ public:
 } // namespace
 
 BOOST_AUTO_TEST_CASE(hashverifier_tests) {
-    std::vector<uint8_t> data = ParseHex("4223");
+    const std::vector<uint8_t> data = ParseHex("4223");
     CDataStream ss(data, SER_DISK, CLIENT_VERSION);
+    CDataStream ss_single(data, SER_DISK, CLIENT_VERSION);
 
     CHashVerifier<CDataStream> verifier(&ss);
+    Sha256SingleHashVerifier<CDataStream> verifier_single(&ss_single);
 
-    CDummyObject dummy;
+    CDummyObject dummy, dummy_single;
     verifier >> dummy;
-    uint256 checksum = verifier.GetHash();
+    verifier_single >> dummy_single;
+    const uint256 checksum = verifier.GetHash();
+    const uint256 checksum_single = verifier_single.GetHash();
+    BOOST_CHECK(checksum != checksum_single);
     BOOST_CHECK_EQUAL(dummy.GetValue(), 0x23);
+    BOOST_CHECK_EQUAL(dummy_single.GetValue(), 0x23);
 
     CHashWriter h0(SER_DISK, CLIENT_VERSION);
+    Sha256SingleHashWriter h0_single(SER_DISK, CLIENT_VERSION);
     h0 << CDataStream(data, SER_DISK, CLIENT_VERSION);
+    h0_single << CDataStream(data, SER_DISK, CLIENT_VERSION);
     BOOST_CHECK(h0.GetHash() == checksum);
+    BOOST_CHECK(h0_single.GetHash() == checksum_single);
 
     CHashWriter h1(SER_DISK, CLIENT_VERSION);
+    Sha256SingleHashWriter h1_single(SER_DISK, CLIENT_VERSION);
     h1 << dummy;
+    h1_single << dummy_single;
     BOOST_CHECK(h1.GetHash() != checksum);
+    BOOST_CHECK(h1_single.GetHash() != checksum_single);
 }
 
 BOOST_AUTO_TEST_CASE(SerializeSipHash_tests) {
