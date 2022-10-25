@@ -16,6 +16,9 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 
+#include <memory>
+#include <utility>
+
 static const size_t DBWRAPPER_PREALLOC_KEY_SIZE = 64;
 static const size_t DBWRAPPER_PREALLOC_VALUE_SIZE = 1024;
 
@@ -117,14 +120,15 @@ class CDBIterator {
 private:
     const CDBWrapper &parent;
     leveldb::Iterator *piter;
+    std::shared_ptr<const leveldb::Snapshot> snapshot; ///< may be nullptr, internal deleter releases snapshot from parent db
 
 public:
     /**
      * @param[in] _parent          Parent CDBWrapper instance.
      * @param[in] _piter           The original leveldb iterator.
      */
-    CDBIterator(const CDBWrapper &_parent, leveldb::Iterator *_piter)
-        : parent(_parent), piter(_piter){};
+    CDBIterator(const CDBWrapper &_parent, leveldb::Iterator *_piter, std::shared_ptr<const leveldb::Snapshot> psnapshot = nullptr)
+        : parent(_parent), piter(_piter), snapshot(std::move(psnapshot)) {};
     ~CDBIterator();
 
     bool Valid() const;
@@ -295,8 +299,17 @@ public:
         return WriteBatch(batch, true);
     }
 
-    CDBIterator *NewIterator() {
-        return new CDBIterator(*this, pdb->NewIterator(iteroptions));
+    CDBIterator *NewIterator(bool snapshot = false) {
+        if (snapshot) {
+            std::shared_ptr<const leveldb::Snapshot> psnapshot{pdb->GetSnapshot(), [db=pdb](const leveldb::Snapshot *s){
+                db->ReleaseSnapshot(s);
+            }};
+            auto snapshot_iteroptions = iteroptions;
+            snapshot_iteroptions.snapshot = psnapshot.get();
+            return new CDBIterator(*this, pdb->NewIterator(snapshot_iteroptions), std::move(psnapshot));
+        } else {
+            return new CDBIterator(*this, pdb->NewIterator(iteroptions));
+        }
     }
 
     /**
