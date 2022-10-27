@@ -95,6 +95,8 @@ static constexpr bool DEFAULT_USE_BIP69 = true;
 static constexpr bool DEFAULT_ALLOW_LEGACY_P2SH = false;
 //! Default for the RPC option "include_unsafe"
 static constexpr bool DEFAULT_INCLUDE_UNSAFE_INPUTS = false;
+//! Pre-calculated constant for input size estimation
+static constexpr size_t DUMMY_P2PKH_INPUT_SIZE = 148;
 
 class CChainParams;
 class CCoinControl;
