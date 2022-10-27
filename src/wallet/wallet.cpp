@@ -1699,8 +1699,6 @@ int64_t CalculateMaximumSignedTxSize(const CTransaction &tx,
                                      bool use_max_sig) {
     CMutableTransaction txNew(tx);
     if (!wallet->DummySignTx(txNew, txouts, use_max_sig)) {
-        // This should never happen, because IsAllFromMe(ISMINE_SPENDABLE)
-        // implies that we can sign for every input.
         return -1;
     }
     return GetSerializeSize(txNew, PROTOCOL_VERSION);
@@ -1711,8 +1709,6 @@ int CalculateMaximumSignedInputSize(const CTxOut &txout, const CWallet *wallet,
     CMutableTransaction txn;
     txn.vin.push_back(CTxIn(COutPoint()));
     if (!wallet->DummySignInput(txn.vin[0], txout, use_max_sig)) {
-        // This should never happen, because IsAllFromMe(ISMINE_SPENDABLE)
-        // implies that we can sign for every input.
         return -1;
     }
     return GetSerializeSize(txn.vin[0], PROTOCOL_VERSION);
@@ -3209,9 +3205,14 @@ CreateTransactionResult CWallet::CreateTransaction(
             if (pick_new_inputs) {
                 nValueIn = Amount::zero();
                 setCoins.clear();
-                coin_selection_params.change_spend_size =
-                    CalculateMaximumSignedInputSize(change_prototype_txout,
-                                                    this);
+                const int change_spend_size = CalculateMaximumSignedInputSize(change_prototype_txout, this);
+                // If the wallet doesn't know how to sign change output, assume
+                // p2pkh as lower-bound to allow BnB to do it's thing
+                if (change_spend_size == -1) {
+                    coin_selection_params.change_spend_size = DUMMY_P2PKH_INPUT_SIZE;
+                } else {
+                    coin_selection_params.change_spend_size = static_cast<size_t>(change_spend_size);
+                }
                 coin_selection_params.effective_fee = nFeeRateNeeded;
                 if (!SelectCoins(vAvailableCoins, nValueToSelect, setCoins,
                                  nValueIn, coinControl, coin_selection_params,
