@@ -201,9 +201,20 @@ def parse_string_content(argument):
     ''
     """
     assert isinstance(argument, str)
+
+    # Detect and parse any raw string literals
+    normalized_string = normalize(escape(argument))
+    m = re.match(r'^(?:L|u8|u|U)?R"([^(]*)\((.*)$', normalized_string)
+    if m:
+        #m[1] is the d_char_sequence
+        #m[2] is the rest of the raw string with closing sequence
+        m2 = re.match(r'(.*)\)' + m[1] + r'"', m[2])
+        if m2:
+            return m2[1]
+
     string_content = ""
     in_string = False
-    for char in normalize(escape(argument)):
+    for char in normalized_string:
         if char == "\"":
             in_string = not in_string
         elif in_string:
