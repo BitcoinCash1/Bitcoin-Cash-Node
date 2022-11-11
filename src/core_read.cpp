@@ -230,7 +230,13 @@ bool DecodeHexBlk(CBlock &block, const std::string &strHexBlk) {
 
 bool DecodePSBT(PartiallySignedTransaction &psbt, const std::string &base64_tx,
                 std::string &error) {
-    std::vector<uint8_t> tx_data = DecodeBase64(base64_tx.c_str());
+    bool base64_invalid = false;
+    std::vector<uint8_t> tx_data = DecodeBase64(base64_tx.c_str(), &base64_invalid);
+    if (base64_invalid) {
+        error = "invalid base64";
+        return false;
+    }
+
     CDataStream ss_data(tx_data, SER_NETWORK, PROTOCOL_VERSION);
     try {
         ss_data >> psbt;

@@ -12,6 +12,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
     assert_raises_rpc_error,
+    connect_nodes_bi,
     find_output,
 )
 
@@ -235,6 +236,114 @@ class PSBTTest(BitcoinTestFramework):
                 extractor['extract'], True)['hex']
             assert_equal(extracted, extractor['result'])
 
+        # Test decoding error: invalid base64
+        assert_raises_rpc_error(-22,
+                                "TX decode failed invalid base64",
+                                self.nodes[0].decodepsbt,
+                                ";definitely not base64;")
+
+        # Test that psbts with p2pkh outputs are created properly
+        p2pkh = self.nodes[0].getnewaddress()
+        psbt = self.nodes[1].walletcreatefundedpsbt(
+            [], [{p2pkh: 1}], 0, {"includeWatching": True}, True)
+        self.nodes[0].decodepsbt(psbt['psbt'])
+
+
+class BCHNIssue440Test (BitcoinTestFramework):
+    '''
+    Regression test for bugfix (backport of D6029, D6030) for BCHN issue #440
+    https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/issues/440
+    '''
+    def set_test_params(self):
+        self.num_nodes = 2
+        self.setup_clean_chain = True
+
+    def skip_test_if_missing_module(self):
+        self.skip_if_no_wallet()
+
+    def setup_network(self, split=False):
+        self.setup_nodes()
+        connect_nodes_bi(self.nodes[0], self.nodes[1])
+
+    def run_test(self):
+        self.log.info("Mining blocks...")
+        self.generate(self.nodes[1], 101)
+        #self.sync_all(self.nodes[0:1])
+        self.sync_all()
+        # Node 1 sync test
+        assert_equal(self.nodes[1].getblockcount(), 101)
+        assert_equal(self.nodes[1].getbalance(), 50)
+        timestamp = self.nodes[1].getblock(
+            self.nodes[1].getbestblockhash())['mediantime']
+
+        # get two addresses on node 0, for import as watchonly on node 1.
+        # the first will later be be funded, and the second
+        # will be a change address for walletcreatefundedpsbt
+        self.log.info("Create new addresses on node 0...")
+        node0_address1 = self.nodes[0].getaddressinfo(self.nodes[0].getnewaddress())
+        node0_address2 = self.nodes[0].getaddressinfo(self.nodes[0].getnewaddress())
+
+        # Check addresses
+        assert_equal(node0_address1['ismine'], True)
+        assert_equal(node0_address2['ismine'], True)
+
+        # Address Test - before import
+        for addr_info in [node0_address1, node0_address2]:
+            check_address_info = self.nodes[1].getaddressinfo(addr_info['address'])
+            assert_equal(check_address_info['iswatchonly'], False)
+            assert_equal(check_address_info['ismine'], False)
+
+        # RPC importmulti on node 1
+        self.log.info("Import the addresses on node 1, watch-only")
+        for addr in [node0_address1, node0_address2]:
+            address_info = self.nodes[0].getaddressinfo(addr['address'])
+            result = self.nodes[1].importmulti([{
+                "scriptPubKey": {
+                    "address": address_info['address']
+                },
+                "timestamp": "now",
+                "watchonly": True,
+            }])
+            assert_equal(result[0]['success'], True)
+            address_assert = self.nodes[1].getaddressinfo(addr['address'])
+            assert_equal(address_assert['iswatchonly'], True)
+            assert_equal(address_assert['ismine'], False)
+            assert_equal(address_assert['timestamp'], timestamp)
+            assert_equal(address_assert['ischange'], False)
+
+        # Fund the first address with 0.5 BCH
+        self.nodes[1].sendtoaddress(node0_address1['address'], 0.5)
+
+        # Mine it, check blockchain state on both nodes
+        self.generate(self.nodes[1], 1)
+        self.sync_all(self.nodes[0:1])
+        assert_equal(self.nodes[0].getblockcount(), 102)
+        assert_equal(self.nodes[1].getblockcount(), 102)
+        assert_equal(self.nodes[0].getbalance(), 0.5)
+
+        # RPC walletcreatefundedpsbt on node 0
+        # see if it crashes the node :)
+        psbt = self.nodes[1].walletcreatefundedpsbt(
+                      # inputs
+                      [],
+                      # outputs
+                      [{node0_address1['address']: 0.1}],
+                      # locktime
+                      0,
+                      # options
+                      {"changeAddress": node0_address2['address'],
+                       "includeWatching": True},
+                      # bip32derivs
+                      True
+                    )
+        self.log.info(psbt)
+        # Check that it decodes on both nodes
+        for node_num in (0, 1):
+            psbt_decoded = self.nodes[node_num].decodepsbt(psbt['psbt'])
+            self.log.info("decoded PSBT on node {}: {}".format(node_num,
+                                                               psbt_decoded))
+
 
 if __name__ == '__main__':
     PSBTTest().main()
+    BCHNIssue440Test().main()
