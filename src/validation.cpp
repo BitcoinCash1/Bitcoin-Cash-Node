@@ -5704,6 +5704,8 @@ CBlockFileInfo *GetBlockFileInfo(size_t n) {
 static const uint64_t MEMPOOL_DUMP_VERSION = 1;
 
 bool LoadMempool(const Config &config, CTxMemPool &pool) {
+    Tic start;
+
     int64_t nExpiryTimeout =
         gArgs.GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY) * 60 * 60;
     FILE *filestr = fsbridge::fopen(GetDataDir() / "mempool.dat", "rb");
@@ -5783,8 +5785,8 @@ bool LoadMempool(const Config &config, CTxMemPool &pool) {
     }
 
     LogPrintf("Imported mempool transactions from disk: %i succeeded, %i "
-              "failed, %i expired, %i already there\n",
-              count, failed, expired, already_there);
+              "failed, %i expired, %i already there, %s msec elapsed\n",
+              count, failed, expired, already_there, start.msecStr());
     return true;
 }
 
@@ -5835,8 +5837,8 @@ bool DumpMempool(const CTxMemPool &pool) {
         RenameOver(GetDataDir() / "mempool.dat.new",
                    GetDataDir() / "mempool.dat");
         int64_t last = GetTimeMicros();
-        LogPrintf("Dumped mempool: %gs to copy, %gs to dump\n",
-                  (mid - start) * MICRO, (last - mid) * MICRO);
+        LogPrintf("Dumped mempool: %g msec to copy, %g msec to dump\n",
+                  (mid - start) * MILLI, (last - mid) * MILLI);
     } catch (const std::exception &e) {
         LogPrintf("Failed to dump mempool: %s. Continuing anyway.\n", e.what());
         return false;
