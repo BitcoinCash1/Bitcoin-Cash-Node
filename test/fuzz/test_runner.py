@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2019 The Bitcoin Core developers
+# Copyright (c) 2022 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Run fuzz test targets.
@@ -114,6 +115,9 @@ def run_once(*, corpus, test_list, test_dir, export_coverage):
         args = [
             os.path.join(test_dir, t),
             '-runs=1',
+            '-timeout=10',
+            '-rss_limit_mb=6000',
+            '-error_exitcode=78',
             os.path.join(corpus, t),
         ]
         logging.debug('Run {} with args {}'.format(t, args))
