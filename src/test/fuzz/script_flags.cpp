@@ -12,6 +12,10 @@
 /** Flags that are not forbidden by an assert */
 static bool IsValidFlagCombination(uint32_t flags);
 
+/** VerifyScript() return values are passed to this function. Mismatches are allowed in certain cases. */
+static bool IsExpected(bool ret, bool ret_fuzzed, uint32_t verify_flags, ScriptError serror,
+                       uint32_t verify_flags_fuzzed, ScriptError serror_fuzzed);
+
 void test_one_input(std::vector<uint8_t> buffer) {
     CDataStream ds(buffer, SER_NETWORK, INIT_PROTO_VERSION);
     try {
@@ -46,6 +50,7 @@ void test_one_input(std::vector<uint8_t> buffer) {
             const TransactionSignatureChecker checker{limited_context, txdata};
 
             ScriptError serror;
+            const auto pre_fuzz_verify_flags = verify_flags;
             const bool ret = VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey, verify_flags, checker, &serror);
             assert(ret == (serror == ScriptError::OK));
 
@@ -65,7 +70,7 @@ void test_one_input(std::vector<uint8_t> buffer) {
                 VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey, verify_flags, checker, &serror_fuzzed);
             assert(ret_fuzzed == (serror_fuzzed == ScriptError::OK));
 
-            assert(ret_fuzzed == ret);
+            assert(IsExpected(ret, ret_fuzzed, pre_fuzz_verify_flags, serror, verify_flags, serror_fuzzed));
         }
     } catch (const std::ios_base::failure &) {
         return;
@@ -74,5 +79,44 @@ void test_one_input(std::vector<uint8_t> buffer) {
 
 static bool IsValidFlagCombination(uint32_t flags) {
     // If the CLEANSTACK flag is set, then P2SH should also be set
-    return (~flags & SCRIPT_VERIFY_CLEANSTACK) || (flags & SCRIPT_VERIFY_P2SH);
+    return ((~flags & SCRIPT_VERIFY_CLEANSTACK) || (flags & SCRIPT_VERIFY_P2SH))
+            // Additionally, if P2SH_32 is set, P2SH should also be set
+            && ((~flags & SCRIPT_ENABLE_P2SH_32) || (flags & SCRIPT_VERIFY_P2SH))
+            // If native introspection is enabled, 64-bit script integers must be as well
+            && ((~flags & SCRIPT_NATIVE_INTROSPECTION) || (flags & SCRIPT_64_BIT_INTEGERS))
+            // If tokens are enabled, native introspection must be as well
+            && ((~flags & SCRIPT_ENABLE_TOKENS) || (flags & SCRIPT_NATIVE_INTROSPECTION));
+}
+
+static bool IsExpected(bool ret, bool ret_fuzzed, uint32_t verify_flags, ScriptError serror,
+                       uint32_t verify_flags_fuzzed, ScriptError serror_fuzzed) {
+    // We expect the two runs of VerifyScript() to match in return value.
+    if (ret == ret_fuzzed) {
+        return true;
+    }
+
+    auto is_bad_opcode = [](ScriptError script_error) {
+        return script_error == ScriptError::BAD_OPCODE || script_error == ScriptError::DISABLED_OPCODE;
+    };
+
+    // If reason they mismatch is BAD_OPCODE or DISABLED_OPCODE error in only one of them, then allow pass for flags
+    // differing for the script flags that we know added opcodes to the interpreter.
+    if (is_bad_opcode(serror) || is_bad_opcode(serror_fuzzed)) {
+        const uint32_t flags_that_added_opcodes[] = {
+            SCRIPT_ENABLE_TOKENS, SCRIPT_NATIVE_INTROSPECTION, SCRIPT_64_BIT_INTEGERS
+        };
+        for (const uint32_t flag : flags_that_added_opcodes) {
+            if ((verify_flags_fuzzed & flag) != (verify_flags & flag)) {
+                return true;
+            }
+        }
+    }
+    // If the reason they mismatch is due to number range encoding, tolerate a diffence in the 64-bit integer flags.
+    else if (serror == ScriptError::INVALID_NUMBER_RANGE || serror_fuzzed == ScriptError::INVALID_NUMBER_RANGE) {
+        if ((verify_flags_fuzzed & SCRIPT_64_BIT_INTEGERS) != (verify_flags & SCRIPT_64_BIT_INTEGERS)) {
+            return true;
+        }
+    }
+
+    return false;
 }
