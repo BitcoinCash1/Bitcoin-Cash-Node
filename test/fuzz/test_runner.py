@@ -116,7 +116,6 @@ def run_once(*, corpus, test_list, test_dir, export_coverage):
             os.path.join(test_dir, t),
             '-runs=1',
             '-timeout=10',
-            '-rss_limit_mb=6000',
             '-error_exitcode=78',
             os.path.join(corpus, t),
         ]
