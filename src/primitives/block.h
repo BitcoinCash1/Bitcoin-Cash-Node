@@ -45,6 +45,9 @@ public:
     int64_t GetBlockTime() const { return nTime; }
 };
 
+/// Block headers are 80 bytes. Some code depends on this constant (see: validation.cpp).
+inline constexpr size_t BLOCK_HEADER_SIZE = 80u;
+
 class CBlock : public CBlockHeader {
 public:
     // network and disk
