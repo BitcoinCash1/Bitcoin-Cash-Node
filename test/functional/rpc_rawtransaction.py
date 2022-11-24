@@ -32,6 +32,7 @@ from test_framework.util import (
     assert_greater_than,
     assert_raises_rpc_error,
     connect_nodes_bi,
+    disconnect_nodes,
     hex_str_to_bytes,
 )
 
@@ -56,7 +57,12 @@ class multidict(dict):
 class RawTransactionsTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 3
+        self.num_nodes = 5
+        # node 0 has txindex
+        # 1 and 2 have txindex enabled
+        # 3 is in manual pruning mode
+        # 4 is to be disconnected and not contain queried transactions and blocks
+        self.extra_args = [[], ['-txindex'], ['-txindex'], ['-prune=1'], ['-txindex']]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -64,8 +70,10 @@ class RawTransactionsTest(BitcoinTestFramework):
     def setup_network(self):
         super().setup_network()
         connect_nodes_bi(self.nodes[0], self.nodes[2])
+        connect_nodes_bi(self.nodes[0], self.nodes[4])
 
     def run_test(self):
+        synced_nodes = self.nodes[:4]
         self.log.info(
             'prepare some coins for multiple *rawtransaction commands')
         self.generate(self.nodes[2], 1)
@@ -75,9 +83,20 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 1.5)
         self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 1.0)
         self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 5.0)
-        self.sync_all()
+
+        # disconnect node 4
+        disconnect_nodes(self.nodes[0], self.nodes[4])
+        disconnect_nodes(self.nodes[1], self.nodes[4])
+        disconnect_nodes(self.nodes[2], self.nodes[4])
+        disconnect_nodes(self.nodes[3], self.nodes[4])
+        disconnect_nodes(self.nodes[4], self.nodes[0])
+        disconnect_nodes(self.nodes[4], self.nodes[1])
+        disconnect_nodes(self.nodes[4], self.nodes[2])
+        disconnect_nodes(self.nodes[4], self.nodes[3])
+
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 5)
-        self.sync_all()
+        self.sync_all(synced_nodes)
 
         self.log.info(
             'Test getrawtransaction on genesis block coinbase returns an error')
@@ -231,7 +250,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         # make a tx by sending then generate 2 blocks; block1 has the tx in it
         tx = self.nodes[2].sendtoaddress(self.nodes[1].getnewaddress(), 1)
         block1, block2 = self.generate(self.nodes[2], 2)
-        self.sync_all()
+        self.sync_all(synced_nodes)
         # We should be able to get the raw transaction by providing the correct
         # block
         gottx = self.nodes[0].getrawtransaction(tx, True, block1)
@@ -310,9 +329,9 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # send 1.2 BCH to msig adr
         txId = self.nodes[0].sendtoaddress(mSigObj, 1.2)
-        self.sync_all()
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
+        self.sync_all(synced_nodes)
         # node2 has both keys of the 2of2 ms addr., tx should affect the
         # balance
         assert_equal(self.nodes[2].getbalance(), bal + Decimal('1.20000000'))
@@ -333,9 +352,9 @@ class RawTransactionsTest(BitcoinTestFramework):
         txId = self.nodes[0].sendtoaddress(mSigObj, 2.2)
         decTx = self.nodes[0].gettransaction(txId)
         rawTx = self.nodes[0].decoderawtransaction(decTx['hex'])
-        self.sync_all()
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
+        self.sync_all(synced_nodes)
 
         # THIS IS AN INCOMPLETE FEATURE
         # NODE2 HAS TWO OF THREE KEY AND THE FUNDS SHOULD BE SPENDABLE AND
@@ -369,11 +388,12 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTxSigned = self.nodes[2].signrawtransactionwithwallet(rawTx, inputs)
         # node2 can sign the tx compl., own two of three keys
         assert_equal(rawTxSigned['complete'], True)
-        self.nodes[2].sendrawtransaction(rawTxSigned['hex'])
+        hash = self.nodes[2].sendrawtransaction(rawTxSigned['hex'])
         rawTx = self.nodes[0].decoderawtransaction(rawTxSigned['hex'])
-        self.sync_all()
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
+        self.sync_all(synced_nodes)
+        firstSentTx = self.nodes[2].getrawtransaction(hash, True)
         assert_equal(self.nodes[0].getbalance(), bal + Decimal(
             '50.00000000') + Decimal('2.19000000'))  # block reward + tx
 
@@ -396,9 +416,9 @@ class RawTransactionsTest(BitcoinTestFramework):
         txId = self.nodes[0].sendtoaddress(mSigObj, 2.2)
         decTx = self.nodes[0].gettransaction(txId)
         rawTx2 = self.nodes[0].decoderawtransaction(decTx['hex'])
-        self.sync_all()
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
+        self.sync_all(synced_nodes)
 
         # the funds of a 2of2 multisig tx should not be marked as spendable
         assert_equal(self.nodes[2].getbalance(), bal)
@@ -430,11 +450,13 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTxComb = self.nodes[2].combinerawtransaction(
             [rawTxPartialSigned1['hex'], rawTxPartialSigned2['hex']])
         self.log.debug(rawTxComb)
-        self.nodes[2].sendrawtransaction(rawTxComb)
+        hash = self.nodes[2].sendrawtransaction(rawTxComb)
         rawTx2 = self.nodes[0].decoderawtransaction(rawTxComb)
-        self.sync_all()
+
+        self.sync_all(synced_nodes)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
+        self.sync_all(synced_nodes)
+        lastSentTx = self.nodes[2].getrawtransaction(hash, True)
         assert_equal(self.nodes[0].getbalance(
         ), bal + Decimal('50.00000000') + Decimal('2.19000000'))  # block reward + tx
 
@@ -571,6 +593,141 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.log.info('Refuse garbage after transaction')
         assert_raises_rpc_error(-22, 'TX decode failed',
                                 self.nodes[0].decoderawtransaction, ToHex(tx) + '00')
+
+
+        # 11. getrawtransaction verbosity level 2
+        # confirm all pending transactions
+        self.generate(self.nodes[0], 1)
+        self.sync_all(synced_nodes)
+
+
+        # 11.1 working with past transaction, prevout of which is in past block, also not present in coin database
+        # no -txindex enabled node
+        assert_raises_rpc_error(
+            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, firstSentTx["hash"], 2)
+        assert_raises_rpc_error(
+            -5, "fee estimation. Prevout transaction not found in the provided block and Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
+
+        # disconnected node
+        assert_raises_rpc_error(
+            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions", self.nodes[4].getrawtransaction, firstSentTx["hash"], 2)
+        assert_raises_rpc_error(
+            -5, "Block hash not found", self.nodes[4].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
+
+        # -txindex enabled node
+        result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2)
+        assert_equal(result["vin"][0]["value"], Decimal('2.20'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.19'))
+        assert_equal(result["fee"], Decimal('0.01'))
+        result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2, firstSentTx["blockhash"])
+        assert_equal(result["vin"][0]["value"], Decimal('2.20'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.19'))
+        assert_equal(result["fee"], Decimal('0.01'))
+
+
+        # pruning node
+        assert_raises_rpc_error(
+            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, firstSentTx["hash"], 2)
+        assert_raises_rpc_error(
+            -5, "for fee estimation. Prevout transaction not found in the provided block and Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
+
+
+        # 11.2 make new mempool transaction spending confirmed transaction
+        inputs = [{'txid': lastSentTx["hash"], 'vout': 0}]
+        outputs = multidict([(self.nodes[0].getnewaddress(), 2.00), (self.nodes[0].getnewaddress(), 0.18)])
+        rawtx = self.nodes[0].createrawtransaction(inputs, outputs)
+        rawtx = self.nodes[0].signrawtransactionwithwallet(rawtx)
+        rawtx, rawtx['hex'] = (self.nodes[0].decoderawtransaction(rawtx['hex']),rawtx['hex'])
+        hash = self.nodes[0].sendrawtransaction(rawtx['hex'])
+        lastSentTx = self.nodes[0].getrawtransaction(hash, True)
+        self.sync_all(synced_nodes)
+
+        # 11.3 checks
+        # no -txindex enabled node, tx is in mempool and prevout is in coin database
+        self.nodes[0].getrawtransaction(lastSentTx["hash"], 2)
+
+        # disconnected node
+        assert_raises_rpc_error(
+            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions", self.nodes[4].getrawtransaction, lastSentTx["hash"], 2)
+
+        # -txindex enabled node
+        result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2)
+        assert_equal(result["vin"][0]["value"], Decimal('2.19'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.00'))
+        assert_equal(result["vout"][1]["value"], Decimal('0.18'))
+        assert_equal(result["fee"], Decimal('0.01'))
+
+        # pruning node, tx is in mempool and prevout is in coin database
+        self.nodes[3].getrawtransaction(lastSentTx["hash"], 2)
+
+        # 11.4 send another transaction to mempool, which spends the previous tx already in mempool
+        # this transaction also spends two inputs from previous one, allowing to hit the tx cache
+        inputs = [{'txid': lastSentTx["hash"], 'vout': 0}, {'txid': lastSentTx["hash"], 'vout': 1}]
+        outputs = {self.nodes[0].getnewaddress(): 2.17}
+        rawtx = self.nodes[0].createrawtransaction(inputs, outputs)
+        rawtx = self.nodes[0].signrawtransactionwithwallet(rawtx)
+        rawtx, rawtx['hex'] = (self.nodes[0].decoderawtransaction(rawtx['hex']),rawtx['hex'])
+        hash = self.nodes[0].sendrawtransaction(rawtx['hex'])
+        lastSentTx = self.nodes[0].getrawtransaction(hash, True)
+        self.sync_all(synced_nodes)
+
+        # 11.5 checks
+        # no -txindex enabled node, both transaction are findable, no exception
+        self.nodes[0].getrawtransaction(rawtx["hash"], 2)
+
+        # disconnected node
+        assert_raises_rpc_error(
+            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions", self.nodes[4].getrawtransaction, rawtx["hash"], 2)
+
+        # -txindex enabled node
+        result = self.nodes[1].getrawtransaction(rawtx["hash"], 2)
+        assert_equal(result["vin"][0]["value"], Decimal('2.00'))
+        assert_equal(result["vin"][1]["value"], Decimal('0.18'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.17'))
+        assert_equal(result["fee"], Decimal('0.01'))
+
+        # pruning node, both transaction are findable in mempool, no exception
+        self.nodes[3].getrawtransaction(lastSentTx["hash"], 2)
+
+
+        # 11.6 same block
+        # confirm all pending transactions
+        # now we have a spending transaction and output being spent in the same block
+        self.generate(self.nodes[0], 1)
+        self.sync_all(synced_nodes)
+
+        lastSentTx = self.nodes[0].getrawtransaction(hash, True)
+
+        # no -txindex enabled node, will not find tx without block specified
+        assert_raises_rpc_error(
+            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, lastSentTx["hash"], 2)
+        # will find all txs in the same block
+        self.nodes[0].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+
+        # disconnected node
+        assert_raises_rpc_error(
+            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions", self.nodes[4].getrawtransaction, lastSentTx["hash"], 2)
+        assert_raises_rpc_error(
+            -5, "Block hash not found", self.nodes[4].getrawtransaction, lastSentTx["hash"], 2, lastSentTx["blockhash"])
+
+        # -txindex enabled node
+        result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2)
+        assert_equal(result["vin"][0]["value"], Decimal('2.00'))
+        assert_equal(result["vin"][1]["value"], Decimal('0.18'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.17'))
+        assert_equal(result["fee"], Decimal('0.01'))
+        result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+        assert_equal(result["vin"][0]["value"], Decimal('2.00'))
+        assert_equal(result["vin"][1]["value"], Decimal('0.18'))
+        assert_equal(result["vout"][0]["value"], Decimal('2.17'))
+        assert_equal(result["fee"], Decimal('0.01'))
+
+        # pruning node, will not find tx without txindex or block specified
+        assert_raises_rpc_error(
+            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, lastSentTx["hash"], 2)
+        # will find all txs in the same block
+        self.nodes[3].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+
 
 
 if __name__ == '__main__':

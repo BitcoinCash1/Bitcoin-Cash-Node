@@ -67,6 +67,15 @@ BOOST_AUTO_TEST_CASE(rpc_rawparams) {
                               "a3b807410df0b60fcb9736768df5823938b2f838694939ba"
                               "45f3c0a1bff150ed not_int"),
                       std::runtime_error);
+    BOOST_CHECK_THROW(CallRPC("getrawtransaction "
+                              "a3b807410df0b60fcb9736768df5823938b2f838694939ba"
+                              "45f3c0a1bff150ed -1"),
+                      std::runtime_error);
+    BOOST_CHECK_THROW(CallRPC("getrawtransaction "
+                              "a3b807410df0b60fcb9736768df5823938b2f838694939ba"
+                              "45f3c0a1bff150ed 3"),
+                      std::runtime_error);
+
 
     BOOST_CHECK_THROW(CallRPC("createrawtransaction"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("createrawtransaction null null"),
