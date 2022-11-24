@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -165,9 +166,16 @@ public:
                 parent->endRemoveRows();
                 break;
             case CT_UPDATED:
-                // Miscellaneous updates -- nothing to do, status update will
-                // take care of this, and is only computed for visible
-                // transactions.
+                // Miscellaneous updates
+                interfaces::WalletTx wtx = wallet.getWalletTx(txid);
+
+                QList<TransactionRecord> toUpdate =
+                    TransactionRecord::decomposeTransaction(wtx);
+                cachedWallet.replace(lowerIndex, toUpdate.first());
+                const auto index1 = parent->createIndex(lowerIndex, 0, index(wallet, lowerIndex));
+                const auto index2 = parent->createIndex(lowerIndex, parent->columns.size() - 1, index(wallet, lowerIndex));
+                Q_EMIT parent->dataChanged(index1, index2);
+
                 break;
         }
     }
@@ -296,6 +304,9 @@ TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const {
             break;
         case TransactionStatus::Conflicted:
             status = tr("Conflicted");
+            break;
+        case TransactionStatus::DoubleSpent:
+            status = tr("Conflicted, double spend proof found");
             break;
         case TransactionStatus::Immature:
             status =
@@ -462,6 +473,8 @@ TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx) const {
             return QIcon(":/icons/transaction_confirmed");
         case TransactionStatus::Conflicted:
             return QIcon(":/icons/transaction_conflicted");
+        case TransactionStatus::DoubleSpent:
+            return QIcon(":/icons/warning");
         case TransactionStatus::Immature: {
             int total = wtx->status.depth + wtx->status.matures_in;
             int part = (wtx->status.depth * 4 / total) + 1;
@@ -554,7 +567,8 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const {
             return column_alignments[index.column()];
         case Qt::ForegroundRole:
             // Use the "danger" color for abandoned transactions
-            if (rec->status.status == TransactionStatus::Abandoned) {
+            if (rec->status.status == TransactionStatus::Abandoned ||
+                rec->status.status == TransactionStatus::DoubleSpent) {
                 return COLOR_TX_STATUS_DANGER;
             }
             // Non-confirmed (but not immature) as transactions are grey

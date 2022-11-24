@@ -1,9 +1,13 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
 // Copyright (c) 2020-2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
+
+#include <dsproof/dspid.h>
+#include <primitives/txid.h>
 
 #include <QDateTime>
 #include <QObject>
@@ -83,6 +87,7 @@ private:
     std::unique_ptr<interfaces::Handler> m_handler_banned_list_changed;
     std::unique_ptr<interfaces::Handler> m_handler_notify_block_tip;
     std::unique_ptr<interfaces::Handler> m_handler_notify_header_tip;
+    std::unique_ptr<interfaces::Handler> m_handler_notify_transaction_double_spent;
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
     BanTableModel *banTableModel;
@@ -106,6 +111,8 @@ Q_SIGNALS:
 
     // Show progress dialog e.g. for verifychain
     void showProgress(const QString &title, int nProgress);
+
+    void transactionDoubleSpent(const TxId txId, const DspId dspId);
 
 public Q_SLOTS:
     void updateTimer();

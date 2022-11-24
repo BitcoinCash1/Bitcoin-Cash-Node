@@ -1,5 +1,6 @@
 // Copyright (c) 2018 The Bitcoin Core developers
 // Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -327,6 +328,10 @@ namespace {
                     fn(initial_download, block->nHeight, block->GetBlockTime(), block->GetBlockHash(),
                        GuessVerificationProgress(Params().TxData(), block));
                 }));
+        }
+        std::unique_ptr<Handler>
+        handleNotifyTransactionDoubleSpent(NotifyTransactionDoubleSpentFn fn) override {
+            return MakeHandler(::uiInterface.NotifyTransactionDoubleSpent_connect(fn));
         }
         NodeContext m_context;
     };

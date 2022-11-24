@@ -1,6 +1,9 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#include <txmempool.h>
 
 #include <qt/walletview.h>
 
@@ -28,6 +31,9 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QDebug>
+
+extern CTxMemPool g_mempool;
 
 WalletView::WalletView(const PlatformStyle *_platformStyle,
                        WalletModel *_walletModel, QWidget *parent)
@@ -132,8 +138,36 @@ void WalletView::setBitcoinGUI(BitcoinGUI *gui) {
 void WalletView::setClientModel(ClientModel *_clientModel) {
     this->clientModel = _clientModel;
 
+    if (_clientModel) {
+        connect(_clientModel, &ClientModel::transactionDoubleSpent, this,
+                &WalletView::transactionDoubleSpent);
+    }
+
     overviewPage->setClientModel(_clientModel);
     sendCoinsPage->setClientModel(_clientModel);
+}
+
+void WalletView::transactionDoubleSpent(const TxId txId, const DspId dspId) {
+    const CTransactionRef &tx = walletModel->wallet().getTx(txId);
+    if (!tx) {
+        return;
+    }
+
+    const auto &optDspPair = g_mempool.getDoubleSpendProof(dspId, nullptr);
+    if (!optDspPair.has_value()) {
+        return;
+    }
+
+    const DoubleSpendProof &dsProof = (*optDspPair).first;
+    QString msg = tr("Outpoint %1:%2 was attempted to be double spent").arg(
+        QString::fromStdString(dsProof.prevTxId().ToString().substr(0, 10)),
+        QString::number(dsProof.prevOutIndex())
+    );
+    Q_EMIT message(tr("Double Spend Proof"), msg, CClientUIInterface::MSG_INFORMATION);
+
+    QString hashQStr = QString::fromStdString(txId.ToString());
+    walletModel->getTransactionTableModel()->updateTransaction(hashQStr, CT_UPDATED,
+                                                               true);
 }
 
 void WalletView::setWalletModel(WalletModel *_walletModel) {

@@ -1,4 +1,5 @@
 // Copyright (c) 2010-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -33,6 +34,8 @@ struct UISignals {
         NotifyHeaderTip;
     boost::signals2::signal<CClientUIInterface::BannedListChangedSig>
         BannedListChanged;
+    boost::signals2::signal<CClientUIInterface::NotifyTransactionDoubleSpentSig>
+        NotifyTransactionDoubleSpent;
 } g_ui_signals;
 
 #define ADD_SIGNALS_IMPL_WRAPPER(signal_name)                                  \
@@ -56,6 +59,7 @@ ADD_SIGNALS_IMPL_WRAPPER(ShowProgress);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyBlockTip);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyHeaderTip);
 ADD_SIGNALS_IMPL_WRAPPER(BannedListChanged);
+ADD_SIGNALS_IMPL_WRAPPER(NotifyTransactionDoubleSpent);
 
 bool CClientUIInterface::ThreadSafeMessageBox(const std::string &message,
                                               const std::string &caption,
@@ -95,6 +99,10 @@ void CClientUIInterface::NotifyHeaderTip(bool b, const CBlockIndex *i) {
 }
 void CClientUIInterface::BannedListChanged() {
     return g_ui_signals.BannedListChanged();
+}
+void CClientUIInterface::NotifyTransactionDoubleSpent(const TxId txId,
+                                                      const DspId dspId) {
+    return g_ui_signals.NotifyTransactionDoubleSpent(txId, dspId);
 }
 
 bool InitError(const std::string &str) {

@@ -1,4 +1,5 @@
 // Copyright (c) 2018 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -92,6 +93,7 @@ namespace {
         result.time = wtx.GetTxTime();
         result.value_map = wtx.mapValue;
         result.is_coinbase = wtx.IsCoinBase();
+        result.dsProof = wtx.GetDsProof();
         return result;
     }
 
@@ -118,6 +120,7 @@ namespace {
         result.is_abandoned = wtx.isAbandoned();
         result.is_coinbase = wtx.IsCoinBase();
         result.is_in_main_chain = wtx.IsInMainChain(locked_chain);
+        result.is_double_spent = result.depth_in_main_chain < 1 && wtx.IsDoubleSpent();
         return result;
     }
 

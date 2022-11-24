@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -77,6 +78,15 @@ QString TransactionDesc::toHTML(interfaces::Node &node,
     Amount nCredit = wtx.credit;
     Amount nDebit = wtx.debit;
     Amount nNet = nCredit - nDebit;
+    DoubleSpendProof dsProof = wtx.dsProof;
+    if (!dsProof.isEmpty()) {
+        strHTML += "<b>" + tr("Double Spend Proof") + ":</b><br>" +
+            tr("Outpoint %1:%2 which is involved in this transaction was attempted to be double spent<br>"
+               "Proof ID: %3<br><br>")
+                .arg(QString::fromStdString(dsProof.prevTxId().ToString()),
+                     QString::number(dsProof.prevOutIndex()),
+                     QString::fromStdString(dsProof.GetId().ToString()));
+    }
 
     strHTML += "<b>" + tr("Status") + ":</b> " +
                FormatTxStatus(wtx, status, inMempool, numBlocks);

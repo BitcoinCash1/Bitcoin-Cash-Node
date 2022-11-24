@@ -1,10 +1,12 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <amount.h>
+#include <dsproof/dsproof.h>
 #include <primitives/txid.h>
 
 #include <QList>
@@ -51,7 +53,9 @@ public:
         /** Mined but waiting for maturity */
         Immature,
         /** Mined but not accepted */
-        NotAccepted
+        NotAccepted,
+        /** Double spend proof was found for outpoints involved in this tx */
+        DoubleSpent
     };
 
     /// Transaction counts towards available balance
@@ -128,6 +132,7 @@ public:
     std::string address;
     Amount debit;
     Amount credit;
+    DoubleSpendProof dsProof;
     /**@}*/
 
     /** Subtransaction index, for sort key */

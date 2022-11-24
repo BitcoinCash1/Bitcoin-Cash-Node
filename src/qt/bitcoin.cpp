@@ -1,5 +1,6 @@
 // Copyright (c) 2011-2019 The Bitcoin Core developers
 // Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -74,6 +75,7 @@ static constexpr bool DEFAULT_START_MINIMIZED = false;
 Q_DECLARE_METATYPE(bool *)
 Q_DECLARE_METATYPE(Amount)
 Q_DECLARE_METATYPE(uint256)
+Q_DECLARE_METATYPE(TxId)
 
 // Config is non-copyable so we can only register pointers to it
 Q_DECLARE_METATYPE(Config *)
@@ -566,6 +568,9 @@ int GuiMain(int argc, char *argv[]) {
     // copy-construct non-pointers to objects for invoking slots
     // behind-the-scenes in the 'Queued' connection case.
     qRegisterMetaType<Config *>();
+
+    qRegisterMetaType<TxId>();
+    qRegisterMetaType<uint256>("DspId");
 
     /// 2. Show any error parsing parameters. Now that Qt is initialized, we can show the error.
     if (!parametersParsed) {
