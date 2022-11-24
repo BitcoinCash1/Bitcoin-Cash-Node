@@ -327,7 +327,8 @@ def report_cmd(argv):
 ##########################################################################
 
 
-GIT_LOG_CMD = "git log --pretty=format:%ai {}"
+# only look for changes since the fork commit
+GIT_LOG_CMD = "git log --pretty=format:%ai 964a185cc83af34587194a6ecda3ed9cf6b49263^..HEAD {}"
 
 
 def call_git_log(filename):
@@ -443,7 +444,7 @@ def update_updatable_copyright(filename):
     file_lines[index] = new_line
     write_file_lines(filename, file_lines)
     print_file_action_message(filename,
-                              "Copyright updated! -> {}".format(
+                              "Copyright updated -> {}".format(
                                   last_git_change_year))
 
 
