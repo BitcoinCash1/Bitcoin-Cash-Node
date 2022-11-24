@@ -62,7 +62,7 @@ static void DuplicateInputs(benchmark::State &state) {
 
     block.hashMerkleRoot = BlockMerkleRoot(block);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         CValidationState cvstate{};
         assert(!CheckBlock(block, cvstate, chainparams.GetConsensus(),
                            BlockValidationOptions(GetConfig())
@@ -110,7 +110,7 @@ static void CheckRegularTransactionBench(benchmark::State &state) {
         }
     }
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (const auto &tx : valid_txns) {
             CValidationState state1;
             assert(CheckRegularTransaction(tx, state1));

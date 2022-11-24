@@ -138,7 +138,7 @@ static void benchRemoveForBlock(const Config& config, benchmark::State& state,
     // Note: in order to isolate how long removeForBlock takes, we are
     // forced to pre-create all the pools we will be needing up front,
     // copying the entries from g_mempool into them.
-    for (uint64_t i = 0; i < state.m_num_iters * state.m_num_evals + 1; ++i) {
+    for (uint64_t i = 0; i < state.m_num_iters + 1; ++i) {
         LOCK2(cs_main, g_mempool.cs);
         const auto &index = g_mempool.mapTx.get<entry_id>(); // iterate by entry id
         pools.emplace_back();
@@ -152,7 +152,7 @@ static void benchRemoveForBlock(const Config& config, benchmark::State& state,
 
     auto it = pools.begin();
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         assert(it != pools.end());
         auto &pool = *it++;
         pool.removeForBlock(block.vtx);

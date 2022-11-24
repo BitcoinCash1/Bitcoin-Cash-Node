@@ -21,7 +21,7 @@ static void DeserializeBlockTest(const std::vector<uint8_t> &data, benchmark::St
     char a = '\0';
     stream.write(&a, 1); // Prevent compaction
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         CBlock block;
         stream >> block;
         bool rewound = stream.Rewind(data.size());
@@ -37,7 +37,7 @@ static void DeserializeAndCheckBlockTest(const std::vector<uint8_t> &data, bench
     const Config &config = GetConfig();
     const Consensus::Params params = config.GetChainParams().GetConsensus();
     BlockValidationOptions options(config);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         // Note that CBlock caches its checked state, so we need to recreate it
         // here.
         CBlock block;
@@ -64,7 +64,7 @@ static void CheckBlockTest(const std::vector<uint8_t> &data, benchmark::State &s
     CValidationState validationState;
 
     // de-serialize once, check many times
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         block.fChecked = false; // reset block checked state
 
         bool checked = CheckBlock(block, validationState, params, options);
@@ -83,7 +83,7 @@ static void CheckProofOfWorkTest(const std::vector<uint8_t> &data, benchmark::St
     stream >> block;
 
     // de-serialize once, check many times
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         bool checked = CheckProofOfWork(block.GetHash(), block.nBits, params);
         assert(checked);
     }
@@ -99,7 +99,7 @@ static void CheckBlockHashTest(const std::vector<uint8_t> &data, benchmark::Stat
 
     BlockHash const expected = BlockHash::fromHex(expected_hash);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         BlockHash hash = block.GetHash();
         assert(hash == expected);
     }

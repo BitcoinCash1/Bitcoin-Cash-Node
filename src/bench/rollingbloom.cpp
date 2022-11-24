@@ -11,7 +11,7 @@ static void RollingBloom(benchmark::State &state) {
     CRollingBloomFilter filter(120000, 0.000001);
     std::vector<uint8_t> data(32);
     uint32_t count = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         count++;
         data[0] = count;
         data[1] = count >> 8;
@@ -29,7 +29,7 @@ static void RollingBloom(benchmark::State &state) {
 
 static void RollingBloomReset(benchmark::State &state) {
     CRollingBloomFilter filter(120000, 0.000001);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         filter.reset();
     }
 }

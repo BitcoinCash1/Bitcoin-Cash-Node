@@ -139,7 +139,7 @@ static void benchATMP(const Config& config,
 
     LOCK(::cs_main);
     assert(g_mempool.size() == 0);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (const auto& tx : chainedTxs) {
             CValidationState vstate;
             bool ok = AcceptToMemoryPool(
@@ -205,7 +205,7 @@ static void benchReorg(const Config& config,
     }
     CBlockIndex* mostWorkTip  = ::ChainActive().Tip();
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         CValidationState vstate;
 
         // Disconnect blocks with long transaction chains
@@ -264,7 +264,7 @@ static void benchGenerateNewBlock(const Config& config,
     assert(mempool.size() == txCount);
 
     const CScript dummy = CScript() << OP_TRUE;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         auto blocktemplate = BlockAssembler(config, mempool).CreateNewBlock(dummy);
         assert(blocktemplate);
         // +1 for coinbase
@@ -282,7 +282,7 @@ static void benchEviction(const Config&,
     // Note: in order to isolate how long eviction takes (as opposed to add + eviction),
     // we are forced to pre-create all the pools we will be needing up front.
 
-    for (uint64_t i = 0; i < state.m_num_iters * state.m_num_evals + 1; ++i) {
+    for (uint64_t i = 0; i < state.m_num_iters; ++i) {
         pools.emplace_back();
         CTxMemPool &pool = pools.back();
         TestMemPoolEntryHelper entry;
@@ -312,7 +312,7 @@ static void benchEviction(const Config&,
 
     auto it = pools.begin();
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         assert(it != pools.end());
         auto & pool = *it++;
         LOCK2(cs_main, pool.cs);

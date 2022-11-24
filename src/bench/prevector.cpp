@@ -30,7 +30,7 @@ static_assert(IS_TRIVIALLY_CONSTRUCTIBLE<trivial_t>::value,
               "expected trivial_t to be trivially constructible");
 
 template <typename T> static void PrevectorDestructor(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (auto x = 0; x < 1000; ++x) {
             prevector<28, T> t0;
             prevector<28, T> t1;
@@ -41,7 +41,7 @@ template <typename T> static void PrevectorDestructor(benchmark::State &state) {
 }
 
 template <typename T> static void PrevectorClear(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (auto x = 0; x < 1000; ++x) {
             prevector<28, T> t0;
             prevector<28, T> t1;
@@ -54,7 +54,7 @@ template <typename T> static void PrevectorClear(benchmark::State &state) {
 }
 
 template <typename T> static void PrevectorResize(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         prevector<28, T> t0;
         prevector<28, T> t1;
         for (auto x = 0; x < 1000; ++x) {
@@ -78,7 +78,7 @@ static void PrevectorDeserialize(benchmark::State &state) {
     for (auto x = 0; x < 101; ++x) {
         s0 << t0;
     }
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         prevector<28, T> t1;
         for (auto x = 0; x < 1000; ++x) {
             s0 >> t1;

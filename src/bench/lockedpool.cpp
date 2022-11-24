@@ -23,7 +23,7 @@ static void BenchLockedPool(benchmark::State &state) {
         addr.push_back(nullptr);
     }
     uint32_t s = 0x12345678;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (int x = 0; x < BITER; ++x) {
             int idx = s & (addr.size() - 1);
             if (s & 0x80000000) {

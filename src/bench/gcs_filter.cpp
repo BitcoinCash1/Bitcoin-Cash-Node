@@ -15,7 +15,7 @@ static void ConstructGCSFilter(benchmark::State &state) {
     }
 
     uint64_t siphash_k0 = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         GCSFilter filter({siphash_k0, 0, 20, 1 << 20}, elements);
 
         siphash_k0++;
@@ -32,7 +32,7 @@ static void MatchGCSFilter(benchmark::State &state) {
     }
     GCSFilter filter({0, 0, 20, 1 << 20}, elements);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         filter.Match(GCSFilter::Element());
     }
 }

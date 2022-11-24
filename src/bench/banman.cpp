@@ -50,7 +50,7 @@ static void BanManAddressIsBanned(benchmark::State &state) {
         banman.Ban(gen(), 0, false, false /* disable slow saves to disk */);
 
     size_t index = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         banman.IsBanned(chkAddresses[index++ % nAddressChk]);
     }
 }
@@ -69,7 +69,7 @@ static void BanManAddressIsDiscouraged(benchmark::State &state) {
         banman.Discourage(gen());
 
     size_t index = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         banman.IsDiscouraged(chkAddresses[index++ % nAddressChk]);
     }
 }
@@ -85,7 +85,7 @@ static void BanManAddressBan(benchmark::State &state) {
     for (auto & addr : addresses)
         addr = gen();
     size_t banTime = 60, index = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         banman.Ban(addresses[index++ % nAddressGen], banTime++, false, false /* disable slow saves to disk */);
     }
 }

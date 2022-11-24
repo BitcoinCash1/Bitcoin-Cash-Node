@@ -51,7 +51,7 @@ static void AssembleBlock(benchmark::State &state) {
         }
     }
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         PrepareBlock(config, SCRIPT_PUB);
     }
 }

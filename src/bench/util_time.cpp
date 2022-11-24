@@ -7,27 +7,27 @@
 #include <util/time.h>
 
 static void BenchTimeDeprecated(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)GetTime();
     }
 }
 
 static void BenchTimeMock(benchmark::State &state) {
     SetMockTime(111);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)GetTime<std::chrono::seconds>();
     }
     SetMockTime(0);
 }
 
 static void BenchTimeMillis(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)GetTime<std::chrono::milliseconds>();
     }
 }
 
 static void BenchTimeMillisSys(benchmark::State &state) {
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)GetTimeMillis();
     }
 }

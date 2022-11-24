@@ -34,12 +34,12 @@ static void JSONReadWriteBlock(const std::vector<uint8_t> &data, unsigned int pr
     const auto blockuv = blockToJSON(GetConfig(), block, &blockindex, &blockindex, /*verbose*/ true);
 
     if (write) {
-        while (state.KeepRunning()) {
+        BENCHMARK_LOOP {
             (void)UniValue::stringify(blockuv, pretty);
         }
     } else {
         std::string json = UniValue::stringify(blockuv, pretty);
-        while (state.KeepRunning()) {
+        BENCHMARK_LOOP {
             UniValue uv;
             if (!uv.read(json))
                 throw std::runtime_error("UniValue lib failed to parse its own generated string.");
