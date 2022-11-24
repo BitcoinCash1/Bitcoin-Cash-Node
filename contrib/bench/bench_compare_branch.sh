@@ -8,7 +8,7 @@ export LC_ALL=C
 
 # check if we're in a ninja build dir
 if [ ! -f "build.ninja" ]; then
-  echo "Run this from your build directory, after calling cmake -GNinja" >&2
+  echo "Run this from your build directory, after calling cmake -GNinja.  Usage: $0 branch1 branch2" >&2
   exit 1
 fi
 
@@ -67,42 +67,48 @@ fi
 # check out branches and run the benchmarks
 echo "Comparing benchmark results for $compare_base and $compare_branch..."
 
-result1=$(mktemp "bchn_bench_compare_tmp.XXXXXXXXXX")
-result2=$(mktemp "bchn_bench_compare_tmp.XXXXXXXXXX")
+result_base=$(mktemp "bchn_bench_compare_tmp.$compare_base.XXXXXX.txt")
+result_branch=$(mktemp "bchn_bench_compare_tmp.$compare_branch.XXXXXX.txt")
 function cleanup_tmp {
-  rm -f "$result1" "$result2"
+  rm -f "$result_base" "$result_branch"
 }
 trap cleanup_tmp EXIT
 
 if [ "$current_branch" = "$compare_base" ]; then
-  echo "Benchmarking $compare_base..." >&2
-  ninja bench_bitcoin && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result1" || exit 1
-  echo "Benchmarking $compare_branch..." >&2
+  echo "Building $compare_base..." >&2
+  ninja bench_bitcoin >/dev/null && \
+    echo "Benchmarking $compare_base..." && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_base" || exit 1
+  echo "Building $compare_branch..." >&2
   git checkout "$compare_branch" >&2 && \
-    ninja bench_bitcoin >&2 && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result2" || exit 1
+    ninja bench_bitcoin >/dev/null && \
+    echo "Benchmarking $compare_branch" && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_branch" || exit 1
 elif [ "$current_branch" = "$compare_branch" ]; then
-  echo "Benchmarking $compare_branch..." >&2
-  ninja bench_bitcoin && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result2" || exit 1
-  echo "Benchmarking $compare_base..." >&2
+  echo "Building $compare_branch..." >&2
+  ninja bench_bitcoin >/dev/null && \
+    echo "Bechmarking $compare_branch..." && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_branch" || exit 1
+  echo "Building $compare_base..." >&2
   git checkout "$compare_base" >&2 && \
-    ninja bench_bitcoin >&2 && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result1" || exit 1
+    ninja bench_bitcoin >/dev/null && \
+    echo "Bechmarking $compare_base..." && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_base" || exit 1
 else
-  echo "Benchmarking $compare_base..." >&2
+  echo "Building $compare_base..." >&2
   git checkout "$compare_base" >&2 && \
-    ninja bench_bitcoin >&2 && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result1" || exit 1
-  echo "Benchmarking $compare_branch..." >&2
+    ninja bench_bitcoin >/dev/null && \
+    echo "Bechmarking $compare_base..." && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_base" || exit 1
+  echo "Building $compare_branch..." >&2
   git checkout "$compare_branch" >&2 && \
-    ninja bench_bitcoin >&2 && \
-    src/bench/bench_bitcoin "$filter_arg" > "$result2" || exit 1
+    ninja bench_bitcoin >/dev/null && \
+    echo "Bechmarking $compare_branch..." && \
+    src/bench/bench_bitcoin "$filter_arg" > "$result_branch" || exit 1
 fi
 # return to the previously checked out branch
 git checkout "$current_branch" >&2
 
 script_dir=$(dirname "$0")
 echo
-"$script_dir/bench_compare.sh" "${threshold_args[@]}" "${colour_args[@]}" "$result1" "$result2"
+"$script_dir/bench_compare.sh" "${threshold_args[@]}" "${colour_args[@]}" "$result_base" "$result_branch"

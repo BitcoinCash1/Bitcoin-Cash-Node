@@ -68,3 +68,29 @@ Coloring is disabled for Markdown.
 
 The "highlighting" percentage cutoff is configurable using
 `--percentage` (`-p`).
+
+## `bench_bisect.sh`
+
+The script runs a [git bisect](https://git-scm.com/docs/git-bisect) workflow,
+using the result of a given benchmark as a metric.  The intended use is when a
+benchmark time is known to have changed between two points in git history.
+This script can be used to quickly find the first commit where the specified
+benchmark begins to run significantly slower.
+
+This is best used with benchmark results that are repeatable (do not vary from
+run to run on a given build by more than a few percent), and where the
+difference in benchmark results between the two target branches or commits is
+significant.  Such benchmarks can be identified with the
+`bench_compare_branch.sh` script.
+
+Specify the one benchmark to run (if a filter matches multiple results, only
+the last benchmark is taken into account, so filter explicitly)  Then specify
+the commit or tag when the benchmark is known to be fast, followed by the one
+when it is known to be slow.
+
+Finally, specify your build directory, as git bisect, and hence this script
+must be run from the repository's root, so we need to know where to build.
+
+Usage: `contrib/bench/bench_bisect.sh benchmark fast_commit slow_commit build_dir`
+
+Example: `contrib/bench/bench_bisect.sh BanManAddressIsDiscouraged v24.0.0 v24.1.0 ./build`
