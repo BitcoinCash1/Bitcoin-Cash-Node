@@ -16,6 +16,7 @@
 #include <tinyformat.h>
 #include <uint256.h>
 
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -56,16 +57,16 @@ protected:
     //! CBlockIndex into a vector *by value*, for example, which may get
     //! inadvertently resized (thus leading to a situation with dangling
     //! pointers).
-    CBlockIndex(const CBlockIndex &) = default;
-    CBlockIndex &operator=(const CBlockIndex &) = default;
+    explicit CBlockIndex(const CBlockIndex &) = default;
+    CBlockIndex &operator=(const CBlockIndex &) = delete;
     //! Move construction and move assignment are forbidden since nothing
     //! in this codebase uses these and it's safer not to allow it.
     CBlockIndex(CBlockIndex &&) = delete;
     CBlockIndex &operator=(CBlockIndex &&) = delete;
 
 public:
-    //! pointer to the hash of the block, if any. Memory is owned by this
-    //! CBlockIndex
+    //! pointer to the hash of the block, if any. Memory is owned by external
+    //! code that also owns this CBlockIndex. See: class CChanState in validation.cpp.
     const BlockHash *phashBlock = nullptr;
 
     //! pointer to the index of the predecessor of this block
@@ -243,6 +244,10 @@ public:
     CBlockIndex *GetAncestor(int height);
     const CBlockIndex *GetAncestor(int height) const;
 };
+
+// ensure that the future code that may modify the CBlockIndex preserves type safety restriction on CBlockIndex
+static_assert(!std::is_copy_constructible_v<CBlockIndex> && !std::is_move_constructible_v<CBlockIndex>
+    && !std::is_copy_assignable_v<CBlockIndex> && !std::is_move_assignable_v<CBlockIndex>);
 
 /**
  * Maintain a map of CBlockIndex for all known headers.

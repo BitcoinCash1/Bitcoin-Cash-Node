@@ -81,35 +81,36 @@ BOOST_AUTO_TEST_CASE(get_next_work_upper_limit_actual) {
         0x1d00e1fdU);
 }
 
+using CBlockIndexPtr = std::unique_ptr<CBlockIndex>;
+const auto MkCBlockIndexPtr = &std::make_unique<CBlockIndex>;
+
 BOOST_AUTO_TEST_CASE(GetBlockProofEquivalentTime_test) {
     DummyConfig config(CBaseChainParams::MAIN);
 
-    std::vector<CBlockIndex> blocks(10000);
+    std::vector<CBlockIndexPtr> blocks(10000);
     for (int i = 0; i < 10000; i++) {
-        blocks[i].pprev = i ? &blocks[i - 1] : nullptr;
-        blocks[i].nHeight = i;
-        blocks[i].nTime =
+        blocks[i] = MkCBlockIndexPtr();
+        blocks[i]->pprev = i ? blocks[i - 1].get() : nullptr;
+        blocks[i]->nHeight = i;
+        blocks[i]->nTime =
             1269211443 +
             i * config.GetChainParams().GetConsensus().nPowTargetSpacing;
-        blocks[i].nBits = 0x207fffff; /* target 0x7fffff000... */
-        blocks[i].nChainWork =
-            i ? blocks[i - 1].nChainWork + GetBlockProof(blocks[i])
+        blocks[i]->nBits = 0x207fffff; /* target 0x7fffff000... */
+        blocks[i]->nChainWork =
+            i ? blocks[i - 1]->nChainWork + GetBlockProof(*blocks[i])
               : arith_uint256(0);
     }
 
     for (int j = 0; j < 1000; j++) {
-        CBlockIndex *p1 = &blocks[InsecureRandRange(10000)];
-        CBlockIndex *p2 = &blocks[InsecureRandRange(10000)];
-        CBlockIndex *p3 = &blocks[InsecureRandRange(10000)];
+        CBlockIndexPtr& p1 = blocks[InsecureRandRange(10000)];
+        CBlockIndexPtr& p2 = blocks[InsecureRandRange(10000)];
+        CBlockIndexPtr& p3 = blocks[InsecureRandRange(10000)];
 
         int64_t tdiff = GetBlockProofEquivalentTime(
             *p1, *p2, *p3, config.GetChainParams().GetConsensus());
         BOOST_CHECK_EQUAL(tdiff, p1->GetBlockTime() - p2->GetBlockTime());
     }
 }
-
-using CBlockIndexPtr = std::unique_ptr<CBlockIndex>;
-const auto MkCBlockIndexPtr = &std::make_unique<CBlockIndex>;
 
 static CBlockIndexPtr GetBlockIndex(CBlockIndex *pindexPrev, int64_t nTimeInterval,
                                     uint32_t nBits) {
