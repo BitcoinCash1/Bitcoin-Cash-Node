@@ -1069,7 +1069,7 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
         }
 
         // check the block size and populate data
-        if (blockSize < 80u) {
+        if (blockSize < BLOCK_HEADER_SIZE) {
             return error("%s: block size verification failed for %s", __func__, blockPos.ToString());
         }
         rawBlock.resize(blockSize);
@@ -5378,7 +5378,7 @@ void LoadExternalBlockFile(const Config &config, FILE *fileIn,
 
                 // Read size.
                 blkdat >> nSize;
-                if (nSize < 80) {
+                if (nSize < BLOCK_HEADER_SIZE) {
                     continue;
                 }
             } catch (const std::exception &) {
