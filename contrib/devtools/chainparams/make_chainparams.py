@@ -18,6 +18,7 @@ class Chain(Enum):
     TestNet = "TESTNET"
     TestNet4 = "TESTNET4"
     ScaleNet = "SCALENET"
+    ChipNet = "CHIPNET"
 
 
 def get_chainparams(rpc_caller, block):
@@ -31,6 +32,8 @@ def get_chainparams(rpc_caller, block):
         chain = Chain.TestNet4
     elif chaininfo['chain'] == 'scale':
         chain = Chain.ScaleNet
+    elif chaininfo['chain'] == 'chip':
+        chain = Chain.ChipNet
         # Comment-out the below to actually update chain params for scalenet
         sys.exit("ScaleNet chainparams should not be updated. See BCHN issue "
                  "#293. If you really wish to proceed anyway, then please "

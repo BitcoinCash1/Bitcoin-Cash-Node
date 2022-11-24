@@ -12,6 +12,7 @@ argument:
     nodes_testnet3.txt
     nodes_testnet4.txt
     nodes_scalenet.txt
+    nodes_chipnet.txt
 
 These files must consist of lines in the format
 
@@ -34,6 +35,9 @@ The output will be four data structures with the peers in binary format:
    ...
    }
    static SeedSpec6 pnSeed6_scalenet[]={
+   ...
+   }
+   static SeedSpec6 pnSeed6_chipnet[]={
    ...
    }
 
@@ -153,6 +157,9 @@ def main():
     g.write('\n')
     with open(os.path.join(indir, 'nodes_scalenet.txt'), 'r', encoding="utf8") as f:
         process_nodes(g, f, 'pnSeed6_scalenet', 38333)
+    with open(os.path.join(indir, 'nodes_chipnet.txt'), 'r', encoding="utf8") as f:
+        process_nodes(g, f, 'pnSeed6_chipnet', 48333)
+    g.write('\n')
     g.write('#endif // BITCOIN_CHAINPARAMSSEEDS_H\n')
 
 

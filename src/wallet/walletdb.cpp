@@ -359,7 +359,7 @@ static bool ReadKeyValue(CWallet *pwallet, CDataStream &ssKey,
             CKeyMetadata keyMeta;
             ssValue >> keyMeta;
             wss.nKeyMeta++;
-            pwallet->LoadScriptMetadata(CScriptID(script), keyMeta);
+            pwallet->LoadScriptMetadata(ScriptID(script, false /* no p2sh_32 in wallet */), keyMeta);
         } else if (strType == "defaultkey") {
             // We don't want or need the default key, but if there is one set,
             // we want to make sure that it is valid so that we can detect

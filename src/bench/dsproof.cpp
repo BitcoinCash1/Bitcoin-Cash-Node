@@ -54,13 +54,14 @@ static void DoubleSpendProofCreate(benchmark::State &state) {
         for (auto & txin : tx.vin) {
             const Coin coin(CTxOut{1 * COIN, GetScriptForDestination(privKey.GetPubKey().GetID())}, 123, false);
 
-            SignatureData sigdata = DataFromTransaction(tx, i, coin.GetTxOut());
+            // no "real" script execution context is necessary for dsproofs (P2PKH only)
+            const ScriptExecutionContext limited_context{unsigned(i), coin.GetTxOut(), tx};
 
-            auto const context = std::nullopt; // no script execution context is necessary for dsproofs (P2PKH only)
+            SignatureData sigdata = DataFromTransaction(limited_context, STANDARD_SCRIPT_VERIFY_FLAGS);
 
             ProduceSignature(keyStore,
-                             MutableTransactionSignatureCreator(&tx, i, coin.GetTxOut().nValue, sigHashType),
-                             coin.GetTxOut().scriptPubKey, sigdata, context);
+                             TransactionSignatureCreator(limited_context, sigHashType),
+                             coin.GetTxOut().scriptPubKey, sigdata, STANDARD_SCRIPT_VERIFY_FLAGS);
             UpdateInput(txin, sigdata);
             ++i;
             if (i == tx.vin.size() && !commonTxOut)

@@ -66,17 +66,16 @@ std::vector<uint8_t> PackAddrData(const T &id, uint8_t type) {
 }
 
 // Implements encoding of CTxDestination using cashaddr.
-class CashAddrEncoder : public boost::static_visitor<std::string> {
-public:
-    CashAddrEncoder(const CChainParams &p) : params(p) {}
+struct CashAddrEncoder : boost::static_visitor<std::string> {
+    CashAddrEncoder(const CChainParams &p, bool t) : params(p), tokenAwareType(t) {}
 
     std::string operator()(const CKeyID &id) const {
-        std::vector<uint8_t> data = PackAddrData(id, PUBKEY_TYPE);
+        std::vector<uint8_t> data = PackAddrData(id, tokenAwareType ? TOKEN_PUBKEY_TYPE : PUBKEY_TYPE);
         return cashaddr::Encode(params.CashAddrPrefix(), data);
     }
 
-    std::string operator()(const CScriptID &id) const {
-        std::vector<uint8_t> data = PackAddrData(id, SCRIPT_TYPE);
+    std::string operator()(const ScriptID &id) const {
+        std::vector<uint8_t> data = PackAddrData(id, tokenAwareType ? TOKEN_SCRIPT_TYPE : SCRIPT_TYPE);
         return cashaddr::Encode(params.CashAddrPrefix(), data);
     }
 
@@ -84,34 +83,32 @@ public:
 
 private:
     const CChainParams &params;
+    const bool tokenAwareType;
 };
 
 } // namespace
 
-std::string EncodeCashAddr(const CTxDestination &dst,
-                           const CChainParams &params) {
-    return boost::apply_visitor(CashAddrEncoder(params), dst);
+std::string EncodeCashAddr(const CTxDestination &dst, const CChainParams &params, const bool tokenAwareType) {
+    return boost::apply_visitor(CashAddrEncoder(params, tokenAwareType), dst);
 }
 
-std::string EncodeCashAddr(const std::string &prefix,
-                           const CashAddrContent &content) {
+std::string EncodeCashAddr(const std::string &prefix, const CashAddrContent &content) {
     std::vector<uint8_t> data = PackAddrData(content.hash, content.type);
     return cashaddr::Encode(prefix, data);
 }
 
-CTxDestination DecodeCashAddr(const std::string &addr,
-                              const CChainParams &params) {
-    CashAddrContent content =
-        DecodeCashAddrContent(addr, params.CashAddrPrefix());
-    if (content.hash.size() == 0) {
-        return CNoDestination{};
+CTxDestination DecodeCashAddr(const std::string &addr, const CChainParams &params, bool *tokenAwareTypeOut) {
+    CTxDestination ret = CNoDestination{};
+    if (const CashAddrContent content = DecodeCashAddrContent(addr, params.CashAddrPrefix()); !content.IsNull()) {
+        if (tokenAwareTypeOut) {
+            *tokenAwareTypeOut = content.IsTokenAwareType();
+        }
+        ret = DecodeCashAddrDestination(content);
     }
-
-    return DecodeCashAddrDestination(content);
+    return ret;
 }
 
-CashAddrContent DecodeCashAddrContent(const std::string &addr,
-                                      const std::string &expectedPrefix) {
+CashAddrContent DecodeCashAddrContent(const std::string &addr, const std::string &expectedPrefix) {
     std::string prefix;
     std::vector<uint8_t> payload;
     std::tie(prefix, payload) = cashaddr::Decode(addr, expectedPrefix);
@@ -155,19 +152,29 @@ CashAddrContent DecodeCashAddrContent(const std::string &addr,
 }
 
 CTxDestination DecodeCashAddrDestination(const CashAddrContent &content) {
-    if (content.hash.size() != 20) {
-        // Only 20 bytes hash are supported now.
+    const bool is20Bytes{content.hash.size() == 20};
+
+    if (!is20Bytes && content.hash.size() != 32) {
+        // Only accept 20 or 32 byte hashes. A 20-byte hash is for p2sh and/or p2pkh; a 32-byte hash is for p2sh_32.
         return CNoDestination{};
     }
 
-    uint160 hash;
-    std::copy(begin(content.hash), end(content.hash), hash.begin());
-
     switch (content.type) {
         case PUBKEY_TYPE:
-            return CKeyID(hash);
+        case TOKEN_PUBKEY_TYPE:
+            // p2pkh only supports 20-byte hashes
+            if (is20Bytes) {
+                return CKeyID(uint160(content.hash));
+            } else {
+                return CNoDestination{};
+            }
         case SCRIPT_TYPE:
-            return CScriptID(hash);
+        case TOKEN_SCRIPT_TYPE:
+            if (is20Bytes) {
+                return ScriptID(uint160(content.hash)); // p2sh
+            } else {
+                return ScriptID(uint256(content.hash)); // p2sh_32
+            }
         default:
             return CNoDestination{};
     }

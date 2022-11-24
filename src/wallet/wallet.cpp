@@ -168,7 +168,7 @@ public:
         txnouttype type;
         std::vector<CTxDestination> vDest;
         int nRequired;
-        if (ExtractDestinations(script, type, vDest, nRequired)) {
+        if (ExtractDestinations(script, type, vDest, nRequired, 0 /* no p2sh_32 in wallet */)) {
             for (const CTxDestination &dest : vDest) {
                 boost::apply_visitor(*this, dest);
             }
@@ -181,14 +181,14 @@ public:
         }
     }
 
-    void operator()(const CScriptID &scriptId) {
+    void operator()(const ScriptID &scriptId) {
         CScript script;
         if (keystore.GetCScript(scriptId, script)) {
             Process(script);
         }
     }
 
-    void operator()(const CNoDestination &none) {}
+    void operator()(const CNoDestination &) {}
 };
 
 const CWalletTx *CWallet::GetWalletTx(const TxId &txid) const {
@@ -380,7 +380,7 @@ void CWallet::LoadKeyMetadata(const CKeyID &keyID, const CKeyMetadata &meta) {
     mapKeyMetadata[keyID] = meta;
 }
 
-void CWallet::LoadScriptMetadata(const CScriptID &script_id,
+void CWallet::LoadScriptMetadata(const ScriptID &script_id,
                                  const CKeyMetadata &meta) {
     // m_script_metadata
     AssertLockHeld(cs_wallet);
@@ -408,12 +408,16 @@ void CWallet::UpdateTimeFirstKey(int64_t nCreateTime) {
     }
 }
 
-bool CWallet::AddCScript(const CScript &redeemScript) {
-    if (!CCryptoKeyStore::AddCScript(redeemScript)) {
+bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32) {
+    if (is_p2sh_32) {
+        // Warn of internal invalid usage
+        WalletLogPrintf("WARNING: p2sh_32 is not currently supported in wallet in %s\n", __func__);
         return false;
     }
-    if (WalletBatch(*database).WriteCScript(Hash160(redeemScript),
-                                            redeemScript)) {
+    if (!CCryptoKeyStore::AddCScript(redeemScript, is_p2sh_32)) {
+        return false;
+    }
+    if (WalletBatch(*database).WriteCScript(Hash160(redeemScript), redeemScript)) {
         UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET);
         return true;
     }
@@ -428,7 +432,7 @@ bool CWallet::LoadCScript(const CScript &redeemScript) {
      */
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
         std::string strAddr =
-            EncodeDestination(CScriptID(redeemScript), GetConfig());
+            EncodeDestination(ScriptID(redeemScript, false /* no p2sh_32 in wallet */), GetConfig());
         WalletLogPrintf("%s: Warning: This wallet contains a redeemScript "
                         "of size %i which exceeds maximum size %i thus can "
                         "never be redeemed. Do not use address %s.\n",
@@ -437,7 +441,7 @@ bool CWallet::LoadCScript(const CScript &redeemScript) {
         return true;
     }
 
-    return CCryptoKeyStore::AddCScript(redeemScript);
+    return CCryptoKeyStore::AddCScript(redeemScript, false /* no p2sh_32 in wallet */);
 }
 
 bool CWallet::AddWatchOnly(const CScript &dest) {
@@ -445,7 +449,7 @@ bool CWallet::AddWatchOnly(const CScript &dest) {
         return false;
     }
 
-    const CKeyMetadata &meta = m_script_metadata[CScriptID(dest)];
+    const CKeyMetadata &meta = m_script_metadata[ScriptID(dest, false /* no p2sh_32 in wallet */)];
     UpdateTimeFirstKey(meta.nCreateTime);
     NotifyWatchonlyChanged(true);
     if (WalletBatch(*database).WriteWatchOnly(dest, meta)) {
@@ -456,7 +460,7 @@ bool CWallet::AddWatchOnly(const CScript &dest) {
 }
 
 bool CWallet::AddWatchOnly(const CScript &dest, int64_t nCreateTime) {
-    m_script_metadata[CScriptID(dest)].nCreateTime = nCreateTime;
+    m_script_metadata[ScriptID(dest, false /* no p2sh_32 in wallet */)].nCreateTime = nCreateTime;
     return AddWatchOnly(dest);
 }
 
@@ -1406,7 +1410,7 @@ bool CWallet::IsChange(const CScript &script) const {
     // change).
     if (::IsMine(*this, script)) {
         CTxDestination address;
-        if (!ExtractDestination(script, address)) {
+        if (!ExtractDestination(script, address, 0 /* no p2sh_32 in wallet */)) {
             return true;
         }
 
@@ -1645,12 +1649,10 @@ bool CWallet::DummySignInput(CTxIn &tx_in, const CTxOut &txout,
     const CScript &scriptPubKey = txout.scriptPubKey;
     SignatureData sigdata;
 
-    auto const context = std::nullopt; // No introspection necessary here
-
     if ( ! ProduceSignature(*this,
                           use_max_sig ? DUMMY_MAXIMUM_SIGNATURE_CREATOR
                                       : DUMMY_SIGNATURE_CREATOR,
-                          scriptPubKey, sigdata, context)) {
+                          scriptPubKey, sigdata, STANDARD_SCRIPT_VERIFY_FLAGS)) {
         return false;
     }
 
@@ -1748,7 +1750,7 @@ void CWalletTx::GetAmounts(std::list<COutputEntry> &listReceived,
         // In either case, we need to get the destination address.
         CTxDestination address;
 
-        if (!ExtractDestination(txout.scriptPubKey, address) &&
+        if (!ExtractDestination(txout.scriptPubKey, address, 0 /* no p2sh_32 in wallet */) &&
             !txout.scriptPubKey.IsUnspendable()) {
             pwallet->WalletLogPrintf("CWalletTx::GetAmounts: Unknown "
                                      "transaction type found, txid %s\n",
@@ -2473,6 +2475,7 @@ void CWallet::AvailableCoins(interfaces::Chain::Lock &locked_chain,
     Amount nTotal = Amount::zero();
 
     const Consensus::Params params = Params().GetConsensus();
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(params, ::ChainActive().Tip());
 
     for (const auto &entry : mapWallet) {
         const TxId &wtxid = entry.first;
@@ -2558,16 +2561,31 @@ void CWallet::AvailableCoins(interfaces::Chain::Lock &locked_chain,
                 continue;
             }
 
-            auto const context = std::nullopt; // No introspection for wallet coins & scripts
-            bool solvable = IsSolvable(*this, pcoin->tx->vout[i].scriptPubKey, context);
+            bool solvable = IsSolvable(*this, pcoin->tx->vout[i].scriptPubKey, scriptFlags);
             bool spendable =
                 ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
                 (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) &&
                  (coinControl && coinControl->fAllowWatchOnly && solvable));
 
-            vCoins.push_back(
-                COutput(pcoin, i, nDepth, spendable, solvable, safeTx,
-                        (coinControl && coinControl->fAllowWatchOnly)));
+
+            if (pcoin->tx->vout[i].tokenDataPtr) {
+                // this coin has a token on it
+                const bool allowTokens = coinControl ? coinControl->m_allow_tokens : false;
+                if (!allowTokens) {
+                    // caller doesn't want coins with tokens on them, skip
+                    continue;
+                }
+            } else {
+                // this coin has no token on it
+                const bool tokensOnly = coinControl ? coinControl->m_tokens_only : false;
+                if (tokensOnly) {
+                    // caller wants only token coins, skip
+                    continue;
+                }
+            }
+
+            vCoins.emplace_back( /* COutput c'tor: */ pcoin, i, nDepth, spendable, solvable, safeTx,
+                                 (coinControl && coinControl->fAllowWatchOnly));
 
             // Checks the sum amount of all UTXO's.
             if (nMinimumSumAmount != MAX_MONEY) {
@@ -2599,9 +2617,8 @@ CWallet::ListCoins(interfaces::Chain::Lock &locked_chain) const {
     for (const auto &coin : availableCoins) {
         CTxDestination address;
         if (coin.fSpendable &&
-            ExtractDestination(
-                FindNonChangeParentOutput(*coin.tx->tx, coin.i).scriptPubKey,
-                address)) {
+            ExtractDestination(FindNonChangeParentOutput(*coin.tx->tx, coin.i).scriptPubKey,
+                               address, 0 /* no p2sh_32 in wallet */)) {
             result[address].emplace_back(std::move(coin));
         }
     }
@@ -2616,10 +2633,8 @@ CWallet::ListCoins(interfaces::Chain::Lock &locked_chain) const {
                 IsMine(it->second.tx->vout[output.GetN()]) ==
                     ISMINE_SPENDABLE) {
                 CTxDestination address;
-                if (ExtractDestination(
-                        FindNonChangeParentOutput(*it->second.tx, output.GetN())
-                            .scriptPubKey,
-                        address)) {
+                if (ExtractDestination(FindNonChangeParentOutput(*it->second.tx, output.GetN()).scriptPubKey,
+                                       address, 0 /* no p2sh_32 in wallet */)) {
                     result[address].emplace_back(
                         &it->second, output.GetN(), depth, true /* spendable */,
                         true /* solvable */, false /* safe */);
@@ -2837,34 +2852,6 @@ bool CWallet::SelectCoins(const std::vector<COutput> &vAvailableCoins,
     return res;
 }
 
-bool CWallet::SignTransaction(CMutableTransaction &tx) {
-    // sign the new tx
-    int nIn = 0;
-    for (CTxIn &input : tx.vin) {
-        auto mi = mapWallet.find(input.prevout.GetTxId());
-        if (mi == mapWallet.end() ||
-            input.prevout.GetN() >= mi->second.tx->vout.size()) {
-            return false;
-        }
-        const CScript &scriptPubKey =
-            mi->second.tx->vout[input.prevout.GetN()].scriptPubKey;
-        const Amount amount = mi->second.tx->vout[input.prevout.GetN()].nValue;
-        SignatureData sigdata;
-        SigHashType sigHashType = SigHashType().withFork();
-
-        auto const context = std::nullopt; // No introspection for wallet coins (wallet cannot sign smart contracts)
-
-        if ( ! ProduceSignature(*this,
-                              MutableTransactionSignatureCreator(&tx, nIn, amount, sigHashType),
-                              scriptPubKey, sigdata, context)) {
-            return false;
-        }
-        UpdateInput(input, sigdata);
-        nIn++;
-    }
-    return true;
-}
-
 bool CWallet::FundTransaction(CMutableTransaction &tx, Amount &nFeeRet,
                               int &nChangePosInOut, std::string &strFailReason,
                               bool lockUnspents,
@@ -2875,7 +2862,7 @@ bool CWallet::FundTransaction(CMutableTransaction &tx, Amount &nFeeRet,
     // Turn the txout set into a CRecipient vector.
     for (size_t idx = 0; idx < tx.vout.size(); idx++) {
         const CTxOut &txOut = tx.vout[idx];
-        CRecipient recipient = {txOut.scriptPubKey, txOut.nValue,
+        CRecipient recipient = {txOut.scriptPubKey, txOut.nValue, txOut.tokenDataPtr,
                                 setSubtractFeeFromOutputs.count(idx) == 1};
         vecSend.push_back(recipient);
     }
@@ -2998,28 +2985,23 @@ CWallet::TransactionChangeType(OutputType change_type,
     return m_default_address_type;
 }
 
-static void sortOutputsBIP69(std::vector<CTxOut> &vout, int &nChangePosInOut) {
+static void sortOutputsBIP69(CMutableTransaction &tx, int &nChangePosInOut) {
     std::optional<CTxOut> savedChangeOut;
 
-    if (nChangePosInOut >= 0 && unsigned(nChangePosInOut) < vout.size()) {
+    if (nChangePosInOut >= 0 && unsigned(nChangePosInOut) < tx.vout.size()) {
         // Caller has a change position they are keeping track of, so note which CTxOut it is.
-        savedChangeOut = vout[nChangePosInOut];
+        savedChangeOut = tx.vout[nChangePosInOut];
     }
 
-    std::sort(vout.begin(), vout.end(), [](const CTxOut &a, const CTxOut &b){
-        if (a.nValue == b.nValue) {
-            return a.scriptPubKey < b.scriptPubKey;
-        }
-        return a.nValue < b.nValue;
-    });
+    tx.SortOutputsBip69();
 
     if (savedChangeOut) {
         // Figure out where the change position ended up after the sort. Note
         // that std::find is ok here because all CTxOuts that compare equal
         // are identical and indistinguishable.
-        const auto it = std::find(vout.begin(), vout.end(), *savedChangeOut);
-        assert(it != vout.end());
-        nChangePosInOut = it - vout.begin();
+        const auto it = std::find(tx.vout.begin(), tx.vout.end(), *savedChangeOut);
+        assert(it != tx.vout.end());
+        nChangePosInOut = it - tx.vout.begin();
     }
 }
 
@@ -3159,7 +3141,7 @@ CreateTransactionResult CWallet::CreateTransaction(
             coin_selection_params.tx_noinputs_size = 10;
             // vouts to the payees
             for (const auto &recipient : vecSend) {
-                CTxOut txout(recipient.nAmount, recipient.scriptPubKey);
+                CTxOut txout(recipient.nAmount, recipient.scriptPubKey, recipient.tokenDataPtr);
 
                 if (recipient.fSubtractFeeFromAmount) {
                     assert(nSubtractFeeFromAmount != 0);
@@ -3197,7 +3179,7 @@ CreateTransactionResult CWallet::CreateTransaction(
                     return CreateTransactionResult::CT_INSUFFICIENT_AMOUNT;
                 }
 
-                txNew.vout.push_back(txout);
+                txNew.vout.push_back(std::move(txout));
             }
 
             // Choose coins to use
@@ -3394,7 +3376,9 @@ CreateTransactionResult CWallet::CreateTransaction(
         if (bip69) {
             // Note that after this call nChangePosInOut may be modified and **all** iterators to txNew.vout may
             // be invalidated.
-            sortOutputsBIP69(txNew.vout, nChangePosInOut);
+            sortOutputsBIP69(txNew, nChangePosInOut);
+            // Note that the *inputs* are already bip69-sorted in all call paths because they come from a set
+            // keyed off of COutPoint operator< (which does happen to sort bip69).
         }
 
         if (sign) {
@@ -3404,12 +3388,13 @@ CreateTransactionResult CWallet::CreateTransaction(
                 const CScript &scriptPubKey = coin.txout.scriptPubKey;
                 SignatureData sigdata;
 
-                auto const context = std::nullopt; // No introspection for wallet coins (no smart contracts in wallet)
+                // limited context, wallet cannot sign native introspection scripts or sign SIGHASH_UTXOS
+                const ScriptExecutionContext limitedContext(unsigned(nIn), coin.txout, txNew);
+                AssertLockHeld(cs_main);
+                const uint32_t flags = GetMemPoolScriptFlags(::Params().GetConsensus(), ::ChainActive().Tip());
 
-                if ( ! ProduceSignature(
-                        *this,
-                        MutableTransactionSignatureCreator(&txNew, nIn, coin.txout.nValue, sigHashType),
-                        scriptPubKey, sigdata, context)) {
+                if ( ! ProduceSignature(*this, TransactionSignatureCreator(limitedContext, sigHashType), scriptPubKey,
+                                        sigdata, flags)) {
                     strFailReason = _("Signing transaction failed");
                     return CreateTransactionResult::CT_ERROR;
                 }
@@ -3623,8 +3608,7 @@ bool CWallet::DelAddressBook(const CTxDestination &address) {
 
 const std::string &CWallet::GetLabelName(const CScript &scriptPubKey) const {
     CTxDestination address;
-    if (ExtractDestination(scriptPubKey, address) &&
-        !scriptPubKey.IsUnspendable()) {
+    if (ExtractDestination(scriptPubKey, address, 0 /* no p2sh_32 in wallet */) && !scriptPubKey.IsUnspendable()) {
         auto mi = mapAddressBook.find(address);
         if (mi != mapAddressBook.end()) {
             return mi->second.name;
@@ -3933,7 +3917,7 @@ CWallet::GetAddressBalances(interfaces::Chain::Lock &locked_chain) {
                 continue;
             }
 
-            if (!ExtractDestination(pcoin->tx->vout[i].scriptPubKey, addr)) {
+            if (!ExtractDestination(pcoin->tx->vout[i].scriptPubKey, addr, 0 /* no p2sh_32 in wallet */)) {
                 continue;
             }
 
@@ -3973,7 +3957,7 @@ std::set<std::set<CTxDestination>> CWallet::GetAddressGroupings() {
                 if (!ExtractDestination(mapWallet.at(txin.prevout.GetTxId())
                                             .tx->vout[txin.prevout.GetN()]
                                             .scriptPubKey,
-                                        address)) {
+                                        address, 0 /* no p2sh_32 in wallet */)) {
                     continue;
                 }
 
@@ -3987,7 +3971,7 @@ std::set<std::set<CTxDestination>> CWallet::GetAddressGroupings() {
                     if (IsChange(txout)) {
                         CTxDestination txoutAddr;
                         if (!ExtractDestination(txout.scriptPubKey,
-                                                txoutAddr)) {
+                                                txoutAddr, 0 /* no p2sh_32 in wallet */)) {
                             continue;
                         }
 
@@ -4006,7 +3990,7 @@ std::set<std::set<CTxDestination>> CWallet::GetAddressGroupings() {
         for (const auto &txout : pcoin->tx->vout) {
             if (IsMine(txout)) {
                 CTxDestination address;
-                if (!ExtractDestination(txout.scriptPubKey, address)) {
+                if (!ExtractDestination(txout.scriptPubKey, address, 0 /* no p2sh_32 in wallet */)) {
                     continue;
                 }
 
@@ -4921,7 +4905,7 @@ CWallet::GroupOutputs(const std::vector<COutput> &outputs,
 
             if (!single_coin &&
                 ExtractDestination(output.tx->tx->vout[output.i].scriptPubKey,
-                                   dst)) {
+                                   dst, 0 /* no p2sh_32 in wallet */)) {
                 // Limit output groups to no more than 10 entries, to protect
                 // against inadvertently creating a too-large transaction
                 // when using -avoidpartialspends

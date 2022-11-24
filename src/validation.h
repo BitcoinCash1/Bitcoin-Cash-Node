@@ -17,7 +17,9 @@
 #include <consensus/consensus.h>
 #include <flatfile.h>
 #include <fs.h>
+#include <policy/policy.h>
 #include <protocol.h> // For CMessageHeader::MessageMagic
+#include <script/interpreter.h>
 #include <script/script_error.h>
 #include <script/script_execution_context.h>
 #include <script/script_metrics.h>
@@ -28,7 +30,6 @@
 #include <atomic>
 #include <cstdint>
 #include <exception>
-#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -43,8 +44,6 @@ class CBlockUndo;
 class CChainParams;
 class CChain;
 class CCoinsViewDB;
-class CConnman;
-class CInv;
 class Config;
 class CScriptCheck;
 class CTxMemPool;
@@ -542,9 +541,8 @@ public:
  */
 bool CheckInputs(const CTransaction &tx, CValidationState &state,
                  const CCoinsViewCache &view, bool fScriptChecks,
-                 const uint32_t flags, bool sigCacheStore,
-                 bool scriptCacheStore,
-                 const PrecomputedTransactionData &txdata, int &nSigChecksOut,
+                 const uint32_t flags, bool sigCacheStore, bool scriptCacheStore,
+                 PrecomputedTransactionData &txdata /* in/out param */, int &nSigChecksOut,
                  TxSigCheckLimiter &txLimitSigChecks,
                  CheckInputsLimiter *pBlockLimitSigChecks,
                  std::vector<CScriptCheck> *pvChecks)
@@ -553,16 +551,14 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
 /**
  * Handy shortcut to full fledged CheckInputs call.
  */
-static inline bool
-CheckInputs(const CTransaction &tx, CValidationState &state,
-            const CCoinsViewCache &view, bool fScriptChecks,
-            const uint32_t flags, bool sigCacheStore, bool scriptCacheStore,
-            const PrecomputedTransactionData &txdata, int &nSigChecksOut)
+inline bool
+CheckInputs(const CTransaction &tx, CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
+            const uint32_t flags, bool sigCacheStore, bool scriptCacheStore, PrecomputedTransactionData &txdata /* in/out param */,
+            int &nSigChecksOut)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     TxSigCheckLimiter nSigChecksTxLimiter;
     return CheckInputs(tx, state, view, fScriptChecks, flags, sigCacheStore,
-                       scriptCacheStore, txdata, nSigChecksOut,
-                       nSigChecksTxLimiter, nullptr, nullptr);
+                       scriptCacheStore, txdata, nSigChecksOut, nSigChecksTxLimiter, nullptr, nullptr);
 }
 
 /**
@@ -816,3 +812,60 @@ bool LoadDSProofs(CTxMemPool &pool);
 
 //! Check whether the block associated with this index entry is pruned or not.
 bool IsBlockPruned(const CBlockIndex *pblockindex);
+
+/// This class manages tracking exactly at what block a particular upgrade activated, relative to a block index it is
+/// given.  Works correcly even if there is a reorg and/or if the active chain is not being considered.  It was written
+/// originally for Upgrade9 activation height tracking, but it is generic enough in that it can be re-used for any
+/// future upgrade, if needed.
+struct ActivationBlockTracker {
+    /// Typedef for a function pointer to one of the Is*Enabled() functions in consensus/activation.h
+    /// e.g.: IsUpgrade9Enabled
+    using Predicate = bool (*)(const Consensus::Params &, const CBlockIndex *);
+
+    ActivationBlockTracker(Predicate isUpgradeXEnabledFunc) : predicate(isUpgradeXEnabledFunc) {}
+
+    /**
+     * @brief GetActivationBlock - Given a block index for which the upgrade in question is already activated, returns
+     *                             the activation block for the upgrade. (The activation block is the first block which
+     *                             is an ancestor of `pindex` for which `predicate()` returns `true`.
+     * @pre pindex **must** have the upgrade activated for itself (e.g. it must be a block index that returns `true` for
+     *             `predicate(params, pindex)`. For efficiency, this precondition is not checked!
+     * @param params - Consensus params for the global chain, e.g. config.GetChainParams().GetConsensus()
+     * @param pindex - Usually the current tip, but not necessarily. pindex need not live on the active chain.
+     * @return The block that the upgrade activated. The activation block is the last block mined under the OLD rules,
+     *         and the first block for which `predicate()` returns `true`.  The block after this one would be really
+     *         the first block where e.g. tokens are enabled if we are considering upgrade9, for example.  May return
+     *         pindex itself.  If this function's precondition is met (`pindex` has the upgrade activated), will never
+     *         return nullptr.  Otherwise if the precondition is not satisfied, this function's behavior is undefined.
+     */
+    const CBlockIndex *GetActivationBlock(const CBlockIndex *pindex, const Consensus::Params &params)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    /**
+     * For testing purposes.  We cache the activation block index for efficiency. If block indices are freed then this
+     * needs to be called to ensure no dangling pointer when a new block tree is created.
+     */
+    void ResetActivationBlockCache() noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        cachedActivationBlock = nullptr;
+    }
+
+    /**
+     * For testing purposes.  Get the current cached activation block.
+     */
+    const CBlockIndex *GetActivationBlockCache() const noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        return cachedActivationBlock;
+    }
+
+    Predicate GetPredicate() const { return predicate; }
+
+private:
+    const CBlockIndex *cachedActivationBlock GUARDED_BY(cs_main) = nullptr;
+    const Predicate predicate;
+};
+
+/// Global object to track the exact height when Upgrade9 activated (needed by Token consensus rules).
+extern ActivationBlockTracker g_upgrade9_block_tracker;
+
+/// Returns the script flags which are basically nextBlockScriptFlags | STANDARD_SCRIPT_VERIFY_FLAGS
+uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex,
+                               uint32_t *nextBlockFlags = nullptr /* out param: block flags without standard */);

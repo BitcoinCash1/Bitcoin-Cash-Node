@@ -11,8 +11,7 @@
 
 void BitcoinAddressValidatorTests::inputTests() {
     const auto params = CreateChainParams(CBaseChainParams::MAIN);
-    const std::string prefix = params->CashAddrPrefix();
-    BitcoinAddressEntryValidator v(prefix, nullptr);
+    BitcoinAddressEntryValidator v(nullptr);
 
     int unused = 0;
     QString in;

@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <key_io.h>
+#include <policy/policy.h>
 #include <script/sign.h>
 #include <util/strencodings.h>
 #include <wallet/psbtwallet.h>
@@ -56,7 +57,7 @@ BOOST_AUTO_TEST_CASE(psbt_updater_test) {
                  "dae4dba2fbfef536d752ae"),
         SER_NETWORK, PROTOCOL_VERSION);
     s_rs1 >> rs1;
-    m_wallet.AddCScript(rs1);
+    m_wallet.AddCScript(rs1, false /*=p2sh_20*/); // no p2sh_32 in wallet
 
     CScript rs2;
     CDataStream s_rs2(
@@ -65,7 +66,7 @@ BOOST_AUTO_TEST_CASE(psbt_updater_test) {
                  "6151926860221f0e7352ae"),
         SER_NETWORK, PROTOCOL_VERSION);
     s_rs2 >> rs2;
-    m_wallet.AddCScript(rs2);
+    m_wallet.AddCScript(rs2, false /*=p2sh_20*/); // no p2sh_32 in wallet
 
     // Add hd seed
     // Mainnet and uncompressed form of
@@ -92,7 +93,7 @@ BOOST_AUTO_TEST_CASE(psbt_updater_test) {
     // The path missing comes from the HD masterkey.
 
     // Fill transaction with our data
-    FillPSBT(&m_wallet, psbtx, SigHashType(), false, true);
+    FillPSBT(&m_wallet, psbtx, STANDARD_SCRIPT_VERIFY_FLAGS, SigHashType(), false, true);
 
     // Get the final tx
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);

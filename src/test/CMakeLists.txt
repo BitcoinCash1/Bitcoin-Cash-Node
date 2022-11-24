@@ -33,13 +33,35 @@ endfunction()
 gen_json_header(JSON_HEADERS
   data/base58_encode_decode.json
   data/blockfilters.json
+  data/cashaddr_token_types.json
+  data/expected_test_fail_reasons.json
   data/key_io_valid.json
   data/key_io_invalid.json
   data/script_tests.json
   data/sighash.json
+  data/token_tests_prefix_invalid.json
+  data/token_tests_prefix_valid.json
   data/tx_invalid.json
   data/tx_valid.json
 )
+
+function(gen_chip_tests_header NAME)
+  set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/chip_test_vectors.json.h")
+  file(GLOB chip_files "${CMAKE_CURRENT_SOURCE_DIR}/data/CHIPs/bch_vmb_tests_*chip_*.json")
+  add_custom_command(OUTPUT ${combined_vec_h}
+    COMMAND
+      "${Python_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_chip_test_vectors.py"
+      "--encode" ${chip_files} > ${combined_vec_h}
+    DEPENDS
+      "data/generate_chip_test_vectors.py"
+      ${chip_files}
+    VERBATIM
+  )
+  set(${NAME} "${combined_vec_h}" PARENT_SCOPE)
+endfunction()
+
+gen_chip_tests_header(CHIP_HEADER)
 
 include(TestSuite)
 create_test_suite(bitcoin)
@@ -100,6 +122,7 @@ gen_asmap_headers(ASMAP_HEADERS
 
 add_boost_unit_tests_to_suite(bitcoin test_bitcoin
   check_assert.cpp
+  chip_testing_setup.cpp
   jsonutil.cpp
   lib/transaction_utils.cpp
   main.cpp
@@ -111,6 +134,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
 
   # Tests generated from JSON
   ${JSON_HEADERS}
+  ${CHIP_HEADER}
 
   # Wallet test fixture
   ${BITCOIN_WALLET_TEST_FIXTURE}
@@ -128,6 +152,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     base58_tests.cpp
     base64_tests.cpp
     bip32_tests.cpp
+    bip69_tests.cpp
     bitmanip_tests.cpp
     blockchain_tests.cpp
     blockcheck_tests.cpp
@@ -163,6 +188,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     flatfile_tests.cpp
     gbtlight_tests.cpp
     getarg_tests.cpp
+    heapoptional_tests.cpp
     hash_tests.cpp
     inv_tests.cpp
     key_io_tests.cpp
@@ -210,6 +236,8 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     sync_tests.cpp
     testlib_tests.cpp
     timedata_tests.cpp
+    token_tests.cpp
+    token_transaction_tests.cpp
     torcontrol_tests.cpp
     transaction_tests.cpp
     txindex_tests.cpp

@@ -142,7 +142,7 @@ bool PSBTInputSigned(PSBTInput &input) {
 }
 
 bool SignPSBTInput(const SigningProvider &provider,
-                   PartiallySignedTransaction &psbt, int index,
+                   PartiallySignedTransaction &psbt, int index, const uint32_t scriptFlags,
                    SigHashType sighash, const ScriptExecutionContextOpt &optContext) {
     PSBTInput &input = psbt.inputs.at(index);
     const CMutableTransaction &tx = *psbt.tx;
@@ -168,9 +168,17 @@ bool SignPSBTInput(const SigningProvider &provider,
     }
 
     utxo = input.utxo;
-    MutableTransactionSignatureCreator creator(&tx, index, utxo.nValue, sighash);
+    ScriptExecutionContextOpt tmp;
+    const ScriptExecutionContext *pcontext;
+    if (optContext && optContext->inputIndex() == unsigned(index)) {
+        pcontext = &*optContext;
+    } else {
+        tmp.emplace(unsigned(index), utxo, tx);
+        pcontext = &*tmp;
+    }
+    TransactionSignatureCreator creator(*pcontext, sighash);
 
-    bool sig_complete = ProduceSignature(provider, creator, utxo.scriptPubKey, sigdata, optContext);
+    bool sig_complete = ProduceSignature(provider, creator, utxo.scriptPubKey, sigdata, scriptFlags);
     input.FromSignatureData(sigdata);
 
     return sig_complete;

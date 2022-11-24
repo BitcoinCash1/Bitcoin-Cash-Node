@@ -465,8 +465,9 @@ public:
     //!     that either has a proof or we cannot ever produce a proof for (not P2PKH). In that case we set score to
     //!     0.0 (no confidence), and we stop scanning. If no such parent exists and no proof is found for this or any
     //!     ancestor, we set score to 1.0 (high confidence). We also may set score to 0.25 (low confidence) if the
-    //!     recursion depth is reached (in which case RecursionLimitReached is thrown). We set score to -1.0 if txId is
-    //!     not found in the mempool.
+    //!     recursion depth is reached (in which case RecursionLimitReached is thrown), or if we hit an ancestor
+    //!     that has a P2PKH input that is not signed with SIGHASH_ALL or is signed with SIGHASH_ANYONECANPAY.
+    //!     We set score to -1.0 if txId is not found in the mempool.
     //! @throws std::runtime_error on internal error, or RecursionLimitReached if the search exceeded a depth of 1,000
     //!     ancestors deep, or 20,000 ancestors total.
     std::optional<DspRecurseResult> recursiveDSProofSearch(const TxId &txId, DspDescendants *descendants = nullptr,

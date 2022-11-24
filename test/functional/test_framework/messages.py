@@ -20,12 +20,14 @@ by tests, compromising their intended effect.
 """
 from codecs import encode
 import copy
+from enum import IntEnum
 import hashlib
 from io import BytesIO
 import random
 import socket
 import struct
 import time
+from typing import Optional, Tuple
 
 from test_framework.siphash import siphash256
 from test_framework.util import hex_str_to_bytes
@@ -423,26 +425,156 @@ class CTxIn:
             repr(self.prevout), self.scriptSig.hex(), self.nSequence)
 
 
-class CTxOut:
-    __slots__ = ("nValue", "scriptPubKey")
+class TokenStructure(IntEnum):
+    HasAmount = 0x10
+    HasNFT = 0x20
+    HasCommitmentLength = 0x40
 
-    def __init__(self, nValue=0, scriptPubKey=b""):
+
+class TokenCapability(IntEnum):
+    NoCapability = 0x00
+    Mutable = 0x01
+    Minting = 0x02
+
+
+class TokenOutputData:
+    __slots__ = ("id", "bitfield", "amount", "commitment")
+
+    def __init__(self, id: int = 0, amount: int = 1, commitment: bytes = b'',
+                 bitfield: int = TokenStructure.HasAmount):
+        self.id = id
+        self.amount = amount
+        self.commitment = commitment
+        self.bitfield = bitfield
+
+    @property
+    def id_hex(self) -> str:
+        return ser_uint256(self.id)[::-1].hex()
+
+    @id_hex.setter
+    def id_hex(self, hex: str):
+        b = bytes.fromhex(hex)
+        assert len(b) == 32
+        self.id = uint256_from_str(b[::-1])
+
+    def deserialize(self, f):
+        self.id = deser_uint256(f)
+        self.bitfield = struct.unpack("<B", f.read(1))[0]
+        if self.HasCommitmentLength():
+            self.commitment = deser_string(f)
+        else:
+            self.commitment = b''
+        if self.HasAmount():
+            self.amount = deser_compact_size(f)
+        else:
+            self.amount = 0
+
+    def serialize(self) -> bytes:
+        r = bytearray()
+        r += ser_uint256(self.id)
+        r += struct.pack("B", self.bitfield)
+        if self.HasCommitmentLength():
+            r += ser_string(self.commitment)
+        if self.HasAmount():
+            r += ser_compact_size(self.amount)
+        return bytes(r)
+
+    def GetCapability(self) -> int:
+        return self.bitfield & 0x0f
+
+    def HasCommitmentLength(self) -> bool:
+        return bool(self.bitfield & TokenStructure.HasCommitmentLength)
+
+    def HasAmount(self) -> bool:
+        return bool(self.bitfield & TokenStructure.HasAmount)
+
+    def HasNFT(self) -> bool:
+        return bool(self.bitfield & TokenStructure.HasNFT)
+
+    def IsMintingNFT(self) -> bool:
+        return self.HasNFT() and self.GetCapability() == TokenCapability.Minting
+
+    def IsMutableNFT(self) -> bool:
+        return self.HasNFT() and self.GetCapability() == TokenCapability.Mutable
+
+    def IsImmutableNFT(self) -> bool:
+        return self.HasNFT() and self.GetCapability() == TokenCapability.NoCapability
+
+    def IsValidBitfield(self) -> bool:
+        s = self.bitfield & 0xf0
+        if s >= 0x80 or s == 0x00:
+            return False
+        if self.bitfield & 0x0f > 2:
+            return False
+        if not self.HasNFT() and not self.HasAmount():
+            return False
+        if not self.HasNFT() and (self.bitfield & 0x0f) != 0:
+            return False
+        if not self.HasNFT() and self.HasCommitmentLength():
+            return False
+        return True
+
+    def __repr__(self) -> str:
+        return f"TokenOutputData(id={self.id_hex} bitfield={self.bitfield:02x} amount={self.amount} " \
+               f"commitment={self.commitment[:40].hex()})"
+
+
+class token:
+    """Emulate the C++ 'token' namespace"""
+    PREFIX_BYTE = bytes([0xef])
+    Structure = TokenStructure
+    Capability = TokenCapability
+    OutputData = TokenOutputData
+
+    @classmethod
+    def wrap_spk(cls, token_data: Optional[TokenOutputData], script_pub_key: bytes) -> bytes:
+        if not token_data:
+            return script_pub_key
+        buf = bytearray()
+        buf += cls.PREFIX_BYTE
+        buf += token_data.serialize()
+        buf += script_pub_key
+        return bytes(buf)
+
+    @classmethod
+    def unwrap_spk(cls, wrapped_spk: bytes) -> Tuple[Optional[TokenOutputData], bytes]:
+        if not wrapped_spk or wrapped_spk[0] != cls.PREFIX_BYTE:
+            return None, wrapped_spk
+        token_data = TokenOutputData()
+        f = BytesIO(wrapped_spk)
+        pfx = f.read(1)  # consume prefix byte
+        assert pfx == cls.PREFIX_BYTE
+        token_data.deserialize(f)  # unserialize token_data from buffer after prefix_byte
+        if (not token_data.IsValidBitfield() or (token_data.HasAmount() and not token_data.amount)
+                or (token_data.HasCommitmentLength() and not token_data.commitment)):
+            # Bad bitfield or 0 serialized amount or empty serialized commitment is a deserialization error,
+            # just return the entire buffer as spk
+            return None, wrapped_spk
+        spk = wrapped_spk[f.tell():]  # leftover bytes go to real spk
+        return token_data, spk  # Parsed ok
+
+
+class CTxOut:
+    __slots__ = ("nValue", "scriptPubKey", "tokenData")
+
+    def __init__(self, nValue=0, scriptPubKey=b"", tokenData=None):
         self.nValue = nValue
         self.scriptPubKey = scriptPubKey
+        self.tokenData = tokenData
 
     def deserialize(self, f):
         self.nValue = struct.unpack("<q", f.read(8))[0]
-        self.scriptPubKey = deser_string(f)
+        self.tokenData, self.scriptPubKey = token.unwrap_spk(deser_string(f))
 
     def serialize(self):
-        r = b""
+        r = bytearray()
         r += struct.pack("<q", self.nValue)
-        r += ser_string(self.scriptPubKey)
-        return r
+        r += ser_string(token.wrap_spk(self.tokenData, self.scriptPubKey))
+        return bytes(r)
 
     def __repr__(self):
-        return "CTxOut(nValue={}.{:08d} scriptPubKey={})".format(
-            self.nValue // COIN, self.nValue % COIN, self.scriptPubKey.hex())
+        return "CTxOut(nValue={}.{:08d} scriptPubKey={} tokenData={})".format(
+            self.nValue // COIN, self.nValue % COIN, self.scriptPubKey.hex(), repr(self.tokenData))
 
 
 class CTransaction:

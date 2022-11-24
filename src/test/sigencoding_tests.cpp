@@ -18,13 +18,11 @@ static valtype SignatureWithHashType(valtype vchSig, SigHashType sigHash) {
     return vchSig;
 }
 
-static void CheckSignatureEncodingWithSigHashType(const valtype &vchSig,
-                                                  uint32_t flags) {
+static void CheckSignatureEncodingWithSigHashType(const valtype &vchSig, uint32_t flags) {
     ScriptError err = ScriptError::OK;
-    BOOST_CHECK(CheckDataSignatureEncoding(vchSig, flags, &err));
-
     const bool hasFork = (flags & SCRIPT_ENABLE_SIGHASH_FORKID) != 0;
     const bool hasStrictEnc = (flags & SCRIPT_VERIFY_STRICTENC) != 0;
+    const bool hasUpgrade9 = (flags & SCRIPT_ENABLE_TOKENS) != 0;
     const bool is64 = (vchSig.size() == 64);
 
     std::vector<BaseSigHashType> allBaseTypes{
@@ -35,12 +33,14 @@ static void CheckSignatureEncodingWithSigHashType(const valtype &vchSig,
         const SigHashType baseSigHash = SigHashType().withBaseType(baseType);
         baseSigHashes.push_back(baseSigHash);
         baseSigHashes.push_back(baseSigHash.withAnyoneCanPay(true));
+        // SIGHASH_UTXOS requires SIGHASH_FORKID
+        if (hasFork && hasUpgrade9) baseSigHashes.push_back(baseSigHash.withUtxos(true));
     }
 
     for (const SigHashType &baseSigHash : baseSigHashes) {
         // Check the signature with the proper fork flag.
-        SigHashType sigHash = baseSigHash.withFork(hasFork);
-        valtype validSig = SignatureWithHashType(vchSig, sigHash);
+        const SigHashType sigHash = baseSigHash.withFork(hasFork);
+        const valtype validSig = SignatureWithHashType(vchSig, sigHash);
         BOOST_CHECK(CheckTransactionSignatureEncoding(validSig, flags, &err));
         BOOST_CHECK_EQUAL(!is64, CheckTransactionECDSASignatureEncoding(
                                      validSig, flags, &err));
@@ -48,11 +48,16 @@ static void CheckSignatureEncodingWithSigHashType(const valtype &vchSig,
                                     validSig, flags, &err));
 
         // If we have strict encoding, we prevent the use of undefined flags.
-        std::array<SigHashType, 2> undefSigHashes{
-            {SigHashType(sigHash.getRawSigHashType() | 0x20),
-             sigHash.withBaseType(BaseSigHashType::UNSUPPORTED)}};
+        std::vector<SigHashType> undefSigHashes{{sigHash.withBaseType(BaseSigHashType::UNSUPPORTED),
+                                                 // having both of these set is undefined
+                                                 sigHash.withAnyoneCanPay(true).withUtxos(true)}};
+        if (!hasFork || !hasUpgrade9) {
+            // 0x20 is undefined if forkID is not set in flags or if upgrade9 is not set in flags
+            undefSigHashes.push_back(SigHashType(sigHash.getRawSigHashType() | 0x20));
+        }
 
         for (SigHashType undefSigHash : undefSigHashes) {
+            err = ScriptError::OK;
             valtype undefSighash = SignatureWithHashType(vchSig, undefSigHash);
             BOOST_CHECK_EQUAL(
                 CheckTransactionSignatureEncoding(undefSighash, flags, &err),
@@ -60,8 +65,7 @@ static void CheckSignatureEncodingWithSigHashType(const valtype &vchSig,
             if (hasStrictEnc) {
                 BOOST_CHECK(err == ScriptError::SIG_HASHTYPE);
             }
-            BOOST_CHECK_EQUAL(CheckTransactionECDSASignatureEncoding(
-                                  undefSighash, flags, &err),
+            BOOST_CHECK_EQUAL(CheckTransactionECDSASignatureEncoding(undefSighash, flags, &err),
                               !(hasStrictEnc || is64));
             if (is64 || hasStrictEnc) {
                 BOOST_CHECK(err == (is64 ? ScriptError::SIG_BADLENGTH

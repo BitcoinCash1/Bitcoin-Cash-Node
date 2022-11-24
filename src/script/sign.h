@@ -6,6 +6,7 @@
 #pragma once
 
 #include <hash.h>
+#include <primitives/transaction.h>
 #include <pubkey.h>
 #include <script/interpreter.h>
 #include <script/sighashtype.h>
@@ -15,7 +16,7 @@ class CKey;
 class CKeyID;
 class CMutableTransaction;
 class CScript;
-class CScriptID;
+class ScriptID;
 class CTransaction;
 
 struct KeyOriginInfo {
@@ -27,10 +28,10 @@ struct KeyOriginInfo {
 class SigningProvider {
 public:
     virtual ~SigningProvider() {}
-    virtual bool GetCScript(const CScriptID &scriptid, CScript &script) const {
+    virtual bool GetCScript(const ScriptID &scriptid, CScript &script) const {
         return false;
     }
-    virtual bool HaveCScript(const CScriptID &scriptid) const { return false; }
+    virtual bool HaveCScript(const ScriptID &scriptid) const { return false; }
     virtual bool GetPubKey(const CKeyID &address, CPubKey &pubkey) const {
         return false;
     }
@@ -56,19 +57,19 @@ public:
                           bool hide_origin)
         : m_hide_secret(hide_secret), m_hide_origin(hide_origin),
           m_provider(provider) {}
-    bool GetCScript(const CScriptID &scriptid, CScript &script) const override;
+    bool GetCScript(const ScriptID &scriptid, CScript &script) const override;
     bool GetPubKey(const CKeyID &keyid, CPubKey &pubkey) const override;
     bool GetKey(const CKeyID &keyid, CKey &key) const override;
     bool GetKeyOrigin(const CKeyID &keyid, KeyOriginInfo &info) const override;
 };
 
 struct FlatSigningProvider final : public SigningProvider {
-    std::map<CScriptID, CScript> scripts;
+    std::map<ScriptID, CScript> scripts;
     std::map<CKeyID, CPubKey> pubkeys;
     std::map<CKeyID, KeyOriginInfo> origins;
     std::map<CKeyID, CKey> keys;
 
-    bool GetCScript(const CScriptID &scriptid, CScript &script) const override;
+    bool GetCScript(const ScriptID &scriptid, CScript &script) const override;
     bool GetPubKey(const CKeyID &keyid, CPubKey &pubkey) const override;
     bool GetKeyOrigin(const CKeyID &keyid, KeyOriginInfo &info) const override;
     bool GetKey(const CKeyID &keyid, CKey &key) const override;
@@ -86,25 +87,23 @@ public:
     /** Create a singular (non-script) signature. */
     virtual bool CreateSig(const SigningProvider &provider,
                            std::vector<uint8_t> &vchSig, const CKeyID &keyid,
-                           const CScript &scriptCode) const = 0;
+                           const CScript &scriptCode, uint32_t scriptFlags) const = 0;
 };
 
 /** A signature creator for transactions. */
-class MutableTransactionSignatureCreator : public BaseSignatureCreator {
-    const CMutableTransaction *txTo;
-    unsigned int nIn;
-    Amount amount;
+class TransactionSignatureCreator : public BaseSignatureCreator {
+    const ScriptExecutionContext &context;
     SigHashType sigHashType;
-    const MutableTransactionSignatureChecker checker;
+    const TransactionSignatureChecker checker;
 
 public:
-    MutableTransactionSignatureCreator(
-        const CMutableTransaction *txToIn, unsigned int nInIn,
-        const Amount &amountIn, SigHashType sigHashTypeIn = SigHashType());
+    // NB: if `context.isLimited()`, then we won't be able to sign SIGHASH_UTXOS
+    explicit TransactionSignatureCreator(const ScriptExecutionContext &context,
+                                         SigHashType sigHashTypeIn = SigHashType());
     const BaseSignatureChecker &Checker() const override { return checker; }
     bool CreateSig(const SigningProvider &provider,
                    std::vector<uint8_t> &vchSig, const CKeyID &keyid,
-                   const CScript &scriptCode) const override;
+                   const CScript &scriptCode, uint32_t scriptFlags) const override;
 };
 
 /** A signature creator that just produces 71-byte empty signatures. */
@@ -218,19 +217,20 @@ void SerializeHDKeypaths(Stream &s,
 /** Produce a script signature using a generic signature creator. */
 bool ProduceSignature(const SigningProvider &provider,
                       const BaseSignatureCreator &creator,
-                      const CScript &scriptPubKey, SignatureData &sigdata, ScriptExecutionContextOpt const& context);
+                      const CScript &scriptPubKey, SignatureData &sigdata,
+                      uint32_t scriptFlags);
 
 /** Produce a script signature for a transaction. */
 bool SignSignature(const SigningProvider &provider, const CScript &fromPubKey,
                    CMutableTransaction &txTo, unsigned int nIn,
-                   const Amount amount, SigHashType sigHashType, ScriptExecutionContextOpt const& context);
+                   const CTxOut &prevTxOut, SigHashType sigHashType,
+                   uint32_t scriptFlags, ScriptExecutionContextOpt const& context);
 bool SignSignature(const SigningProvider &provider, const CTransaction &txFrom,
                    CMutableTransaction &txTo, unsigned int nIn,
-                   SigHashType sigHashType, ScriptExecutionContextOpt const& context);
+                   SigHashType sigHashType, uint32_t scriptFlags, ScriptExecutionContextOpt const& context);
 
 /** Extract signature data from a transaction input, and insert it. */
-SignatureData DataFromTransaction(const CMutableTransaction &tx,
-                                  unsigned int nIn, const CTxOut &txout, const ScriptExecutionContextOpt &context = {});
+SignatureData DataFromTransaction(const ScriptExecutionContext &context, uint32_t scriptFlags);
 void UpdateInput(CTxIn &input, const SignatureData &data);
 
 /**
@@ -239,4 +239,4 @@ void UpdateInput(CTxIn &input, const SignatureData &data);
  * keystore is used to look up public keys and redeemscripts by hash.
  * Solvability is unrelated to whether we consider this output to be ours.
  */
-bool IsSolvable(const SigningProvider &provider, const CScript &script, ScriptExecutionContextOpt const& context);
+bool IsSolvable(const SigningProvider &provider, const CScript &script, uint32_t scriptFlags);

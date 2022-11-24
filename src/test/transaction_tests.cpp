@@ -124,8 +124,9 @@ BOOST_AUTO_TEST_CASE(tx_valid) {
             // Build native introspection contexts just in case the test has flags that enable this feature
             const auto contexts = ScriptExecutionContext::createForAllInputs(tx, coins);
 
-            PrecomputedTransactionData txdata(tx);
+            PrecomputedTransactionData txdata;
             for (size_t i = 0; i < tx.vin.size(); i++) {
+                if (!txdata.populated) txdata.PopulateFromContext(contexts.at(i));
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout)) {
                     BOOST_ERROR("Bad test: " << strTest);
                     break;
@@ -138,9 +139,8 @@ BOOST_AUTO_TEST_CASE(tx_valid) {
 
                 uint32_t verify_flags = ParseScriptFlags(test[2].get_str());
                 BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout],
-                        verify_flags, TransactionSignatureChecker(&tx, i, amount, txdata),
-                        contexts[i], &err),
-                    strTest);
+                                                 verify_flags, TransactionSignatureChecker(contexts[i], txdata), &err),
+                                    strTest);
                 BOOST_CHECK_MESSAGE(err == ScriptError::OK, ScriptErrorString(err));
             }
         }
@@ -214,8 +214,9 @@ BOOST_AUTO_TEST_CASE(tx_invalid) {
             // Build native introspection contexts just in case the test has flags that enable this feature
             const auto contexts = ScriptExecutionContext::createForAllInputs(tx, coins);
 
-            PrecomputedTransactionData txdata(tx);
+            PrecomputedTransactionData txdata;
             for (size_t i = 0; i < tx.vin.size() && fValid; i++) {
+                if (!txdata.populated) txdata.PopulateFromContext(contexts.at(i));
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout)) {
                     BOOST_ERROR("Bad test: " << strTest);
                     break;
@@ -227,9 +228,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid) {
                 }
 
                 uint32_t verify_flags = ParseScriptFlags(test[2].get_str());
-                fValid = VerifyScript(tx.vin[i].scriptSig,
-                    mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags,
-                    TransactionSignatureChecker(&tx, i, amount, txdata), contexts[i], &err);
+                fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags,
+                                      TransactionSignatureChecker(contexts[i], txdata), &err);
             }
             BOOST_CHECK_MESSAGE(!fValid, strTest);
             BOOST_CHECK_MESSAGE(err != ScriptError::OK, ScriptErrorString(err));
@@ -372,7 +372,8 @@ static void CreateCreditAndSpend(const CKeyStore &keystore,
     inputm.vout[0].scriptPubKey = CScript();
 
     auto const context = std::nullopt;
-    bool ret = SignSignature(keystore, *output, inputm, 0, SigHashType().withFork(), context);
+    bool ret = SignSignature(keystore, *output, inputm, 0, SigHashType().withFork(), STANDARD_SCRIPT_VERIFY_FLAGS,
+                             context);
 
     BOOST_CHECK_EQUAL(ret, success);
     CDataStream ssin(SER_NETWORK, PROTOCOL_VERSION);
@@ -404,8 +405,8 @@ void CheckWithFlag(const CTransactionRef &output, const CMutableTransaction &inp
 
     bool ret = VerifyScript(inputi.vin[0].scriptSig, output->vout[0].scriptPubKey,
         flags | SCRIPT_ENABLE_SIGHASH_FORKID,
-        TransactionSignatureChecker(&inputi, 0, output->vout[0].nValue),
-        contexts[0], &error);
+        TransactionSignatureChecker(contexts[0]),
+        &error);
     BOOST_CHECK_EQUAL(ret, success);
 }
 
@@ -424,9 +425,9 @@ static CScript PushAll(const std::vector<valtype> &values) {
 }
 
 static
-void ReplaceRedeemScript(CScript &script, const CScript &redeemScript, ScriptExecutionContextOpt context = {}) {
+void ReplaceRedeemScript(CScript &script, const CScript &redeemScript) {
     std::vector<valtype> stack;
-    EvalScript(stack, script, SCRIPT_VERIFY_STRICTENC, BaseSignatureChecker(), context);
+    EvalScript(stack, script, SCRIPT_VERIFY_STRICTENC, BaseSignatureChecker());
     BOOST_CHECK(stack.size() > 0);
     stack.back() = valtype(redeemScript.begin(), redeemScript.end());
     script = PushAll(stack);
@@ -479,8 +480,9 @@ BOOST_AUTO_TEST_CASE(test_big_transaction) {
 
     // sign all inputs
     for (size_t i = 0; i < mtx.vin.size(); ++i) {
-        bool hashSigned = SignSignature(keystore, scriptPubKey, mtx, i, inOutAmt,
-                                        sigHashes.at(i % sigHashes.size()), contexts.at(i));
+        bool hashSigned = SignSignature(keystore, scriptPubKey, mtx, i, CTxOut{inOutAmt, scriptPubKey},
+                                        sigHashes.at(i % sigHashes.size()), STANDARD_SCRIPT_VERIFY_FLAGS,
+                                        contexts.at(i));
         BOOST_CHECK_MESSAGE(hashSigned, "Failed to sign test transaction");
     }
 
@@ -492,13 +494,14 @@ BOOST_AUTO_TEST_CASE(test_big_transaction) {
     }
 
     // check all inputs concurrently, with the cache
-    PrecomputedTransactionData txdata(tx);
+    PrecomputedTransactionData txdata;
     CCheckQueue<CScriptCheck> scriptcheckqueue(128);
     CCheckQueueControl<CScriptCheck> control(&scriptcheckqueue);
 
     scriptcheckqueue.StartWorkerThreads(20);
 
     for (size_t i = 0; i < tx.vin.size(); ++i) {
+        if (!txdata.populated) txdata.PopulateFromContext(contexts.at(i));
         std::vector<CScriptCheck> vChecks;
         vChecks.emplace_back(contexts.at(i), STANDARD_SCRIPT_VERIFY_FLAGS, false, txdata);
         control.Add(vChecks);
@@ -514,13 +517,14 @@ SignatureData CombineSignatures(const CMutableTransaction &input1,
                                 const CMutableTransaction &input2,
                                 const CTransactionRef tx, ScriptExecutionContextOpt context = {}) {
     SignatureData sigdata;
-    sigdata = DataFromTransaction(input1, 0, tx->vout[0]);
-    sigdata.MergeSignatureData(DataFromTransaction(input2, 0, tx->vout[0]));
+    sigdata = DataFromTransaction(ScriptExecutionContext{0, tx->vout[0], input1}, STANDARD_SCRIPT_VERIFY_FLAGS);
+    sigdata.MergeSignatureData(DataFromTransaction(ScriptExecutionContext{0, tx->vout[0], input2},
+                                                   STANDARD_SCRIPT_VERIFY_FLAGS));
 
     ProduceSignature(
         DUMMY_SIGNING_PROVIDER,
-        MutableTransactionSignatureCreator(&input1, 0, tx->vout[0].nValue),
-        tx->vout[0].scriptPubKey, sigdata, context);
+        TransactionSignatureCreator(context.value_or(ScriptExecutionContext{0, tx->vout[0], input1})),
+        tx->vout[0].scriptPubKey, sigdata, STANDARD_SCRIPT_VERIFY_FLAGS);
     return sigdata;
 }
 
@@ -552,12 +556,12 @@ BOOST_AUTO_TEST_CASE(test_witness) {
     oneandthree.push_back(pubkey1);
     oneandthree.push_back(pubkey3);
     scriptMulti = GetScriptForMultisig(2, oneandthree);
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey1));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey2));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey1L));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey2L));
-    BOOST_CHECK(keystore.AddCScript(scriptMulti));
-    BOOST_CHECK(keystore2.AddCScript(scriptMulti));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey1, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey2, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey1L, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey2L, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptMulti, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore2.AddCScript(scriptMulti, false /*=p2sh_20*/));
     BOOST_CHECK(keystore2.AddKeyPubKey(key3, pubkey3));
 
     CTransactionRef output1, output2;
@@ -575,10 +579,10 @@ BOOST_AUTO_TEST_CASE(test_witness) {
 
     // P2SH pay-to-compressed-pubkey.
     CreateCreditAndSpend(keystore,
-                         GetScriptForDestination(CScriptID(scriptPubkey1)),
+                         GetScriptForDestination(ScriptID(scriptPubkey1, false /*=p2sh_20*/)),
                          output1, input1);
     CreateCreditAndSpend(keystore,
-                         GetScriptForDestination(CScriptID(scriptPubkey2)),
+                         GetScriptForDestination(ScriptID(scriptPubkey2, false /*=p2sh_20*/)),
                          output2, input2);
     ReplaceRedeemScript(input2.vin[0].scriptSig, scriptPubkey1);
     CheckWithFlag(output1, input1, 0, true);
@@ -600,10 +604,10 @@ BOOST_AUTO_TEST_CASE(test_witness) {
 
     // P2SH pay-to-uncompressed-pubkey.
     CreateCreditAndSpend(keystore,
-                         GetScriptForDestination(CScriptID(scriptPubkey1L)),
+                         GetScriptForDestination(ScriptID(scriptPubkey1L, false /*=p2sh_20*/)),
                          output1, input1);
     CreateCreditAndSpend(keystore,
-                         GetScriptForDestination(CScriptID(scriptPubkey2L)),
+                         GetScriptForDestination(ScriptID(scriptPubkey2L, false /*=p2sh_20*/)),
                          output2, input2);
     ReplaceRedeemScript(input2.vin[0].scriptSig, scriptPubkey1L);
     CheckWithFlag(output1, input1, 0, true);
@@ -624,12 +628,12 @@ BOOST_AUTO_TEST_CASE(test_witness) {
 
     // P2SH 2-of-2 multisig
     CreateCreditAndSpend(keystore,
-                         GetScriptForDestination(CScriptID(scriptMulti)),
+                         GetScriptForDestination(ScriptID(scriptMulti, false /*=p2sh_20*/)),
                          output1, input1, false);
     CheckWithFlag(output1, input1, 0, true);
     CheckWithFlag(output1, input1, SCRIPT_VERIFY_P2SH, false);
     CreateCreditAndSpend(keystore2,
-                         GetScriptForDestination(CScriptID(scriptMulti)),
+                         GetScriptForDestination(ScriptID(scriptMulti, false /*=p2sh_20*/)),
                          output2, input2, false);
     CheckWithFlag(output2, input2, 0, true);
     CheckWithFlag(output2, input2, SCRIPT_VERIFY_P2SH, false);
@@ -640,6 +644,8 @@ BOOST_AUTO_TEST_CASE(test_witness) {
 }
 
 BOOST_AUTO_TEST_CASE(test_IsStandard) {
+    const uint32_t flags = STANDARD_SCRIPT_VERIFY_FLAGS & ~SCRIPT_ENABLE_P2SH_32 & ~SCRIPT_ENABLE_TOKENS;
+
     LOCK(cs_main);
     CBasicKeyStore keystore;
     CCoinsView coinsDummy;
@@ -658,31 +664,46 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
     t.vout[0].scriptPubKey = GetScriptForDestination(key.GetPubKey().GetID());
 
     std::string reason;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Check dust with default relay fee:
     Amount nDustThreshold = 3 * 182 * dustRelayFee.GetFeePerK() / 1000;
     BOOST_CHECK_EQUAL(nDustThreshold, 546 * SATOSHI);
     // dust:
     t.vout[0].nValue = nDustThreshold - SATOSHI;
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
     // not dust:
     t.vout[0].nValue = nDustThreshold;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Check dust with odd relay fee to verify rounding:
     // nDustThreshold = 182 * 1234 / 1000 * 3
     dustRelayFee = CFeeRate(1234 * SATOSHI);
     // dust:
     t.vout[0].nValue = (672 - 1) * SATOSHI;
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
     // not dust:
     t.vout[0].nValue = 672 * SATOSHI;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
     dustRelayFee = CFeeRate(DUST_RELAY_TX_FEE);
 
     t.vout[0].scriptPubKey = CScript() << OP_1;
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
+
+    // Test P2SH_32 is non-standard pre-activation, and standard post-activation
+    CTxOut &txout = t.vout[0];
+    txout.scriptPubKey = GetScriptForDestination(ScriptID(txout.scriptPubKey, true /* p2sh_32 */));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags | SCRIPT_ENABLE_P2SH_32));
+
+    // Test token-containing output is non-standard pre-activation and standard post-activation
+    txout.scriptPubKey = GetScriptForDestination(ScriptID(CScript() << OP_1, false /* p2sh_20 */));
+    BOOST_CHECK(!txout.tokenDataPtr);
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
+    txout.tokenDataPtr.emplace(token::Id{}, *token::SafeAmount::fromInt(1));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags | SCRIPT_ENABLE_TOKENS));
+    txout.tokenDataPtr.reset();
 
     // MAX_OP_RETURN_RELAY-byte TX_NULL_DATA (standard)
     t.vout[0].scriptPubKey =
@@ -698,7 +719,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "f5d00d4adf73f2dd112ca75cf19754651909becfbe65aed1"
                               "3afb2ab8");
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY, t.vout[0].scriptPubKey.size());
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // MAX_OP_RETURN_RELAY+1-byte TX_NULL_DATA (non-standard)
     t.vout[0].scriptPubKey =
@@ -714,7 +735,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "f5d00d4adf73f2dd112ca75cf19754651909becfbe65aed1"
                               "3afb2ab800");
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY + 1, t.vout[0].scriptPubKey.size());
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     // MAX_OP_RETURN_RELAY-byte TX_NULL_DATA in multiple outputs (standard after May 2021 Network Upgrade)
     t.vout.resize(3);
@@ -736,7 +757,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "732ba6677520a893d75d9a966cb8f85dc301656b1635c631"
                               "f5d00d4adf73f2dd112ca75cf19754651909becfbe65aed1");
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY, t.vout[0].scriptPubKey.size() + t.vout[1].scriptPubKey.size() + t.vout[2].scriptPubKey.size());
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // MAX_OP_RETURN_RELAY+1-byte TX_NULL_DATA in multiple outputs (non-standard)
     t.vout[2].scriptPubKey =
@@ -750,7 +771,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "f5d00d4adf73f2dd112ca75cf19754651909becfbe65aed1"
                               "3a");
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY + 1, t.vout[0].scriptPubKey.size() + t.vout[1].scriptPubKey.size() + t.vout[2].scriptPubKey.size());
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     /**
      * Check when a custom value is used for -datacarriersize .
@@ -767,7 +788,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "271967f1a67130b7105cd6a828e03909a67962e0ea1f61de"
                               "b649f6bc3f4cef3877696e64657878");
     BOOST_CHECK_EQUAL(t.vout[0].scriptPubKey.size(), 90);
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Max user provided payload size + 1 is non-standard
     t.vout[0].scriptPubKey =
@@ -777,7 +798,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                               "271967f1a67130b7105cd6a828e03909a67962e0ea1f61de"
                               "b649f6bc3f4cef3877696e6465787800");
     BOOST_CHECK_EQUAL(t.vout[0].scriptPubKey.size(), 91);
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     // Max user provided payload size in multiple outputs is standard
     // after the May 2021 Network Upgrade.
@@ -792,7 +813,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                   << ParseHex("271967f1a67130b7105cd6a828e03909a67962e0ea1f61de"
                               "b649f6bc3f4cef3877696e646578");
     BOOST_CHECK_EQUAL(t.vout[0].scriptPubKey.size() + t.vout[1].scriptPubKey.size(), 90);
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Max user provided payload size + 1 in multiple outputs is non-standard
     // even after the May 2021 Network Upgrade.
@@ -801,24 +822,24 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                   << ParseHex("271967f1a67130b7105cd6a828e03909a67962e0ea1f61de"
                               "b649f6bc3f4cef3877696e64657878");
     BOOST_CHECK_EQUAL(t.vout[0].scriptPubKey.size() + t.vout[1].scriptPubKey.size(), 91);
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     // Verify -datacarriersize=0 rejects even the smallest possible OP_RETURN payload.
     nMaxDatacarrierBytes = 0;
     t.vout.resize(1);
     t.vout[0].scriptPubKey = CScript() << OP_RETURN;
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     // Clear custom configuration.
     nMaxDatacarrierBytes = nMaxDatacarrierBytesOrig;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Data payload can be encoded in any way...
     t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("");
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
     t.vout[0].scriptPubKey = CScript()
                              << OP_RETURN << ParseHex("00") << ParseHex("01");
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
     // OP_RESERVED *is* considered to be a PUSHDATA type opcode by IsPushOnly()!
     t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_RESERVED
                                        << ScriptInt::fromIntUnchecked(-1)
@@ -839,7 +860,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                                        << ScriptInt::fromIntUnchecked(14)
                                        << ScriptInt::fromIntUnchecked(15)
                                        << ScriptInt::fromIntUnchecked(16);
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
     t.vout[0].scriptPubKey = CScript()
                              << OP_RETURN
                              << ScriptInt::fromIntUnchecked(0)
@@ -847,16 +868,16 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
                              << ScriptInt::fromIntUnchecked(2)
                              << ParseHex("fffffffffffffffffffffffffffffffffffff"
                                          "fffffffffffffffffffffffffffffffffff");
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // ...so long as it only contains PUSHDATA's
     t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_RETURN;
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     // TX_NULL_DATA w/o PUSHDATA
     t.vout.resize(1);
     t.vout[0].scriptPubKey = CScript() << OP_RETURN;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Only one TX_NULL_DATA permitted in all cases,
     // until the May 2021 Network Upgrade.
@@ -870,18 +891,18 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
         CScript() << OP_RETURN
                   << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909"
                               "a67962e0ea1f61deb649f6bc3f4cef38");
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     t.vout[0].scriptPubKey =
         CScript() << OP_RETURN
                   << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909"
                               "a67962e0ea1f61deb649f6bc3f4cef38");
     t.vout[1].scriptPubKey = CScript() << OP_RETURN;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     t.vout[0].scriptPubKey = CScript() << OP_RETURN;
     t.vout[1].scriptPubKey = CScript() << OP_RETURN;
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 
     // Every OP_RETURN output script without data pushes is one byte long,
     // so the maximum number of outputs will be nMaxDatacarrierBytes.
@@ -890,33 +911,56 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
         out.nValue = Amount::zero();
         out.scriptPubKey = CScript() << OP_RETURN;
     }
-    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(!IsStandardTx(CTransaction(t), reason, flags));
 
     t.vout.pop_back();
-    BOOST_CHECK(IsStandardTx(CTransaction(t), reason));
+    BOOST_CHECK(IsStandardTx(CTransaction(t), reason, flags));
 }
 
 BOOST_AUTO_TEST_CASE(txsize_activation_test) {
     const Config &config = GetConfig();
     const Consensus::Params &params = config.GetChainParams().GetConsensus();
-    const int32_t magneticAnomalyActivationHeight =
-        params.magneticAnomalyHeight;
+    // ContextualCheckTransaction expects nHeight of next block and MTP for previous block.
+    // But the hard-coded chain params are for previous block, hence why we increment the height here.
+    const int32_t magneticAnomalyActivationHeight = params.magneticAnomalyHeight + 1;
+    const int64_t upgrade9MTP = params.upgrade9ActivationTime;
 
-    // A minimaly sized transction.
+    // A minimally-sized transction.
     const auto &minTx = CTransaction::null;
+    BOOST_CHECK(::GetSerializeSize(minTx) < MIN_TX_SIZE_MAGNETIC_ANOMALY);
     CValidationState state;
 
     BOOST_CHECK(ContextualCheckTransaction(
-        params, minTx, state, magneticAnomalyActivationHeight - 1, 5678, 1234));
+        params, minTx, state, magneticAnomalyActivationHeight - 1, 5678, upgrade9MTP - 1));
     BOOST_CHECK(!ContextualCheckTransaction(
-        params, minTx, state, magneticAnomalyActivationHeight, 5678, 1234));
+        params, minTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP - 1));
     BOOST_CHECK_EQUAL(state.GetRejectCode(), REJECT_INVALID);
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-txns-undersize");
+
+    // A tx that is 65 bytes
+    const CTransaction smallTx = []{
+        CMutableTransaction tx;
+        tx.vin.resize(1);
+        tx.vout.resize(1);
+        const auto txSize = ::GetSerializeSize(tx);
+        BOOST_REQUIRE_LE(txSize, MIN_TX_SIZE_UPGRADE9);
+        tx.vin[0].scriptSig.resize(MIN_TX_SIZE_UPGRADE9 - txSize);
+        return CTransaction{tx};
+    }();
+    BOOST_CHECK_EQUAL(::GetSerializeSize(smallTx), MIN_TX_SIZE_UPGRADE9);
+    BOOST_CHECK_LT(::GetSerializeSize(smallTx), MIN_TX_SIZE_MAGNETIC_ANOMALY);
+    state = CValidationState{};
+    BOOST_CHECK(!ContextualCheckTransaction(
+        params, smallTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP - 1));
+    BOOST_CHECK_EQUAL(state.GetRejectCode(), REJECT_INVALID);
+    BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-txns-undersize");
+    BOOST_CHECK(ContextualCheckTransaction(
+        params, smallTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP));
 }
 
 BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
     CScript const p2pk_scriptPubKey = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
-    CScript const p2sh_scriptPubKey = GetScriptForDestination(CScriptID(p2pk_scriptPubKey));
+    CScript const p2sh_scriptPubKey = GetScriptForDestination(ScriptID(p2pk_scriptPubKey, false /*=p2sh_20*/));
 
     CMutableTransaction funding_tx_1;
     CScript noppyScriptPubKey;
@@ -930,7 +974,9 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         noppyScriptPubKey << OP_IF << OP_NOP10 << OP_ENDIF << OP_1;
         funding_tx_1.vout[0].scriptPubKey = noppyScriptPubKey;
         std::vector<uint8_t> fundingVchSig;
-        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_1), 0, SigHashType().withFork(), m_coinbase_txns[0]->vout[0].nValue);
+        const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx_1};
+        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(),
+                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_1.vin[0].scriptSig << fundingVchSig;
@@ -954,7 +1000,9 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         noppyScriptPubKey << OP_IF << OP_NOP10 << OP_ENDIF << OP_1;
         funding_tx_2.vout[0].scriptPubKey = noppyScriptPubKey;
         std::vector<uint8_t> fundingVchSig;
-        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, CTransaction(funding_tx_2), 0, SigHashType().withFork(), m_coinbase_txns[0]->vout[0].nValue);
+        const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx_2};
+        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(), nullptr,
+                                               STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_2.vin[0].scriptSig << fundingVchSig;
@@ -1063,6 +1111,30 @@ BOOST_AUTO_TEST_CASE(CTransaction_ToString) {
         "\n    CTxOut(nValue=4.45352901, scriptPubKey=76a9147d9a37c154facc9fd0068a5b)"
         "\n    CTxOut(nValue=1.00000000, scriptPubKey=76a9140a373caf0ab3c2b46cd05625)"
         "\n");
+}
+
+BOOST_AUTO_TEST_CASE(CTransaction_ToString_TokenData) {
+    const std::vector<uint8_t> txBytes = ParseHex(
+        "0200000002f9216e4d8853a41a9775a2542e91e549751403095471c16fb07209c9d63be650020000006a47304402204a76646d32f4ed67"
+        "5b11340b2f3502c197c5d52cfca0834709cf4e3374d45e950220153e8697ea1c02b403f8f45dc84c0924bd15a1b00c629135f1184df6ca"
+        "1b29504121036f679d3562595fbe5c0a8a7194a2a8e476f2a094afc73a1dec817e2373b37f56fffffffff9216e4d8853a41a9775a2542e"
+        "91e549751403095471c16fb07209c9d63be650000000006a47304402203080d4d635e32746094d7dc2ee5e448fdea75486965b419346b1"
+        "e32a0e46f4740220276087388b4c98512ca5135f9e7914786c31f976861013f14df7f4487472673a412102abaad90841057ddb1ed92960"
+        "8b536535b0cd8a18ba0a90dba66ba7b1c1f7b4eaffffffff03a08601000000000044ef43c1044127e1274181e7458c70b02d5c75b49b31"
+        "a337d85703d56480345cd2cc10ffffffffffffffff7f76a9140a373caf0ab3c2b46cd05625b8d545c295b93d7a88aca086010000000000"
+        "44ef43c1044127e1274181e7458c70b02d5c75b49b31a337d85703d56480345cd2cc6208596f596f596f212176a914fd68d2c87f0dc179"
+        "9e51657d32efb9aa367d161e88acf0e0ae2f000000001976a914ea873aaafbdd7a7c74d73ee1174e42f620b0a18c88ac00000000");
+    CMutableTransaction mtx;
+    CDataStream (txBytes, SER_NETWORK, CLIENT_VERSION) >> mtx;
+    CTransaction tx(mtx);
+    BOOST_CHECK_EQUAL(tx.ToString(), "CTransaction(txid=d546a26ff3, ver=2, vin.size=2, vout.size=3, nLockTime=0)\n"
+        "    CTxIn(COutPoint(50e63bd6c9, 2), scriptSig=47304402204a76646d32f4ed)\n"
+        "    CTxIn(COutPoint(50e63bd6c9, 0), scriptSig=47304402203080d4d635e327)\n"
+        "    CTxOut(nValue=0.00100000, scriptPubKey=76a9140a373caf0ab3c2b46cd05625 "
+        "token::OutputData(id=ccd25c348064d50357d837a3319bb4, bitfield=10, amount=9223372036854775807, commitment=))\n"
+        "    CTxOut(nValue=0.00100000, scriptPubKey=76a914fd68d2c87f0dc1799e51657d "
+        "token::OutputData(id=ccd25c348064d50357d837a3319bb4, bitfield=62, amount=0, commitment=596f596f596f2121))\n"
+        "    CTxOut(nValue=7.99990000, scriptPubKey=76a914ea873aaafbdd7a7c74d73ee1)\n");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

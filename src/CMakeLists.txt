@@ -490,6 +490,7 @@ target_link_libraries(script common)
 add_library(bitcoinconsensus
   arith_uint256.cpp
   hash.cpp
+  primitives/token.cpp
   primitives/transaction.cpp
   pubkey.cpp
   uint256.cpp
@@ -524,6 +525,7 @@ add_library(server
   checkpoints.cpp
   config.cpp
   consensus/activation.cpp
+  consensus/tokens.cpp
   consensus/tx_verify.cpp
   consensus/tx_check.cpp
   dsproof/dsproof.cpp

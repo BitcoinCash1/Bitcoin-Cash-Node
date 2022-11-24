@@ -15,6 +15,8 @@ namespace interfaces {
 class Chain;
 } // namespace interfaces
 
+struct RPCArg;
+
 /** Sign a transaction with the given keystore and previous transactions */
 UniValue::Object SignTransaction(interfaces::Chain &chain, CMutableTransaction &mtx, const UniValue &prevTxs,
                                  CBasicKeyStore *keystore, bool tempKeystore, const UniValue &hashType);
@@ -24,3 +26,13 @@ CMutableTransaction ConstructTransaction(const CChainParams &params,
                                          const UniValue &inputs_in,
                                          const UniValue &outputs_in,
                                          const UniValue &locktime);
+
+/**
+ *  Returns an RPCArg represending the alternate way to specify transaction outputs as:
+ *      "address": { "amount": xx, "tokenData" : { ... } }
+ *  Used by: ConstructTransaction above as an alternate way to specify outputs with token data in them.
+ *  See: createrawtransaction, createpsbt, walletcreatefundedpsbt
+ */
+RPCArg GetAlternateAddressObjectOutputArgSpec(bool optional = true);
+/** Returns an RPCArg spec for: "tokenData" : { "category": "xxx", "amount": nnn ... } */
+RPCArg GetTokenDataArgSpec(bool optional = true);

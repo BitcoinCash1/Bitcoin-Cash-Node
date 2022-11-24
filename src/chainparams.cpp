@@ -140,8 +140,11 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 740237;
 
-        // May 15, 2023 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9ActivationTime = 1684152000;
+
+        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade10ActivationTime = 1715774400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
@@ -362,8 +365,11 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 1500205;
 
-        // May 15, 2023 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9ActivationTime = 1684152000;
+
+        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade10ActivationTime = 1715774400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
@@ -544,8 +550,11 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 95464;
 
-        // May 15, 2023 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9ActivationTime = 1684152000;
+
+        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade10ActivationTime = 1715774400;
 
         // Default limit for block size (in bytes) (testnet4 is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
@@ -698,8 +707,11 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 10'006;
 
-        // May 15, 2023 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9ActivationTime = 1684152000;
+
+        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade10ActivationTime = 1715774400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = 256 * ONE_MEGABYTE;
@@ -766,6 +778,158 @@ public:
 };
 
 /**
+ * Chipnet (activates the next upgrade earier than the other networks)
+ */
+class CChipNetParams : public CChainParams {
+public:
+    CChipNetParams() {
+        strNetworkID = CBaseChainParams::CHIPNET;
+        consensus.nSubsidyHalvingInterval = 210000;
+        consensus.BIP16Height = 1;
+        // Note: Because BIP34Height is less than 17, clients will face an unusual corner case with BIP34 encoding.
+        // The "correct" encoding for BIP34 blocks at height <= 16 uses OP_1 (0x81) through OP_16 (0x90) as a single
+        // byte (i.e. "[shortest possible] encoded CScript format"), not a single byte with length followed by the
+        // little-endian encoded version of the height as mentioned in BIP34. The BIP34 spec document itself ought to
+        // be updated to reflect this.
+        // https://github.com/bitcoin/bitcoin/pull/14633
+        consensus.BIP34Height = 2;
+        consensus.BIP34Hash = BlockHash::fromHex("00000000b0c65b1e03baace7d5c093db0d6aac224df01484985ffd5e86a1a20c");
+        consensus.BIP65Height = 3;
+        consensus.BIP66Height = 4;
+        consensus.CSVHeight = 5;
+        consensus.powLimit = uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        // two weeks
+        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60;
+        consensus.nPowTargetSpacing = 10 * 60;
+        consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.fPowNoRetargeting = false;
+
+        // The half life for the ASERT DAA. For every (nASERTHalfLife) seconds behind schedule the blockchain gets,
+        // difficulty is cut in half. Doubled if blocks are ahead of schedule.
+        // One hour
+        consensus.nASERTHalfLife = 60 * 60;
+
+        // The best chain should have at least this much work.
+        consensus.nMinimumChainWork = ChainParamsConstants::CHIPNET_MINIMUM_CHAIN_WORK;
+
+        // By default assume that the signatures in ancestors of this block are
+        // valid.
+        consensus.defaultAssumeValid = ChainParamsConstants::CHIPNET_DEFAULT_ASSUME_VALID;
+
+        // August 1, 2017 hard fork
+        consensus.uahfHeight = 6;
+
+        // November 13, 2017 hard fork
+        consensus.daaHeight = 3000;
+
+        // November 15, 2018 hard fork
+        consensus.magneticAnomalyHeight = 4000;
+
+        // November 15, 2019 protocol upgrade
+        consensus.gravitonHeight = 5000;
+
+        // May 15, 2020 12:00:00 UTC protocol upgrade
+        // Note: We must set this to 0 here because "historical" sigop code has
+        //       been removed from the BCHN codebase. All sigop checks really
+        //       use the new post-May2020 sigcheck code unconditionally in this
+        //       codebase, regardless of what this height is set to. So it's
+        //       "as-if" the activation height really is 0 for all intents and
+        //       purposes. If other node implementations wish to use this code
+        //       as a reference, they need to be made aware of this quirk of
+        //       BCHN, so we explicitly set the activation height to zero here.
+        //       For example, BU or other nodes do keep both sigop and sigcheck
+        //       implementations in their execution paths so they will need to
+        //       use 0 here to be able to synch to this chain.
+        //       See: https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/issues/167
+        consensus.phononHeight = 0;
+
+        // Nov 15, 2020 12:00:00 UTC protocol upgrade
+        consensus.axionActivationTime = 1605441600;
+
+        // May 15, 2022 12:00:00 UTC protocol upgrade
+        consensus.upgrade8Height = 95464;
+
+        // November 15, 2022 12:00:00 UTC; protocol upgrade activates 6 months early
+        consensus.upgrade9ActivationTime = 1668513600;
+
+        // Default limit for block size (in bytes) (chipnet is like testnet4 in that it is smaller at 2MB)
+        consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
+
+        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
+        consensus.nDefaultGeneratedBlockSize = 2 * ONE_MEGABYTE;
+
+        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+
+        // Anchor params: Note that the block after this height *must* also be checkpointed below.
+        consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
+            16844,        // anchor block height
+            0x1d00ffff,   // anchor block nBits
+            1605451779,   // anchor block previous block timestamp
+        };
+
+        diskMagic[0] = 0xcd;
+        diskMagic[1] = 0x22;
+        diskMagic[2] = 0xa7;
+        diskMagic[3] = 0x92;
+        netMagic[0] = 0xe2;
+        netMagic[1] = 0xb7;
+        netMagic[2] = 0xda;
+        netMagic[3] = 0xaf;
+        nDefaultPort = 48333;
+        nPruneAfterHeight = 1000;
+        m_assumed_blockchain_size = 1;
+        m_assumed_chain_state_size = 1;
+
+        genesis = CreateGenesisBlock(1597811185, 114152193, 0x1d00ffff, 1, 50 * COIN);
+        consensus.hashGenesisBlock = genesis.GetHash();
+        assert(consensus.hashGenesisBlock ==
+            BlockHash::fromHex("000000001dd410c49a788668ce26751718cc797474d3152a5fc073dd44fd9f7b"));
+
+        vFixedSeeds.clear();
+        vSeeds.clear();
+        // Jason Dreyzehner
+        vSeeds.emplace_back("chipnet.bitjson.com");
+
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 196);
+        base58Prefixes[SECRET_KEY] = std::vector<uint8_t>(1, 239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+        cashaddrPrefix = "bchtest";
+        vFixedSeeds.assign(std::begin(pnSeed6_chipnet), std::end(pnSeed6_chipnet));
+
+        fDefaultConsistencyChecks = false;
+        fRequireStandard = true;
+        m_is_test_chain = true;
+
+        checkpointData = {
+            /* .mapCheckpoints = */ {
+                {0, genesis.GetHash()},
+                {5000, BlockHash::fromHex("000000009f092d074574a216faec682040a853c4f079c33dfd2c3ef1fd8108c4")},
+                // Axion activation.
+                {16845, BlockHash::fromHex("00000000fb325b8f34fe80c96a5f708a08699a68bbab82dba4474d86bd743077")},
+                {38000, BlockHash::fromHex("000000000015197537e59f339e3b1bbf81a66f691bd3d7aa08560fc7bf5113fb")},
+
+                // Upgrade 7 ("tachyon") era (actual activation block was in the past significantly before this)
+                {54700, BlockHash::fromHex("00000000009af4379d87f17d0f172ee4769b48839a5a3a3e81d69da4322518b8")},
+                {68117, BlockHash::fromHex("0000000000a2c2fc11a3b72adbd10a3f02a1f8745da55a85321523043639829a")},
+
+                // Upgrade 8; May 15, 2022 (MTP time >= 1652616000), first upgrade block: 95465
+                {95465, BlockHash::fromHex("00000000a77206a2265cabc47cc2c34706ba1c5e5a5743ac6681b83d43c91a01")},
+
+                // Fork block for chipnet
+                {115252, BlockHash::fromHex("00000000040ba9641ba98a37b2e5ceead38e4e2930ac8f145c8094f94c708727")},
+                {115510, BlockHash::fromHex("000000006ad16ee5ee579bc3712b6f15cdf0a7f25a694e1979616794b73c5122")},
+            }};
+
+        // Data as of block
+        // 00000000c74929a8b9cb64581b1b9d8294c71ef172a6ce5d27988fc6026ad3d4
+        // (height 115527)
+        chainTxData = {1664921612 /* time */, 118258 /* numTx */, 0.002 /* tx/sec */};
+    }
+};
+
+/**
  * Regression test
  */
 class CRegTestParams : public CChainParams {
@@ -826,8 +990,11 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 0;
 
-        // May 15, 2023 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9ActivationTime = 1684152000;
+
+        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade10ActivationTime = 1715774400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
@@ -912,6 +1079,10 @@ std::unique_ptr<CChainParams> CreateChainParams(const std::string &chain) {
 
     if (chain == CBaseChainParams::SCALENET) {
         return std::make_unique<CScaleNetParams>();
+    }
+
+    if (chain == CBaseChainParams::CHIPNET) {
+        return std::make_unique<CChipNetParams>();
     }
 
     throw std::runtime_error(

@@ -1,11 +1,14 @@
-// Copyright (c) 2020 The Bitcoin developers
+// Copyright (c) 2020-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <chainparams.h>
 #include <config.h>
+#include <consensus/activation.h>
 #include <consensus/validation.h>
 #include <dsproof/storage.h>
 #include <policy/mempool.h>
+#include <policy/policy.h>
 #include <script/interpreter.h>
 #include <script/sighashtype.h>
 #include <script/sign.h>
@@ -30,6 +33,31 @@
 #include <vector>
 
 using ByteVec = std::vector<uint8_t>;
+
+// Mixin to ensure mempool is cleared
+struct EnsureClearedMempoolMixin {
+    ~EnsureClearedMempoolMixin() { LOCK(g_mempool.cs); g_mempool.clear(); }
+};
+
+// Mixin to ensure tokens are enabled for this test
+struct Upgrade9ActivatedMixin {
+    std::optional<std::string> optOrigUpgrade9ActivationTime;
+
+    Upgrade9ActivatedMixin() {
+        if (gArgs.IsArgSet("-upgrade9activationtime")) {
+            optOrigUpgrade9ActivationTime = gArgs.GetArg("-upgrade9activationtime", "");
+        }
+        gArgs.ForceSetArg("-upgrade9activationtime", "0");
+    }
+
+    ~Upgrade9ActivatedMixin() {
+        gArgs.ClearArg("-upgrade9activationtime");
+        if (optOrigUpgrade9ActivationTime) {
+            gArgs.SoftSetArg("-upgrade9activationtime", *optOrigUpgrade9ActivationTime);
+        }
+    }
+};
+
 
 BOOST_FIXTURE_TEST_SUITE(dsproof_tests, BasicTestingSetup)
 
@@ -264,10 +292,12 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     return {b, std::move(state)};
 }
 
+struct EnsureClearedMempoolTestChain100Setup : TestChain100Setup, EnsureClearedMempoolMixin {};
+
 /// Comprehensive test that adds real tx's to the mempool and double-spends them.
 /// - Tests that the proofs are generated correctly when rejecting double-spends
 /// - Tests orphans and claiming of orphans
-BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
+BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, EnsureClearedMempoolTestChain100Setup) {
     FlatSigningProvider provider;
     provider.keys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey;
     provider.pubkeys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey.GetPubKey();
@@ -281,7 +311,9 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
     for (const auto & tx : m_coinbase_txns) {
         LOCK2(cs_main, g_mempool.cs);
         // belt-and-suspenders check that coinbase tx cannot have double spend proofs
-        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, *tx));
+        bool isProtected;
+        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, *tx, &isProtected));
+        BOOST_CHECK(!isProtected);
         CMutableTransaction spend;
         spend.nVersion = 1;
         spend.vin.resize(1);
@@ -290,10 +322,12 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
         spend.vout[0].nValue = int64_t(GetRand(1'000)) * CENT;
         spend.vout[0].scriptPubKey = scriptPubKey;
         // Sign:
-        const auto ok = SignSignature(provider, *tx, spend, 0, SigHashType().withFork(), {} /* context */);
+        const auto ok = SignSignature(provider, *tx, spend, 0, SigHashType().withFork(),
+                                      STANDARD_SCRIPT_VERIFY_FLAGS, {} /* context */);
         BOOST_CHECK(ok);
         // Also a tx spending a p2pk cannot have a dsproof
-        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, CTransaction{spend}));
+        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, CTransaction{spend}, &isProtected));
+        BOOST_CHECK(!isProtected);
     }
 
     // next, mine a bunch of blocks that send coinbase to p2pkh
@@ -302,7 +336,9 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
         m_coinbase_txns.push_back(b.vtx[0]);
         LOCK2(cs_main, g_mempool.cs);
         // belt-and-suspenders check that coinbase tx cannot have double spend proofs
-        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, *m_coinbase_txns.back()));
+        bool isProtected;
+        BOOST_CHECK(!DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, *m_coinbase_txns.back(), &isProtected));
+        BOOST_CHECK(!isProtected);
     }
 
     // Some code-paths below need locks held
@@ -326,7 +362,8 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
         spends[i].vout[0].scriptPubKey = scriptPubKey;
 
         // Sign:
-        const auto ok = SignSignature(provider, *cbTxRef, spends[i], 0, SigHashType().withFork(), context);
+        const auto ok = SignSignature(provider, *cbTxRef, spends[i], 0, SigHashType().withFork(),
+                                      STANDARD_SCRIPT_VERIFY_FLAGS, context);
         BOOST_CHECK(ok);
     }
 
@@ -345,7 +382,9 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
             BOOST_CHECK(ok);
             BOOST_CHECK(state.IsValid());
             // p2pkh can have dsproof
-            BOOST_CHECK(DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, CTransaction(spend1)));
+            bool isProtected;
+            BOOST_CHECK(DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(g_mempool, CTransaction(spend1), &isProtected));
+            BOOST_CHECK(isProtected);
         }
         // Add second tx to mempool, check that it is rejected and that the dsproof generated is what we expect
         {
@@ -510,7 +549,7 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, TestChain100Setup) {
 /// Comprehensive test that adds real tx's to the mempool and double-spends them,
 /// and also makes the double-spent tx's a chain of unconfirmed children. This
 /// tests the CTxMemPool::recursiveDSProofSearch facility.
-BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, TestChain100Setup) {
+BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, EnsureClearedMempoolTestChain100Setup) {
     FlatSigningProvider provider;
     provider.keys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey;
     provider.pubkeys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey.GetPubKey();
@@ -546,7 +585,8 @@ BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, TestChain100Setup) {
         spends[i].vout[1].scriptPubKey = scriptPubKey;
 
         // Sign:
-        const auto ok = SignSignature(provider, *cbTxRef, spends[i], 0, SigHashType().withFork(), context);
+        const auto ok = SignSignature(provider, *cbTxRef, spends[i], 0, SigHashType().withFork(),
+                                      STANDARD_SCRIPT_VERIFY_FLAGS, context);
         BOOST_CHECK(ok);
     }
     size_t nokCt = 0, okCt = 0;
@@ -594,7 +634,8 @@ BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, TestChain100Setup) {
 
             // Sign:
             for (size_t n = 0; n < tx.vin.size(); ++n) {
-                const auto ok = SignSignature(provider, *parent, tx, n, SigHashType().withFork(), context);
+                const auto ok = SignSignature(provider, *parent, tx, n, SigHashType().withFork(),
+                                              STANDARD_SCRIPT_VERIFY_FLAGS, context);
                 BOOST_CHECK(ok);
             }
             l.emplace_back();
@@ -638,5 +679,167 @@ BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, TestChain100Setup) {
     BOOST_CHECK_EQUAL(g_mempool.size(), 0u);
     BOOST_CHECK_EQUAL(g_mempool.doubleSpendProofStorage()->size(), 0u);
 }
+
+// Like EnsureClearedMempoolTestChain100Setup, but ensures tokens are enabled
+struct Upgrade9TestChain100Setup : Upgrade9ActivatedMixin, EnsureClearedMempoolTestChain100Setup {};
+
+/// Test that a txn input with a CashToken in it does correctly produce a proof.
+BOOST_FIXTURE_TEST_CASE(dsproof_with_cashtokens, Upgrade9TestChain100Setup) {
+    FlatSigningProvider provider;
+    provider.keys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey;
+    provider.pubkeys[coinbaseKey.GetPubKey().GetID()] = coinbaseKey.GetPubKey();
+
+    const CScript scriptPubKey = GetScriptForDestination(coinbaseKey.GetPubKey().GetID());
+    const size_t firstTxIdx = m_coinbase_txns.size();
+
+    for (int i = 0; i < COINBASE_MATURITY*2 + 1; ++i) {
+        const CBlock b = CreateAndProcessBlock({}, scriptPubKey);
+        m_coinbase_txns.push_back(b.vtx[0]);
+    }
+
+    // Some code-paths below need locks held
+    LOCK2(cs_main, g_mempool.cs);
+    BOOST_CHECK(DoubleSpendProof::IsEnabled()); // default state should be enabled
+    // tokens should also be enabled
+    BOOST_CHECK(IsUpgrade9Enabled(::GetConfig().GetChainParams().GetConsensus(), ::ChainActive().Tip()));
+    g_mempool.clear(); // ensure mempool is clean
+    BOOST_CHECK_EQUAL(g_mempool.doubleSpendProofStorage()->size(), 0u);
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(::GetConfig().GetChainParams().GetConsensus(),
+                                                       ::ChainActive().Tip());
+
+    // Create 5 new token categories, 1 fungle and 1 nft-only for each
+    std::vector<CMutableTransaction> tokenGenesisTxns;
+    auto const context = std::nullopt;
+    tokenGenesisTxns.resize(5);
+    for (size_t i = 0; i < tokenGenesisTxns.size(); ++i) {
+        const auto &txFrom = m_coinbase_txns.at(firstTxIdx + i);
+        auto & txTo = tokenGenesisTxns[i];
+        const token::Id tokenId{txFrom->GetId()};
+        txTo.nVersion = 1;
+        txTo.vin.resize(1);
+        txTo.vin[0].prevout = COutPoint(txFrom->GetId(), 0);
+        txTo.vout.resize(2);
+
+        // output 0- has fungible-only tokens
+        auto *output = &txTo.vout[0];
+        //   ensure spends are unique amounts (thus unique txid)
+        output->nValue = txFrom->GetValueOut() - int64_t(i+1) * CENT;
+        output->scriptPubKey = scriptPubKey;
+        //   create a pure fungible token with 2^(24 + i) amount.
+        output->tokenDataPtr.emplace(tokenId, token::SafeAmount::fromInt(0x1000000LL << i).value());
+
+        // output 1 - has immutable NFT only
+        output = &txTo.vout[1];
+        output->nValue = txFrom->GetValueOut() - txTo.vout[0].nValue;
+        output->scriptPubKey = scriptPubKey;
+        //   create an NFT token with 0 amount.
+        token::NFTCommitment commitmentData;
+        GenericVectorWriter vw(SER_NETWORK, INIT_PROTO_VERSION, commitmentData, 0);
+        SerializeToVector(vw, InsecureRand256(), COMPACTSIZE(GetRand(65536))); // random hash and an int into commitment
+        BOOST_CHECK_GT(commitmentData.size(), uint256::size());
+        txTo.vout[1].tokenDataPtr.emplace(tokenId, token::SafeAmount::fromInt(0).value(), commitmentData, true /* hasNFT */);
+
+        // Sign all inputs
+        for (size_t inputNum = 0; inputNum < txTo.vin.size(); ++inputNum) {
+            const auto ok = SignSignature(provider, *txFrom, txTo, inputNum, SigHashType().withFork(),
+                                          scriptFlags, context);
+            BOOST_CHECK(ok);
+        }
+    }
+
+    // put all the token genesis txns into mempool
+    for (const auto &mtx : tokenGenesisTxns) {
+        CTransactionRef tx;
+        auto [ok, state] = ToMemPool(mtx, &tx);
+        BOOST_CHECK_MESSAGE(ok, strprintf("ok was: %i, state was: %s", int(ok), state.GetRejectReason()));
+    }
+
+    BOOST_CHECK_EQUAL(g_mempool.size(), tokenGenesisTxns.size());
+    BOOST_CHECK_EQUAL(g_mempool.listDoubleSpendProofs().size(), 0u);
+
+    // Create double-spend pairs of the above token-genesis txns:
+    std::vector<CMutableTransaction> spends;
+    size_t nExpectedDbleSpends = 0;
+    for (const auto &mtxFrom : tokenGenesisTxns) {
+        const auto txFrom = MakeTransactionRef(mtxFrom);
+        for (size_t txFromOutput = 0; txFromOutput < txFrom->vout.size(); ++txFromOutput) {
+            ++nExpectedDbleSpends;
+            for (size_t i = 0; i < 2; ++i) {
+                const CTxOut &out = txFrom->vout.at(txFromOutput);
+                // ensure spends are unique amounts (thus unique txid)
+                const Amount value = int64_t((out.nValue / SATOSHI) - int64_t(txFromOutput+i+1)) * SATOSHI;
+                auto &txTo = spends.emplace_back();
+                txTo.nVersion = 1;
+                txTo.vin.resize(1);
+                txTo.vin[0].prevout = COutPoint(txFrom->GetId(), txFromOutput);
+
+                txTo.vout.resize(2);
+                txTo.vout[0].nValue = value / 2;
+                txTo.vout[0].scriptPubKey = out.scriptPubKey;
+
+                // pass the token data along...
+                auto & ptok = txTo.vout[0].tokenDataPtr = out.tokenDataPtr;
+                BOOST_CHECK(ptok && ptok.get() != out.tokenDataPtr.get());
+                if (ptok->HasNFT()) {
+                    BOOST_CHECK(ptok->HasCommitmentLength() && !ptok->HasAmount());
+                } else {
+                    BOOST_CHECK(ptok->IsFungibleOnly() && !ptok->HasCommitmentLength() && ptok->HasAmount());
+                    ptok->SetAmount(ptok->GetAmount().safeSub(i+1).value()); // burn 1+ fungible by subtracting from token amount
+                    BOOST_CHECK(ptok->HasAmount());
+                    BOOST_CHECK(ptok->GetAmount() < out.tokenDataPtr->GetAmount());
+                }
+
+                txTo.vout[1].nValue = value / 2;
+                txTo.vout[1].scriptPubKey = out.scriptPubKey;
+                BOOST_CHECK( ! txTo.vout[1].tokenDataPtr);
+
+                // Sign all inputs
+                for (size_t inputNum = 0; inputNum < txTo.vin.size(); ++inputNum) {
+                    const auto ok = SignSignature(provider, *txFrom, txTo, inputNum, SigHashType().withFork(),
+                                                  scriptFlags, context);
+                    BOOST_CHECK(ok);
+                }
+            }
+        }
+    }
+    BOOST_CHECK_GT(nExpectedDbleSpends, 0);
+
+    // Send the above double-spends to mempool
+    std::vector<CTransactionRef> dblSpendRoots, rejected;
+
+    for (const auto &spend : spends) {
+        CTransactionRef tx;
+        auto [ok, state] = ToMemPool(spend, &tx);
+        if (!ok) {
+            // not added (was dupe)
+            BOOST_CHECK_EQUAL(state.GetRejectReason(), "txn-mempool-conflict");
+            rejected.push_back(MakeTransactionRef(spend));
+        } else {
+            // added
+            dblSpendRoots.push_back(std::move(tx));
+        }
+    }
+    BOOST_CHECK_EQUAL(dblSpendRoots.size(), nExpectedDbleSpends);
+    BOOST_CHECK_EQUAL(dblSpendRoots.size(), spends.size()/2u);
+    BOOST_CHECK_EQUAL(g_mempool.size(), dblSpendRoots.size() + tokenGenesisTxns.size());
+    const auto &proofs = g_mempool.listDoubleSpendProofs();
+    BOOST_CHECK_EQUAL(proofs.size(), dblSpendRoots.size());
+
+    for (const auto &[proof, txid] : proofs) {
+        // basic sanity checks
+        BOOST_CHECK(g_mempool.exists(txid));
+        // none of the proofs should be for a txn we don't have!
+        BOOST_CHECK(std::none_of(rejected.begin(), rejected.end(), [t = txid](const auto &ptx){
+            return ptx->GetId() == t;
+        }));
+        // paranoia: just ensure we can validate our own proof!
+        BOOST_CHECK(proof.validate(g_mempool) == DoubleSpendProof::Validity::Valid);
+    }
+
+    g_mempool.clear();
+    BOOST_CHECK_EQUAL(g_mempool.size(), 0u);
+    BOOST_CHECK_EQUAL(g_mempool.doubleSpendProofStorage()->size(), 0u);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

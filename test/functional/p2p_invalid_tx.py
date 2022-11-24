@@ -28,7 +28,13 @@ from test_framework.util import (
 )
 from test_framework.script import (
     CScript,
-    OP_TRUE
+    MAX_SCRIPT_SIZE,
+    OP_ENDIF,
+    OP_FALSE,
+    OP_IF,
+    OP_RESERVED,
+    OP_RETURN,
+    OP_TRUE,
 )
 
 
@@ -192,6 +198,42 @@ class InvalidTxRequestTest(BitcoinTestFramework):
         rejected_parent.rehash()
         with node.assert_debug_log(['not keeping orphan with rejected parents {}'.format(rejected_parent.hash)]):
             node.p2p.send_txs_and_test([rejected_parent], node, success=False)
+
+        # Restart the node with -persistmempool=0 to clear the mempool, and create a txn that spends an oversized output
+        self.log.info('Test spending of oversized outputs fails')
+        self.restart_node(0, self.extra_args[0] + ['-persistmempool=0'])
+        self.reconnect_p2p(num_connections=1)
+        # We can create an oversized output
+        spk_oversized = CScript([OP_TRUE, OP_FALSE, OP_IF] + ([OP_RESERVED] * MAX_SCRIPT_SIZE) + [OP_ENDIF])
+        tx_oversized_output = create_tx_with_script(block1.vtx[0], 0, script_sig=b'', amount=50 * COIN - 12000,
+                                                    script_pub_key=spk_oversized)
+        node.p2p.send_txs_and_test([tx_oversized_output], node, success=True)
+        assert_equal({tx_oversized_output.hash}, set(node.getrawmempool()))
+        tx_spend_oversized_output = create_tx_with_script(tx_oversized_output, 0, script_sig=b'',
+                                                          amount=tx_oversized_output.vout[0].nValue - 12000,
+                                                          script_pub_key=CScript([OP_TRUE]))
+        # But we cannot spend it
+        node.p2p.send_txs_and_test([tx_spend_oversized_output], node, success=False, expect_disconnect=True,
+                                   reject_reason="bad-txns-input-scriptpubkey-unspendable")
+        assert_equal({tx_oversized_output.hash}, set(node.getrawmempool()))
+
+        # Restart the node with -persistmempool=0 to clear the mempool, and create a txn that spends an OP_RETURN output
+        self.log.info('Test spending of OP_RETURN outputs fails')
+        self.restart_node(0, self.extra_args[0] + ['-persistmempool=0'])
+        self.reconnect_p2p(num_connections=1)
+        # We can create an OP_RETURN utxo
+        spk_opreturn = CScript([OP_RETURN] + ([OP_RESERVED] * 10))
+        tx_opreturn_output = create_tx_with_script(block1.vtx[0], 0, script_sig=b'', amount=50 * COIN - 12000,
+                                                   script_pub_key=spk_opreturn)
+        node.p2p.send_txs_and_test([tx_opreturn_output], node, success=True)
+        assert_equal({tx_opreturn_output.hash}, set(node.getrawmempool()))
+        tx_spend_opreturn_output = create_tx_with_script(tx_opreturn_output, 0, script_sig=b'',
+                                                         amount=tx_opreturn_output.vout[0].nValue - 12000,
+                                                         script_pub_key=CScript([OP_TRUE]))
+        # But we cannot spend it
+        node.p2p.send_txs_and_test([tx_spend_opreturn_output], node, success=False, expect_disconnect=True,
+                                   reject_reason="bad-txns-input-scriptpubkey-unspendable")
+        assert_equal({tx_opreturn_output.hash}, set(node.getrawmempool()))
 
         # restart node with sending BIP61 messages disabled, check that it
         # disconnects without sending the reject message

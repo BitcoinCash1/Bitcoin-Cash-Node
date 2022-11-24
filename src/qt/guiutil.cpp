@@ -139,8 +139,9 @@ QString convertToCashAddr(const CChainParams &params, const QString &addr) {
         // We have something sketchy as input. Do not try to convert.
         return addr;
     }
-    CTxDestination dst = DecodeDestination(addr.toStdString(), params);
-    return QString::fromStdString(EncodeCashAddr(dst, params));
+    bool tokenAddr{};
+    CTxDestination dst = DecodeDestination(addr.toStdString(), params, &tokenAddr);
+    return QString::fromStdString(EncodeCashAddr(dst, params, tokenAddr));
 }
 
 void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent) {
@@ -151,8 +152,7 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent) {
     // and this is the only place, where this address is supplied.
     widget->setPlaceholderText(
         QObject::tr("Enter a Bitcoin Cash address (e.g. %1)").arg(QString::fromStdString(DummyAddress(Params()))));
-    widget->setValidator(
-        new BitcoinAddressEntryValidator(Params().CashAddrPrefix(), parent));
+    widget->setValidator(new BitcoinAddressEntryValidator(parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
 }
 
@@ -591,6 +591,9 @@ static fs::path StartupShortcutPath() {
     }
     if (chain == CBaseChainParams::SCALENET) {
         return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin Cash Node (scalenet).lnk";
+    }
+    if (chain == CBaseChainParams::CHIPNET) {
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin Cash Node (chipnet).lnk";
     }
     return GetSpecialFolderPath(CSIDL_STARTUP) /
            strprintf("Bitcoin Cash Node (%s).lnk", chain); // If we get here: "regtest"

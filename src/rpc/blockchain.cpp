@@ -39,6 +39,8 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <string_view>
 
 struct CUpdatedBlock {
     uint256 hash;
@@ -1191,6 +1193,14 @@ UniValue gettxout(const Config &config, const JSONRPCRequest &request) {
             "        ,...\n"
             "     ]\n"
             "  },\n"
+            "  \"tokenData\" : {           (json object optional)\n"
+            "    \"category\" : \"hex\",     (string) token id\n"
+            "    \"amount\" : \"xxx\",       (string) fungible amount (is a string to support >53-bit amounts)\n"
+            "    \"nft\" : {               (json object optional)\n"
+            "      \"capability\" : \"xxx\", (string) one of \"none\", \"mutable\", \"minting\"\n"
+            "      \"commitment\" : \"hex\"  (string) NFT commitment\n"
+            "    }\n"
+            "  },\n"
             "  \"coinbase\" : true|false   (boolean) Coinbase or not\n"
             "}\n"
 
@@ -1226,12 +1236,16 @@ UniValue gettxout(const Config &config, const JSONRPCRequest &request) {
     }
 
     const CBlockIndex *pindex = LookupBlockIndex(pcoinsTip->GetBestBlock());
+    const CTxOut &txout = coin.GetTxOut();
     UniValue::Object ret;
-    ret.reserve(5);
+    ret.reserve(5u + bool(txout.tokenDataPtr));
     ret.emplace_back("bestblock", pindex->GetBlockHash().GetHex());
     ret.emplace_back("confirmations", coin.GetHeight() == MEMPOOL_HEIGHT ? 0 : pindex->nHeight - coin.GetHeight() + 1);
-    ret.emplace_back("value", ValueFromAmount(coin.GetTxOut().nValue));
-    ret.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, coin.GetTxOut().scriptPubKey, true));
+    ret.emplace_back("value", ValueFromAmount(txout.nValue));
+    ret.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, true));
+    if (txout.tokenDataPtr) {
+        ret.emplace_back("tokenData", TokenDataToUniv(*txout.tokenDataPtr));
+    }
     ret.emplace_back("coinbase", coin.IsCoinBase());
 
     return ret;
@@ -2277,13 +2291,14 @@ static UniValue savemempool(const Config &config,
     return UniValue();
 }
 
-//! Search for a given set of pubkey scripts
-static bool FindScriptPubKey(std::atomic<int> &scan_progress,
-                             const std::atomic<bool> &should_abort,
-                             int64_t &count, CCoinsViewCursor *cursor,
-                             const std::set<CScript> &needles,
-                             std::map<COutPoint, Coin> &out_results,
-                             std::function<void()>& interruption_point) {
+//! Search for a given set of pubkey scripts and tokens
+static bool FindScriptPubKeysAndTokens(std::atomic<int> &scan_progress,
+                                       const std::atomic<bool> &should_abort,
+                                       int64_t &count, CCoinsViewCursor *cursor,
+                                       const std::set<CScript> &needles,
+                                       const std::set<token::Id> &tokenIds,
+                                       std::map<COutPoint, Coin> &out_results,
+                                       std::function<void()>& interruption_point) {
     scan_progress = 0;
     count = 0;
     while (cursor->Valid()) {
@@ -2305,7 +2320,9 @@ static bool FindScriptPubKey(std::atomic<int> &scan_progress,
             uint32_t high = 0x100 * *txid.begin() + *(txid.begin() + 1);
             scan_progress = int(high * 100.0 / 65536.0 + 0.5);
         }
-        if (needles.count(coin.GetTxOut().scriptPubKey)) {
+        const CTxOut &txout = coin.GetTxOut();
+        if (needles.count(txout.scriptPubKey)
+                || (txout.tokenDataPtr && tokenIds.count(txout.tokenDataPtr->GetId()))) {
             out_results.emplace(key, coin);
         }
         cursor->Next();
@@ -2345,6 +2362,23 @@ public:
     }
 };
 
+static std::optional<token::Id> ParseTokenScanObject(std::string_view sv) {
+    std::optional<token::Id> ret;
+    // we expect "tok(<64-hex-chars>)"
+    if (sv.substr(0, 4) != "tok(" || sv.size() != token::Id::size() * 2u + 5u || sv.back() != ')') {
+        // not what we expected
+        return ret;
+    }
+    const std::string_view::size_type begin = 4u,
+                                      end = sv.find_last_of(')');
+    sv = sv.substr(begin, end - begin);
+    ret.emplace(token::Id::Uninitialized);
+    if ( ! ParseHashStr(std::string{sv}, *ret)) {
+        ret.reset(); // hex parse error
+    }
+    return ret;
+}
+
 static UniValue scantxoutset(const Config &config,
                              const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() < 1 ||
@@ -2359,6 +2393,7 @@ static UniValue scantxoutset(const Config &config,
                 "    combo(<pubkey>)                      P2PK and P2PKH outputs for the given pubkey\n"
                 "    pkh(<pubkey>)                        P2PKH outputs for the given pubkey\n"
                 "    sh(multi(<n>,<pubkey>,<pubkey>,...)) P2SH-multisig outputs for the given threshold and pubkeys\n"
+                "    tok(<category>)                      Outputs containing tokens matching 32-byte hex <category>\n"
                 "\nIn the above, <pubkey> either refers to a fixed public key in hexadecimal notation, or to an xpub/xprv optionally followed by one\n"
                 "or more path elements separated by \"/\", and optionally ending in \"/*\" (unhardened), or \"/*'\" or \"/*h\" (hardened) to specify all\n"
                 "unhardened or hardened child keys.\n"
@@ -2386,7 +2421,7 @@ static UniValue scantxoutset(const Config &config,
             "\nResult:\n"
             "{\n"
             "  \"unspents\": [\n"
-            "    {\n"
+            "  {\n"
             "    \"txid\" : \"transactionid\",     (string) The transaction "
             "id\n"
             "    \"vout\": n,                    (numeric) the vout value\n"
@@ -2397,12 +2432,20 @@ static UniValue scantxoutset(const Config &config,
             " of the unspent output\n"
             "    \"height\" : n,                 (numeric) Height of the "
             "unspent transaction output\n"
-            "   }\n"
-            "   ,...],\n"
-            " \"total_amount\" : x.xxx,          (numeric) The total amount of "
-            "all found unspent outputs in " +
-            CURRENCY_UNIT +
-            "\n"
+            "    \"tokenData\" : {               (json object optional)\n"
+            "      \"category\" : \"hex\",         (string) token id\n"
+            "      \"amount\" : \"xxx\",           (string) fungible amount (is a string to support >53-bit amounts)\n"
+            "      \"nft\" : {                   (json object optional)\n"
+            "        \"capability\" : \"xxx\",     (string) one of \"none\", \"mutable\", \"minting\"\n"
+            "        \"commitment\" : \"hex\"      (string) NFT commitment\n"
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "  ,...],\n"
+            "  \"total_amount\" : x.xxx,         (numeric) The total amount of "
+            "all found unspent outputs in " + CURRENCY_UNIT + "\n"
+            "  \"token_total_amount\" : {...},   (json object optional) The total amount of each fungible token, "
+            "by category id\n"
             "]\n");
     }
 
@@ -2439,6 +2482,7 @@ static UniValue scantxoutset(const Config &config,
                 "Scan already in progress, use action \"abort\" or \"status\"");
         }
         std::set<CScript> needles;
+        std::set<token::Id> tokenIds;
         Amount total_in = Amount::zero();
 
         // loop through the scan objects
@@ -2472,9 +2516,14 @@ static UniValue scantxoutset(const Config &config,
             FlatSigningProvider provider;
             auto desc = Parse(desc_str, provider);
             if (!desc) {
-                throw JSONRPCError(
-                    RPC_INVALID_ADDRESS_OR_KEY,
-                    strprintf("Invalid descriptor '%s'", desc_str));
+                // failed to Parse using "Descriptor" subsystem, try our custom "tok(<category>)" syntax as well
+                if (auto optTok = ParseTokenScanObject(desc_str)) {
+                    // matched a tok(<category>) spec
+                    tokenIds.insert(std::move(*optTok));
+                    continue;
+                } else {
+                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("Invalid descriptor '%s'", desc_str));
+                }
             }
             if (!desc->IsRange()) {
                 range = 0;
@@ -2505,15 +2554,12 @@ static UniValue scantxoutset(const Config &config,
             assert(pcursor);
         }
         NodeContext& node = EnsureAnyNodeContext(request.context);
-        bool res = FindScriptPubKey(g_scan_progress, g_should_abort_scan, count,
-                                    pcursor.get(), needles, coins, node.rpc_interruption_point);
-        UniValue::Object result;
-        result.reserve(4);
-        result.emplace_back("success", res);
-        result.emplace_back("searched_items", count);
-
+        bool const res = FindScriptPubKeysAndTokens(g_scan_progress, g_should_abort_scan, count, pcursor.get(), needles,
+                                                    tokenIds, coins, node.rpc_interruption_point);
         UniValue::Array unspents;
         unspents.reserve(coins.size());
+
+        std::map<token::Id, token::SafeAmount> tokenIdTotals;
 
         for (const auto &it : coins) {
             const COutPoint &outpoint = it.first;
@@ -2522,17 +2568,40 @@ static UniValue scantxoutset(const Config &config,
             total_in += txo.nValue;
 
             UniValue::Object unspent;
-            unspent.reserve(5);
+            unspent.reserve(5u + bool(txo.tokenDataPtr));
             unspent.emplace_back("txid", outpoint.GetTxId().GetHex());
             unspent.emplace_back("vout", outpoint.GetN());
             unspent.emplace_back("scriptPubKey", HexStr(txo.scriptPubKey));
             unspent.emplace_back("amount", ValueFromAmount(txo.nValue));
             unspent.emplace_back("height", coin.GetHeight());
-
+            if (txo.tokenDataPtr) {
+                unspent.emplace_back("tokenData", TokenDataToUniv(*txo.tokenDataPtr));
+                if (txo.tokenDataPtr->HasAmount()) {
+                    auto &amt = tokenIdTotals[txo.tokenDataPtr->GetId()];
+                    // guard against overflow in case of weird PATFOs leading to totals exceeding INT64_MAX
+                    if (const auto optSum = amt.safeAdd(txo.tokenDataPtr->GetAmount())) {
+                        amt = *optSum;
+                    }
+                }
+            }
             unspents.emplace_back(std::move(unspent));
         }
+
+        UniValue::Object result;
+        result.reserve(tokenIdTotals.empty() ? 4u : 5u);
+
+        result.emplace_back("success", res);
+        result.emplace_back("searched_items", count);
         result.emplace_back("unspents", std::move(unspents));
         result.emplace_back("total_amount", ValueFromAmount(total_in));
+        if (!tokenIdTotals.empty()) {
+            UniValue::Object tokTotals;
+            tokTotals.reserve(tokenIdTotals.size());
+            for (const auto & [id, amt] : tokenIdTotals) {
+                tokTotals.emplace_back(id.ToString(), SafeAmountToUniv(amt));
+            }
+            result.emplace_back("token_total_amounts", std::move(tokTotals));
+        }
         return result;
     }
 

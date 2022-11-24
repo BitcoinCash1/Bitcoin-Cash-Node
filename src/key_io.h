@@ -22,12 +22,9 @@ std::string EncodeExtKey(const CExtKey &extkey);
 CExtPubKey DecodeExtPubKey(const std::string &str);
 std::string EncodeExtPubKey(const CExtPubKey &extpubkey);
 
-std::string EncodeDestination(const CTxDestination &dest, const Config &config);
-CTxDestination DecodeDestination(const std::string &addr, const CChainParams &);
-bool IsValidDestinationString(const std::string &str,
-                              const CChainParams &params);
+std::string EncodeDestination(const CTxDestination &dest, const Config &config, bool tokenAwareAddress = false);
+CTxDestination DecodeDestination(const std::string &addr, const CChainParams &, bool *tokenAwareAddressOut = nullptr);
+bool IsValidDestinationString(const std::string &str, const CChainParams &params, bool *tokenAwareAddressOut = nullptr);
 
-std::string EncodeLegacyAddr(const CTxDestination &dest,
-                             const CChainParams &params);
-CTxDestination DecodeLegacyAddr(const std::string &str,
-                                const CChainParams &params);
+std::string EncodeLegacyAddr(const CTxDestination &dest, const CChainParams &params);
+CTxDestination DecodeLegacyAddr(const std::string &str, const CChainParams &params);

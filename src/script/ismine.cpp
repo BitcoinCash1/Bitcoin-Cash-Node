@@ -53,7 +53,7 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript &scriptPubKey,
     IsMineResult ret = IsMineResult::NO;
 
     std::vector<valtype> vSolutions;
-    txnouttype whichType = Solver(scriptPubKey, vSolutions);
+    txnouttype whichType = Solver(scriptPubKey, vSolutions, SCRIPT_ENABLE_P2SH_32);
 
     CKeyID keyID;
     switch (whichType) {
@@ -77,7 +77,17 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript &scriptPubKey,
                 // P2SH inside P2SH is invalid.
                 return IsMineResult::INVALID;
             }
-            CScriptID scriptID = CScriptID(uint160(vSolutions[0]));
+            ScriptID scriptID;
+            if (vSolutions[0].size() == uint160::size()) {
+                // p2sh
+                scriptID = uint160(vSolutions[0]);
+            } else if (vSolutions[0].size() == uint256::size()) {
+                // p2sh32
+                scriptID = uint256(vSolutions[0]);
+            } else {
+                // Defensive programming: Should never happen.
+                assert(!"Solver returned a script hash that is neither 20 bytes nor 32 bytes.");
+            }
             CScript subscript;
             if (keystore.GetCScript(scriptID, subscript)) {
                 ret = std::max(ret, IsMineInner(keystore, subscript,

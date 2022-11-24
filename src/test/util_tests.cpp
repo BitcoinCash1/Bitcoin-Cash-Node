@@ -1113,12 +1113,14 @@ struct SettingsMergeTestingSetup : public BasicTestingSetup {
                              {CBaseChainParams::MAIN,
                               CBaseChainParams::TESTNET,
                               CBaseChainParams::TESTNET4,
-                              CBaseChainParams::SCALENET}) {
+                              CBaseChainParams::SCALENET,
+                              CBaseChainParams::CHIPNET}) {
                             for (const std::string &network :
                                  {CBaseChainParams::MAIN,
                                   CBaseChainParams::TESTNET,
                                   CBaseChainParams::TESTNET4,
-                                  CBaseChainParams::SCALENET}) {
+                                  CBaseChainParams::SCALENET,
+                                  CBaseChainParams::CHIPNET}) {
                                 for (bool net_specific : {false, true}) {
                                     fn(arg_actions, conf_actions, soft_set,
                                        force_set, section, network,
@@ -1326,7 +1328,7 @@ BOOST_FIXTURE_TEST_CASE(util_SettingsMerge, SettingsMergeTestingSetup) {
     //   <GetUnsuitable output>
     BOOST_CHECK_EQUAL(
         out_sha_hex,
-        "a94b89ebf89dd6bf3dedd53b34de559abf57ae2486e1182944be45547ad200b4");
+        "c90958b09fa4c1a4b13b4561d07c7ab8a95bd094d0f97cd76eaec336f74ab158");
 }
 
 BOOST_AUTO_TEST_CASE(util_FormatMoney) {

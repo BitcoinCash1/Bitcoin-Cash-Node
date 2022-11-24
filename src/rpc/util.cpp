@@ -97,14 +97,14 @@ class DescribeAddressVisitor : public boost::static_visitor<void> {
 public:
     explicit DescribeAddressVisitor(UniValue::Object& _obj) : obj(_obj) {}
 
-    void operator()(const CNoDestination &dest) const {
+    void operator()(const CNoDestination &) const {
     }
 
-    void operator()(const CKeyID &keyID) const {
+    void operator()(const CKeyID &) const {
         obj.emplace_back("isscript", false);
     }
 
-    void operator()(const CScriptID &scriptID) const {
+    void operator()(const ScriptID &) const {
         obj.emplace_back("isscript", true);
     }
 };
@@ -159,7 +159,8 @@ struct Sections {
         case RPCArg::Type::OBJ:
         case RPCArg::Type::OBJ_USER_KEYS: {
             const auto right = outer_type == OuterType::NONE ? "" : arg.ToDescriptionString(/* implicitly_required */ outer_type == OuterType::ARR);
-            PushSection({indent + "{", right});
+            const auto keyPart = outer_type == OuterType::OBJ && !arg.m_name.empty() ? "\"" + arg.m_name + "\": " : "";
+            PushSection({indent + keyPart + "{", right});
             for (const auto& arg_inner : arg.m_inner) {
                 Push(arg_inner, current_indent + 2, OuterType::OBJ);
             }
@@ -438,6 +439,7 @@ std::string RPCArg::ToStringObj(const bool oneline) const
         }
         return res + "...]";
     case Type::OBJ:
+        return res;
     case Type::OBJ_USER_KEYS:
         // Currently unused, so avoid writing dead code
         assert(false);

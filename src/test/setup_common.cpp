@@ -263,8 +263,7 @@ CBlock TestChain100Setup::CreateAndProcessBlock(
     {
         LOCK(cs_main);
         unsigned int extraNonce = 0;
-        IncrementExtraNonce(&block, ::ChainActive().Tip(),
-                            config.GetExcessiveBlockSize(), extraNonce);
+        IncrementExtraNonce(&block, ::ChainActive().Tip(), config, extraNonce);
     }
 
     const Consensus::Params &params = config.GetChainParams().GetConsensus();

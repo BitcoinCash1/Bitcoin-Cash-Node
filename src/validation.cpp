@@ -16,6 +16,7 @@
 #include <consensus/activation.h>
 #include <consensus/consensus.h>
 #include <consensus/merkle.h>
+#include <consensus/tokens.h>
 #include <consensus/tx_check.h>
 #include <consensus/tx_verify.h>
 #include <consensus/validation.h>
@@ -55,9 +56,9 @@
 
 #include <algorithm>
 #include <atomic>
-#include <future>
+#include <limits>
 #include <list>
-#include <sstream>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -498,8 +499,7 @@ static bool CheckInputsFromMempoolAndCache(
         }
     }
 
-    return CheckInputs(tx, state, view, true, flags, cacheSigStore, true,
-                       txdata, nSigChecksOut);
+    return CheckInputs(tx, state, view, true, flags, cacheSigStore, true, txdata, nSigChecksOut);
 }
 
 static bool
@@ -531,9 +531,13 @@ AcceptToMemoryPoolWorker(const Config &config, CTxMemPool &pool,
         return false;
     }
 
+    uint32_t nextBlockScriptVerifyFlags; // will be block flags (without standard flags)
+    // Validate input scripts against standard script flags: GetNextBlockScriptFlags() | STANDARD_SCRIPT_VERIFY_FLAGS
+    const uint32_t scriptVerifyFlags = GetMemPoolScriptFlags(consensusParams, ::ChainActive().Tip(),
+                                                             &nextBlockScriptVerifyFlags);
+
     // Rather not work on nonstandard transactions (unless -testnet)
-    std::string reason;
-    if (fRequireStandard && !IsStandardTx(tx, reason)) {
+    if (std::string reason; fRequireStandard && !IsStandardTx(tx, reason, scriptVerifyFlags)) {
         return state.DoS(0, false, REJECT_NONSTANDARD, reason);
     }
 
@@ -675,9 +679,6 @@ AcceptToMemoryPoolWorker(const Config &config, CTxMemPool &pool,
                          tx.GetId().ToString(), FormatStateMessage(state));
         }
 
-        const uint32_t nextBlockScriptVerifyFlags =
-            GetNextBlockScriptFlags(consensusParams, ::ChainActive().Tip());
-
         // Check for non-standard pay-to-script-hash in inputs
         if (fRequireStandard &&
             !AreInputsStandard(tx, view, nextBlockScriptVerifyFlags)) {
@@ -716,13 +717,27 @@ AcceptToMemoryPoolWorker(const Config &config, CTxMemPool &pool,
                                  strprintf("%d > %d", nFees, nAbsurdFee));
         }
 
-        // Validate input scripts against standard script flags.
-        const uint32_t scriptVerifyFlags =
-            nextBlockScriptVerifyFlags | STANDARD_SCRIPT_VERIFY_FLAGS;
-        PrecomputedTransactionData txdata(tx);
+        // Check token spends (if any) are within consensus
+        {
+            int64_t firstTokenBlockHeight;
+            if (scriptVerifyFlags & SCRIPT_ENABLE_TOKENS) { // Assumption: this can only be true if Upgrade9 activated
+                firstTokenBlockHeight = g_upgrade9_block_tracker.GetActivationBlock(::ChainActive().Tip(),
+                                                                                    consensusParams)->nHeight
+                                        + 1LL; // First block to actually use token rules is 1 + activation block
+            } else {
+                // not activated yet -- far future
+                firstTokenBlockHeight = std::numeric_limits<int64_t>::max();
+            }
+
+            if ( ! CheckTxTokens(tx, state, view, scriptVerifyFlags, firstTokenBlockHeight)) {
+                // State filled-in by CheckTxTokens
+                return false;
+            }
+        }
+
         int nSigChecksStandard;
-        if (!CheckInputs(tx, state, view, true, scriptVerifyFlags, true, false,
-                         txdata, nSigChecksStandard)) {
+        PrecomputedTransactionData txdata;
+        if (!CheckInputs(tx, state, view, true, scriptVerifyFlags, true, false, txdata, nSigChecksStandard)) {
             // State filled in by CheckInputs.
             return false;
         }
@@ -1242,10 +1257,8 @@ bool CScriptCheck::operator()() {
     assert(bool(context->tx().constantTx()));
 
     if ( ! VerifyScript(context->scriptSig(), context->coinScriptPubKey(), nFlags,
-                        CachingTransactionSignatureChecker(context->tx().constantTx(),
-                                                           context->inputIndex(), context->coinAmount(),
-                                                           cacheStore, txdata),
-                        metrics, context, &error)) {
+                        CachingTransactionSignatureChecker(*context, cacheStore, txdata),
+                        metrics, &error)) {
         return false;
     }
     if ((pTxLimitSigChecks &&
@@ -1269,9 +1282,8 @@ int GetSpendHeight(const CCoinsViewCache &inputs) {
 
 bool CheckInputs(const CTransaction &tx, CValidationState &state,
                  const CCoinsViewCache &view, bool fScriptChecks,
-                 const uint32_t flags, bool sigCacheStore,
-                 bool scriptCacheStore,
-                 const PrecomputedTransactionData &txdata, int &nSigChecksOut,
+                 const uint32_t flags, bool sigCacheStore, bool scriptCacheStore,
+                 PrecomputedTransactionData &txdata, int &nSigChecksOut,
                  TxSigCheckLimiter &txLimitSigChecks,
                  CheckInputsLimiter *pBlockLimitSigChecks,
                  std::vector<CScriptCheck> *pvChecks) {
@@ -1312,6 +1324,9 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
 
     for (size_t i = 0; i < tx.vin.size(); ++i) {
         assert(!contextVec[i].coin().IsSpent());
+        if ( ! txdata.populated) {
+            txdata.PopulateFromContext(contextVec[i]);
+        }
 
         // We very carefully only pass in things to CScriptCheck which are
         // clearly committed to by tx's hash. This provides a sanity
@@ -1320,8 +1335,7 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
         // of CScriptCheck.
 
         // Verify signature
-        CScriptCheck check(contextVec[i], flags, sigCacheStore,
-                           txdata, &txLimitSigChecks, pBlockLimitSigChecks);
+        CScriptCheck check(contextVec[i], flags, sigCacheStore, txdata, &txLimitSigChecks, pBlockLimitSigChecks);
         if (pvChecks) {
             pvChecks->push_back(std::move(check));
         } else if (!check()) {
@@ -1631,8 +1645,7 @@ int32_t ComputeBlockVersion(const CBlockIndex *pindexPrev,
 
 // Returns the script flags which should be checked for the block after
 // the given block.
-static uint32_t GetNextBlockScriptFlags(const Consensus::Params &params,
-                                        const CBlockIndex *pindex) {
+static uint32_t GetNextBlockScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex) {
     uint32_t flags = SCRIPT_VERIFY_NONE;
 
     // Start enforcing P2SH (BIP16)
@@ -1693,7 +1706,21 @@ static uint32_t GetNextBlockScriptFlags(const Consensus::Params &params,
         flags |= SCRIPT_NATIVE_INTROSPECTION;
     }
 
+    // Activation for native tokens: PREFIX_TOKEN, token consensus, plus
+    // token introspection and SIGHASH_UTXOS (0x20) hash type flag.
+    // Activation for p2sh_32
+    if (IsUpgrade9Enabled(params, pindex)) {
+        flags |= SCRIPT_ENABLE_TOKENS;
+        flags |= SCRIPT_ENABLE_P2SH_32;
+    }
+
     return flags;
+}
+
+uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex, uint32_t *nextBlockFlags) {
+    const uint32_t flags = GetNextBlockScriptFlags(params, pindex);
+    if (nextBlockFlags) *nextBlockFlags = flags;
+    return flags | STANDARD_SCRIPT_VERIFY_FLAGS;
 }
 
 static int64_t nTimeCheck = 0;
@@ -1916,6 +1943,15 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
             REJECT_INVALID, "tx-duplicate");
     }
 
+    int64_t firstTokenBlockHeight;
+    if (flags & SCRIPT_ENABLE_TOKENS) { // Assumption: this can only be true if Upgrade9 is activated for pindex->pprev
+        firstTokenBlockHeight = g_upgrade9_block_tracker.GetActivationBlock(pindex->pprev, consensusParams)->nHeight
+                                + 1LL; // First block to actually use token rules is 1 + GetActivationBlock()->nHeight
+    } else {
+        // not activated yet -- far future
+        firstTokenBlockHeight = std::numeric_limits<int64_t>::max();
+    }
+
     size_t txIndex = 0;
     for (const auto &ptx : block.vtx) {
         const CTransaction &tx = *ptx;
@@ -1935,6 +1971,14 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
                 error("%s: accumulated fee in the block out of range.",
                       __func__),
                 REJECT_INVALID, "bad-txns-accumulated-fee-outofrange");
+        }
+
+        // Check token spends are within consensus
+        // Note: we pass coinbase txn here too, which is what we want, since coinbase txn should have NO token data
+        // post-activation of Upgrade9, and this function checks that requirement.
+        if ( ! CheckTxTokens(tx, state, view, flags, firstTokenBlockHeight)) {
+            // State was filled-in by CheckTxTokens
+            return false;
         }
 
         // The following checks do not apply to the coinbase.
@@ -1973,9 +2017,9 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
         // nSigChecksRet may be accurate (found in cache) or 0 (checks were
         // deferred into vChecks).
         int nSigChecksRet;
+        PrecomputedTransactionData txdata; // starts out unpopulated, will be calculated for us in CheckInputs
         if (!CheckInputs(tx, state, view, fScriptChecks, flags, fCacheResults,
-                         fCacheResults, PrecomputedTransactionData(tx),
-                         nSigChecksRet, nSigChecksTxLimiters[txIndex],
+                         fCacheResults, txdata, nSigChecksRet, nSigChecksTxLimiters[txIndex],
                          &nSigChecksBlockLimiter, &vChecks)) {
             // Parallel CheckInputs shouldn't fail except for this reason, which
             // is banworthy. Use "blk-bad-inputs" to mimic the parallel script
@@ -5138,6 +5182,7 @@ void UnloadBlockIndex() {
     pindexBestForkTip = nullptr;
     pindexBestForkBase = nullptr;
     ResetASERTAnchorBlockCache();
+    g_upgrade9_block_tracker.ResetActivationBlockCache();
     g_mempool.clear();
     mapBlocksUnlinked.clear();
     vinfoBlockFile.clear();
@@ -6006,3 +6051,63 @@ public:
         mapBlockIndex.clear();
     }
 } instance_of_cmaincleanup;
+
+ActivationBlockTracker g_upgrade9_block_tracker(&IsUpgrade9Enabled);
+
+const CBlockIndex *
+ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Consensus::Params &params)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+    assert(pindex);
+    AssertLockHeld(cs_main);
+
+    // - We check if we have a cached result, and if we do and it is really the
+    //   ancestor of pindex, then we return it.
+    //
+    // - If we do not or if the cached result is not the ancestor of pindex,
+    //   then we proceed with the more expensive walk back to find the activation block.
+    //
+    if (cachedActivationBlock) {
+        // First, check ChainActive since ChainActive maintains a fast-to-access array of
+        // block indexes for the current chain.
+        if (::ChainActive().Contains(cachedActivationBlock)
+                && (::ChainActive().Contains(pindex) || (pindex->pprev && ::ChainActive().Contains(pindex->pprev)))
+                && pindex->nHeight >= cachedActivationBlock->nHeight) {
+            return cachedActivationBlock;
+        }
+
+        // CBlockIndex::GetAncestor() is reasonably efficient; it uses CBlockIndex::pskip
+        // Note that if pindex == cachedActivationBlock, GetAncestor() here will return
+        // cachedActivationBlock, which is what we want.
+        if (pindex->GetAncestor(cachedActivationBlock->nHeight) == cachedActivationBlock) {
+            return cachedActivationBlock;
+        }
+    }
+
+    // Slow path: walk back until we find the first ancestor for which predicate() == true.
+    const CBlockIndex *pwalk = pindex;
+
+    while (pwalk->pprev) {
+        // first, skip backwards testing predicate
+        // The below code leverages CBlockIndex::pskip to walk back efficiently.
+        if (predicate(params, pwalk->pskip)) {
+            // skip backward
+            pwalk = pwalk->pskip;
+            continue; // continue skipping
+        }
+        // cannot skip here, walk back by 1
+        if (!predicate(params, pwalk->pprev)) {
+            // found it -- highest block where the upgrade is not enabled is pwalk->pprev, and
+            // pwalk points to the first block for which predicate() == true
+            break;
+        }
+        pwalk = pwalk->pprev;
+    }
+
+    // Overwrite the cache with the block index we found. More likely than not, the next
+    // time we are called it will be part of same / similar chain, not some other unrelated
+    // chain with a totally different activation block.
+    cachedActivationBlock = pwalk;
+
+    assert(pwalk);
+    return pwalk;
+}

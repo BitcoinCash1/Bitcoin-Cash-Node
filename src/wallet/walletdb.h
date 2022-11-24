@@ -170,6 +170,7 @@ public:
                          const CKeyMetadata &keyMeta);
     bool WriteMasterKey(unsigned int nID, const CMasterKey &kMasterKey);
 
+    // TODO: Support p2sh_32 as well someday when we add p2sh_32 support to the wallet.
     bool WriteCScript(const uint160 &hash, const CScript &redeemScript);
 
     bool WriteWatchOnly(const CScript &script, const CKeyMetadata &keymeta);

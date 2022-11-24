@@ -24,7 +24,7 @@ void test_one_input(std::vector<uint8_t> buffer) {
 
     try {
         const CTransaction tx(deserialize, ds);
-        const PrecomputedTransactionData txdata(tx);
+        PrecomputedTransactionData txdata;
 
         uint32_t verify_flags;
         ds >> verify_flags;
@@ -40,14 +40,13 @@ void test_one_input(std::vector<uint8_t> buffer) {
             CTxOut prevout;
             ds >> prevout;
 
-            const TransactionSignatureChecker checker{&tx, i, prevout.nValue,
-                                                      txdata};
+            const ScriptExecutionContext limited_context(i, prevout, tx);
+            if (!txdata.populated) txdata.PopulateFromContext(limited_context);
+
+            const TransactionSignatureChecker checker{limited_context, txdata};
 
             ScriptError serror;
-            auto const null_context = std::nullopt;
-            const bool ret =
-                VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey,
-                             verify_flags, checker, null_context, &serror);
+            const bool ret = VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey, verify_flags, checker, &serror);
             assert(ret == (serror == ScriptError::OK));
 
             // Verify that removing flags from a passing test or adding flags to
@@ -63,8 +62,7 @@ void test_one_input(std::vector<uint8_t> buffer) {
 
             ScriptError serror_fuzzed;
             const bool ret_fuzzed =
-                VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey,
-                             verify_flags, checker, null_context, &serror_fuzzed);
+                VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey, verify_flags, checker, &serror_fuzzed);
             assert(ret_fuzzed == (serror_fuzzed == ScriptError::OK));
 
             assert(ret_fuzzed == ret);

@@ -447,8 +447,7 @@ public:
         }
         output_scripts.clear();
         for (const auto &script : sub) {
-            CScriptID id(script);
-            out.scripts.emplace(CScriptID(script), script);
+            out.scripts.emplace(ScriptID(script, false /* no p2sh_32 */), script);
             output_scripts.push_back(m_convert_fn(script));
         }
         return true;
@@ -456,7 +455,7 @@ public:
 };
 
 CScript ConvertP2SH(const CScript &script) {
-    return GetScriptForDestination(CScriptID(script));
+    return GetScriptForDestination(ScriptID(script, false /* no p2sh_32 */));
 }
 
 /** A parsed combo(P) descriptor. */
@@ -796,7 +795,7 @@ std::unique_ptr<Descriptor> InferScript(const CScript &script,
                                         ParseScriptContext ctx,
                                         const SigningProvider &provider) {
     std::vector<std::vector<uint8_t>> data;
-    txnouttype txntype = Solver(script, data);
+    txnouttype txntype = Solver(script, data, 0 /* no p2sh_32 */);
 
     if (txntype == TX_PUBKEY) {
         CPubKey pubkey(data[0].begin(), data[0].end());
@@ -825,7 +824,7 @@ std::unique_ptr<Descriptor> InferScript(const CScript &script,
     }
     if (txntype == TX_SCRIPTHASH && ctx == ParseScriptContext::TOP) {
         uint160 hash(data[0]);
-        CScriptID scriptid(hash);
+        ScriptID scriptid(hash);
         CScript subscript;
         if (provider.GetCScript(scriptid, subscript)) {
             auto sub =
@@ -838,7 +837,7 @@ std::unique_ptr<Descriptor> InferScript(const CScript &script,
     }
 
     CTxDestination dest;
-    if (ExtractDestination(script, dest)) {
+    if (ExtractDestination(script, dest, 0 /* no p2sh_32 */)) {
         if (GetScriptForDestination(dest) == script) {
             return std::make_unique<AddressDescriptor>(std::move(dest));
         }

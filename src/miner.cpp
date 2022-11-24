@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2021 The Bitcoin developers
+// Copyright (c) 2020-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -203,10 +203,12 @@ BlockAssembler::CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSe
     coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, consensusParams);
     coinbaseTx.vin[0].scriptSig = CScript() << ScriptInt::fromIntUnchecked(nHeight) << OP_0;
 
-    // Make sure the coinbase is big enough.
-    uint64_t coinbaseSize = ::GetSerializeSize(coinbaseTx, PROTOCOL_VERSION);
-    if (coinbaseSize < MIN_TX_SIZE) {
-        coinbaseTx.vin[0].scriptSig << std::vector<uint8_t>(MIN_TX_SIZE - coinbaseSize - 1);
+    if (const uint64_t minTxSize = GetMinimumTxSize(consensusParams, pindexPrev)) {
+        const uint64_t coinbaseSize = ::GetSerializeSize(coinbaseTx, PROTOCOL_VERSION);
+        if (coinbaseSize < minTxSize) {
+            // Make sure the coinbase is big enough.
+            coinbaseTx.vin[0].scriptSig << std::vector<uint8_t>(minTxSize - coinbaseSize - 1ULL);
+        }
     }
 
     pblocktemplate->entries[0].tx = MakeTransactionRef(coinbaseTx);
@@ -426,8 +428,7 @@ std::vector<uint8_t> getExcessiveBlockSizeSig(uint64_t nExcessiveBlockSize) {
     return std::vector<uint8_t>(cbmsg.begin(), cbmsg.end());
 }
 
-void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev,
-                         uint64_t nExcessiveBlockSize,
+void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev, const Config &config,
                          unsigned int &nExtraNonce) {
     // Update nExtraNonce
     static uint256 hashPrevBlock;
@@ -435,6 +436,9 @@ void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev,
         nExtraNonce = 0;
         hashPrevBlock = pblock->hashPrevBlock;
     }
+
+    const uint64_t nExcessiveBlockSize = config.GetExcessiveBlockSize();
+    const uint64_t minTxSize = GetMinimumTxSize(config.GetChainParams().GetConsensus(), pindexPrev);
 
     ++nExtraNonce;
     // Height first in coinbase required for block.version=2
@@ -447,14 +451,15 @@ void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev,
         COINBASE_FLAGS;
 
     // Make sure the coinbase is big enough.
-    uint64_t coinbaseSize = ::GetSerializeSize(txCoinbase, PROTOCOL_VERSION);
-    if (coinbaseSize < MIN_TX_SIZE) {
-        txCoinbase.vin[0].scriptSig
-            << std::vector<uint8_t>(MIN_TX_SIZE - coinbaseSize - 1);
+    if (minTxSize) {
+        const uint64_t coinbaseSize = ::GetSerializeSize(txCoinbase, PROTOCOL_VERSION);
+        if (coinbaseSize < minTxSize) {
+            txCoinbase.vin[0].scriptSig << std::vector<uint8_t>(minTxSize - coinbaseSize - 1ULL);
+        }
     }
 
     assert(txCoinbase.vin[0].scriptSig.size() <= MAX_COINBASE_SCRIPTSIG_SIZE);
-    assert(::GetSerializeSize(txCoinbase, PROTOCOL_VERSION) >= MIN_TX_SIZE);
+    assert(::GetSerializeSize(txCoinbase, PROTOCOL_VERSION) >= minTxSize);
 
     pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);

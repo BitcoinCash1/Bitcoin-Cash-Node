@@ -34,21 +34,21 @@ public:
         return EncodeBase58Check(data);
     }
 
-    std::string operator()(const CScriptID &id) const {
+    std::string operator()(const ScriptID &id) const {
         std::vector<uint8_t> data =
             m_params.Base58Prefix(CChainParams::SCRIPT_ADDRESS);
         data.insert(data.end(), id.begin(), id.end());
         return EncodeBase58Check(data);
     }
 
-    std::string operator()(const CNoDestination &no) const { return {}; }
+    std::string operator()(const CNoDestination &) const { return {}; }
 };
 
 CTxDestination DecodeLegacyDestination(const std::string &str,
                                        const CChainParams &params) {
     std::vector<uint8_t> data;
-    uint160 hash;
-    if (!DecodeBase58Check(str, data, 21)) {
+    uint160 hash{uint160::Uninitialized};
+    if (!DecodeBase58Check(str, data, 33 /* max size is 33 (was 21 before p2sh_32), 33 is to support p2sh_32 */)) {
         return CNoDestination();
     }
     // base58-encoded Bitcoin addresses.
@@ -66,13 +66,20 @@ CTxDestination DecodeLegacyDestination(const std::string &str,
     // Script-hash-addresses have version 5 (or 196 testnet).
     // The data vector contains RIPEMD160(SHA256(cscript)), where cscript is
     // the serialized redemption script.
-    const std::vector<uint8_t> &script_prefix =
-        params.Base58Prefix(CChainParams::SCRIPT_ADDRESS);
+    const std::vector<uint8_t> &script_prefix = params.Base58Prefix(CChainParams::SCRIPT_ADDRESS);
     if (data.size() == hash.size() + script_prefix.size() &&
         std::equal(script_prefix.begin(), script_prefix.end(), data.begin())) {
-        std::copy(data.begin() + script_prefix.size(), data.end(),
-                  hash.begin());
-        return CScriptID(hash);
+        std::copy(data.begin() + script_prefix.size(), data.end(), hash.begin());
+        return ScriptID(hash); // p2sh_20
+    }
+    // p2sh_32 support
+    // The data vector contains SHA256(SHA256(cscript)), where cscript is
+    // the serialized redemption script.
+    uint256 hash32{uint256::Uninitialized};
+    if (data.size() == hash32.size() + script_prefix.size() &&
+        std::equal(script_prefix.begin(), script_prefix.end(), data.begin())) {
+        std::copy(data.begin() + script_prefix.size(), data.end(), hash32.begin());
+        return ScriptID(hash32); // p2sh_32
     }
     return CNoDestination();
 }
@@ -160,33 +167,29 @@ std::string EncodeExtKey(const CExtKey &key) {
     return ret;
 }
 
-std::string EncodeDestination(const CTxDestination &dest,
-                              const Config &config) {
+std::string EncodeDestination(const CTxDestination &dest, const Config &config, const bool tokenAwareAddress) {
     const CChainParams &params = config.GetChainParams();
-    return config.UseCashAddrEncoding() ? EncodeCashAddr(dest, params)
+    return config.UseCashAddrEncoding() ? EncodeCashAddr(dest, params, tokenAwareAddress)
                                         : EncodeLegacyAddr(dest, params);
 }
 
-CTxDestination DecodeDestination(const std::string &addr,
-                                 const CChainParams &params) {
-    CTxDestination dst = DecodeCashAddr(addr, params);
+CTxDestination DecodeDestination(const std::string &addr, const CChainParams &params, bool *tokenAwareAddressOut) {
+    CTxDestination dst = DecodeCashAddr(addr, params, tokenAwareAddressOut);
     if (IsValidDestination(dst)) {
         return dst;
     }
+    if (tokenAwareAddressOut) *tokenAwareAddressOut = false; // legacy is never a token-aware address
     return DecodeLegacyAddr(addr, params);
 }
 
-bool IsValidDestinationString(const std::string &str,
-                              const CChainParams &params) {
-    return IsValidDestination(DecodeDestination(str, params));
+bool IsValidDestinationString(const std::string &str, const CChainParams &params, bool *tokenAwareAddressOut) {
+    return IsValidDestination(DecodeDestination(str, params, tokenAwareAddressOut));
 }
 
-std::string EncodeLegacyAddr(const CTxDestination &dest,
-                             const CChainParams &params) {
+std::string EncodeLegacyAddr(const CTxDestination &dest, const CChainParams &params) {
     return boost::apply_visitor(DestinationEncoder(params), dest);
 }
 
-CTxDestination DecodeLegacyAddr(const std::string &str,
-                                const CChainParams &params) {
+CTxDestination DecodeLegacyAddr(const std::string &str, const CChainParams &params) {
     return DecodeLegacyDestination(str, params);
 }

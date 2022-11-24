@@ -20,13 +20,13 @@ private:
     explicit constexpr Amount(int64_t _amount) : amount(_amount) {}
 
 public:
-    constexpr Amount() : amount(0) {}
-    constexpr Amount(const Amount &other) : amount(other.amount) {}
+    constexpr Amount() noexcept : amount(0) {}
+    constexpr Amount(const Amount &other) noexcept : amount(other.amount) {}
 
     /**
      * Assignement operator.
      */
-    constexpr Amount &operator=(const Amount &other) {
+    constexpr Amount &operator=(const Amount &other) noexcept {
         amount = other.amount;
         return *this;
     }

@@ -15,6 +15,7 @@
 #include <script/script.h>
 #include <script/script_flags.h>
 #include <script/sigencoding.h>
+#include <tinyformat.h>
 #include <uint256.h>
 #include <util/bitmanip.h>
 
@@ -162,9 +163,8 @@ public:
 };
 } // namespace
 
-bool EvalScript(std::vector<valtype> &stack, const CScript &script,
-                uint32_t flags, const BaseSignatureChecker &checker,
-                ScriptExecutionMetrics &metrics, ScriptExecutionContextOpt const& context, ScriptError *serror) {
+bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t flags,
+                const BaseSignatureChecker &checker, ScriptExecutionMetrics &metrics, ScriptError *serror) {
     static auto const bnZero = CScriptNum::fromIntUnchecked(0);
     static const valtype vchFalse(0);
     static const valtype vchTrue(1, 1);
@@ -184,6 +184,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
     bool const fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
     bool const nativeIntrospection = (flags & SCRIPT_NATIVE_INTROSPECTION) != 0;
     bool const integers64Bit = (flags & SCRIPT_64_BIT_INTEGERS) != 0;
+    bool const nativeTokens = (flags & SCRIPT_ENABLE_TOKENS) != 0;
+    const ScriptExecutionContext * const context = checker.GetContext();
 
     size_t const maxIntegerSize = integers64Bit ?
         CScriptNum::MAXIMUM_ELEMENT_SIZE_64_BIT :
@@ -1399,6 +1401,17 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                     } break; // end of Native Introspection opcodes (Nullary)
 
                     // Native Introspection opcodes (Unary)
+                    case OP_UTXOTOKENCATEGORY:
+                    case OP_UTXOTOKENCOMMITMENT:
+                    case OP_UTXOTOKENAMOUNT:
+                    case OP_OUTPUTTOKENCATEGORY:
+                    case OP_OUTPUTTOKENCOMMITMENT:
+                    case OP_OUTPUTTOKENAMOUNT:
+                        // These require native tokens (upgrade9)
+                        if ( ! nativeTokens) {
+                            return set_error(serror, ScriptError::BAD_OPCODE);
+                        }
+                        [[fallthrough]];
                     case OP_UTXOVALUE:
                     case OP_UTXOBYTECODE:
                     case OP_OUTPOINTTXHASH:
@@ -1422,10 +1435,38 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                         auto const index = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSize).getint64();
                         popstack(stack); // consume element
 
+                        auto is_valid_input_index = [&] {
+                            if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
+                                return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                            }
+                            return true;
+                        };
+                        auto is_valid_output_index = [&] {
+                            if (index < 0 || uint64_t(index) >= context->tx().vout().size()) {
+                                return set_error(serror, ScriptError::INVALID_TX_OUTPUT_INDEX);
+                            }
+                            return true;
+                        };
+                        auto get_bytecode = [&nativeTokens](const CTxOut &txout) -> std::vector<uint8_t> {
+                            std::vector<uint8_t> ret;
+                            if (!nativeTokens && txout.tokenDataPtr) {
+                                // Special pre-activation case for upgrade9; If they ask for the bytecode, and
+                                // there is PATFO token data we must return what a naive node would return here:
+                                // The full serialized spk blob pre-activation [TOKEN_PREFIX + tokenData + spk]
+                                token::WrappedScriptPubKey wspk;
+                                token::WrapScriptPubKey(wspk, txout.tokenDataPtr, txout.scriptPubKey, INIT_PROTO_VERSION);
+                                ret.assign(wspk.begin(), wspk.end());
+                            } else {
+                                // Post-activation or if no PATFO token data; Return just the scriptPubKey.
+                                ret.assign(txout.scriptPubKey.begin(), txout.scriptPubKey.end());
+                            }
+                            return ret;
+                        };
+
                         switch (opcode) {
                             case OP_UTXOVALUE: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 if (context->isLimited() && uint64_t(index) != context->inputIndex()) {
                                     // This branch can only happen in tests or other non-consensus code
@@ -1437,24 +1478,24 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_UTXOBYTECODE: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 if (context->isLimited() && uint64_t(index) != context->inputIndex()) {
                                     // This branch can only happen in tests or other non-consensus code
                                     // that calls the VM without all the *other* inputs' coins.
                                     return set_error(serror, ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
                                 }
-                                auto const& utxoScript = context->coinScriptPubKey(index);
+                                auto utxoScript = get_bytecode(context->coin(index).GetTxOut());
                                 if (utxoScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
                                     return set_error(serror, ScriptError::PUSH_SIZE);
                                 }
-                                stack.emplace_back(utxoScript.begin(), utxoScript.end());
+                                stack.push_back(std::move(utxoScript));
                             } break;
 
                             case OP_OUTPOINTTXHASH: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 auto const& input = context->tx().vin()[index];
                                 auto const& txid = input.prevout.GetTxId();
@@ -1463,8 +1504,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_OUTPOINTINDEX: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 auto const& input = context->tx().vin()[index];
                                 auto const bn = CScriptNum::fromInt(input.prevout.GetN()).value();
@@ -1472,8 +1513,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_INPUTBYTECODE: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 auto const& inputScript = context->scriptSig(index);
                                 if (inputScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
@@ -1483,8 +1524,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_INPUTSEQUENCENUMBER: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vin().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_INPUT_INDEX);
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
                                 }
                                 auto const& input = context->tx().vin()[index];
                                 auto const bn = CScriptNum::fromInt(input.nSequence).value();
@@ -1492,8 +1533,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_OUTPUTVALUE: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vout().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_OUTPUT_INDEX);
+                                if ( ! is_valid_output_index()) {
+                                    return false; // serror set by is_invalid_output_index lambda
                                 }
                                 auto const& output = context->tx().vout()[index];
                                 auto const bn = CScriptNum::fromInt(output.nValue / SATOSHI).value();
@@ -1501,15 +1542,151 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                             } break;
 
                             case OP_OUTPUTBYTECODE: {
-                                if (index < 0 || uint64_t(index) >= context->tx().vout().size()) {
-                                    return set_error(serror, ScriptError::INVALID_TX_OUTPUT_INDEX);
+                                if ( ! is_valid_output_index()) {
+                                    return false; // serror set by is_invalid_output_index lambda
                                 }
-                                auto const& outputScript = context->tx().vout()[index].scriptPubKey;
+                                auto outputScript = get_bytecode(context->tx().vout()[index]);
                                 if (outputScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
                                     return set_error(serror, ScriptError::PUSH_SIZE);
                                 }
-                                stack.emplace_back(outputScript.begin(), outputScript.end());
+                                stack.push_back(std::move(outputScript));
                             } break;
+
+                            // Token introspection
+                            case OP_UTXOTOKENCATEGORY: {
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
+                                }
+                                if (context->isLimited() && uint64_t(index) != context->inputIndex()) {
+                                    // This branch can only happen in tests or other non-consensus code
+                                    // that calls the VM without all the *other* inputs' coins.
+                                    return set_error(serror, ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+                                }
+                                if (const auto &pdata = context->coinTokenData(index); !pdata) {
+                                    // no token data, push CScriptNum 0 (empty vec)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // has token data, push token id (32 bytes) + *maybe* 0x1 or 0x2 (1 byte)
+                                    const auto &tokId = pdata->GetId();
+                                    valtype vch;
+                                    // only push the capability if it's one of: 0x1 (mutable) or 0x2 (minting)
+                                    const bool pushCapByte = pdata->IsMintingNFT() || pdata->IsMutableNFT();
+                                    vch.reserve(tokId.size() + pushCapByte);
+                                    vch.insert(vch.end(), tokId.begin(), tokId.end());
+                                    if (pushCapByte) vch.push_back(static_cast<uint8_t>(pdata->GetCapability()));
+                                    if (vch.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+                                        // This branch cannot be taken in the current code, but is left in defensively.
+                                        return set_error(serror, ScriptError::PUSH_SIZE);
+                                    }
+                                    stack.push_back(std::move(vch));
+                                }
+                            } break;
+
+                            case OP_UTXOTOKENCOMMITMENT: {
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
+                                }
+                                if (context->isLimited() && uint64_t(index) != context->inputIndex()) {
+                                    // This branch can only happen in tests or other non-consensus code
+                                    // that calls the VM without all the *other* inputs' coins.
+                                    return set_error(serror, ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+                                }
+                                if (const auto &pdata = context->coinTokenData(index); !pdata || !pdata->HasNFT()) {
+                                    // no token data, or has token data but is not an NFT, push CScriptNum 0 (empty vec)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // Has token data, push commitment bytes, if they are <= MAX_SCRIPT_ELEMENT_SIZE
+                                    const auto &commitment = pdata->GetCommitment();
+                                    if (commitment.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+                                        // This branch can normally only be taken in tests
+                                        return set_error(serror, ScriptError::PUSH_SIZE);
+                                    }
+                                    // Push the bytes verbatim to the stack
+                                    stack.emplace_back(commitment.begin(), commitment.end());
+                                }
+                            } break;
+
+                            case OP_UTXOTOKENAMOUNT: {
+                                if ( ! is_valid_input_index()) {
+                                    return false; // serror set by is_invalid_input_index lambda
+                                }
+                                if (context->isLimited() && uint64_t(index) != context->inputIndex()) {
+                                    // This branch can only happen in tests or other non-consensus code
+                                    // that calls the VM without all the *other* inputs' coins.
+                                    return set_error(serror, ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+                                }
+                                if (const auto &pdata = context->coinTokenData(index); !pdata) {
+                                    // no token data, push VM number 0 (empty vector)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // push the amount as a CScriptNum amount. Note it can be zero for NFT-only
+                                    // tokens, in which case an empty vector {} will be pushed.
+                                    auto const bn = CScriptNum::fromInt(pdata->GetAmount().getint64()).value();
+                                    stack.push_back(bn.getvch());
+                                }
+                            } break;
+
+                            case OP_OUTPUTTOKENCATEGORY: {
+                                if ( ! is_valid_output_index()) {
+                                    return false; // serror set by is_invalid_output_index lambda
+                                }
+                                auto const& output = context->tx().vout()[index];
+                                if (const auto &pdata = output.tokenDataPtr; !pdata) {
+                                    // no token data, push CScriptNum 0 (empty vec)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // has token data, push token id (32 bytes) + *maybe* 0x1 or 0x2 (1 byte)
+                                    const auto &tokId = pdata->GetId();
+                                    valtype vch;
+                                    // only push the capability if it's one of: 0x1 (mutable) or 0x2 (minting)
+                                    const bool pushCapByte = pdata->IsMintingNFT() || pdata->IsMutableNFT();
+                                    vch.reserve(tokId.size() + pushCapByte);
+                                    vch.insert(vch.end(), tokId.begin(), tokId.end());
+                                    if (pushCapByte) vch.push_back(static_cast<uint8_t>(pdata->GetCapability()));
+                                    if (vch.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+                                        // This branch cannot be taken in the current code, but is left in defensively.
+                                        return set_error(serror, ScriptError::PUSH_SIZE);
+                                    }
+                                    stack.push_back(std::move(vch));
+                                }
+                            } break;
+
+                            case OP_OUTPUTTOKENCOMMITMENT: {
+                                if ( ! is_valid_output_index()) {
+                                    return false; // serror set by is_invalid_output_index lambda
+                                }
+                                auto const& output = context->tx().vout()[index];
+                                if (const auto &pdata = output.tokenDataPtr; !pdata || !pdata->HasNFT()) {
+                                    // no token data, or has token data but is not an NFT, push CScriptNum 0 (empty vec)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // Has token data, push commitment bytes, if they are <= MAX_SCRIPT_ELEMENT_SIZE
+                                    const auto &commitment = pdata->GetCommitment();
+                                    if (commitment.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+                                        // This branch can normally only be taken in tests
+                                        return set_error(serror, ScriptError::PUSH_SIZE);
+                                    }
+                                    // Push the bytes verbatim to the stack
+                                    stack.emplace_back(commitment.begin(), commitment.end());
+                                }
+                            } break;
+
+                            case OP_OUTPUTTOKENAMOUNT: {
+                                if ( ! is_valid_output_index()) {
+                                    return false; // serror set by is_invalid_output_index lambda
+                                }
+                                auto const& output = context->tx().vout()[index];
+                                if (const auto &pdata = output.tokenDataPtr; !pdata) {
+                                    // no token data, push VM number 0 (empty vector)
+                                    stack.push_back(CScriptNum::fromIntUnchecked(0).getvch());
+                                } else {
+                                    // push the amount as a CScriptNum amount. Note it can be zero for NFT-only
+                                    // tokens, in which case an empty vector {} will be pushed.
+                                    auto const bn = CScriptNum::fromInt(pdata->GetAmount().getint64()).value();
+                                    stack.push_back(bn.getvch());
+                                }
+                            } break;
+
                             default: {
                                 assert(!"invalid opcode");
                                 break;
@@ -1527,6 +1704,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                 return set_error(serror, ScriptError::STACK_SIZE);
             }
         }
+    } catch (const scriptnum_error &e) {
+        return set_error(serror, e.scriptError);
     } catch (...) {
         return set_error(serror, ScriptError::UNKNOWN);
     }
@@ -1544,10 +1723,9 @@ namespace {
  * Wrapper that serializes like CTransaction, but with the modifications
  *  required for the signature hash done in-place
  */
-template <class T> class CTransactionSignatureSerializer {
-private:
+class CTransactionViewSignatureSerializer {
     //! reference to the spending transaction (the one being serialized)
-    const T &txTo;
+    const CTransactionView txTo;
     //! output script being consumed
     const CScript &scriptCode;
     //! input index of txTo being signed
@@ -1556,12 +1734,9 @@ private:
     const SigHashType sigHashType;
 
 public:
-    CTransactionSignatureSerializer(const T &txToIn,
-                                    const CScript &scriptCodeIn,
-                                    unsigned int nInIn,
-                                    SigHashType sigHashTypeIn)
-        : txTo(txToIn), scriptCode(scriptCodeIn), nIn(nInIn),
-          sigHashType(sigHashTypeIn) {}
+    CTransactionViewSignatureSerializer(CTransactionView txToIn, const CScript &scriptCodeIn, unsigned nInIn,
+                                        SigHashType sigHashTypeIn)
+        : txTo(txToIn), scriptCode(scriptCodeIn), nIn(nInIn), sigHashType(sigHashTypeIn) {}
 
     /** Serialize the passed scriptCode, skipping OP_CODESEPARATORs */
     template <typename S> void SerializeScriptCode(S &s) const {
@@ -1595,7 +1770,7 @@ public:
             nInput = nIn;
         }
         // Serialize the prevout
-        ::Serialize(s, txTo.vin[nInput].prevout);
+        ::Serialize(s, txTo.vin()[nInput].prevout);
         // Serialize the script
         if (nInput != nIn) {
             // Blank out other inputs' signatures
@@ -1610,7 +1785,7 @@ public:
             // let the others update at will
             ::Serialize(s, (int)0);
         } else {
-            ::Serialize(s, txTo.vin[nInput].nSequence);
+            ::Serialize(s, txTo.vin()[nInput].nSequence);
         }
     }
 
@@ -1622,17 +1797,17 @@ public:
             // Do not lock-in the txout payee at other indices as txin
             ::Serialize(s, CTxOut());
         } else {
-            ::Serialize(s, txTo.vout[nOutput]);
+            ::Serialize(s, txTo.vout()[nOutput]);
         }
     }
 
     /** Serialize txTo */
     template <typename S> void Serialize(S &s) const {
         // Serialize nVersion
-        ::Serialize(s, txTo.nVersion);
+        ::Serialize(s, txTo.nVersion());
         // Serialize vin
         unsigned int nInputs =
-            sigHashType.hasAnyoneCanPay() ? 1 : txTo.vin.size();
+            sigHashType.hasAnyoneCanPay() ? 1 : txTo.vin().size();
         ::WriteCompactSize(s, nInputs);
         for (unsigned int nInput = 0; nInput < nInputs; nInput++) {
             SerializeInput(s, nInput);
@@ -1643,124 +1818,158 @@ public:
                 ? 0
                 : ((sigHashType.getBaseType() == BaseSigHashType::SINGLE)
                        ? nIn + 1
-                       : txTo.vout.size());
+                       : txTo.vout().size());
         ::WriteCompactSize(s, nOutputs);
         for (unsigned int nOutput = 0; nOutput < nOutputs; nOutput++) {
             SerializeOutput(s, nOutput);
         }
         // Serialize nLockTime
-        ::Serialize(s, txTo.nLockTime);
+        ::Serialize(s, txTo.nLockTime());
     }
 };
 
-template <class T> uint256 GetPrevoutHash(const T &txTo) {
+uint256 GetPrevoutHash(const ScriptExecutionContext &context) {
     CHashWriter ss(SER_GETHASH, 0);
-    for (const auto &txin : txTo.vin) {
+    for (const auto &txin : context.tx().vin()) {
         ss << txin.prevout;
     }
     return ss.GetHash();
 }
 
-template <class T> uint256 GetSequenceHash(const T &txTo) {
+uint256 GetSequenceHash(const ScriptExecutionContext &context) {
     CHashWriter ss(SER_GETHASH, 0);
-    for (const auto &txin : txTo.vin) {
+    for (const auto &txin : context.tx().vin()) {
         ss << txin.nSequence;
     }
     return ss.GetHash();
 }
 
-template <class T> uint256 GetOutputsHash(const T &txTo) {
+uint256 GetOutputsHash(const ScriptExecutionContext &context) {
     CHashWriter ss(SER_GETHASH, 0);
-    for (const auto &txout : txTo.vout) {
+    for (const auto &txout : context.tx().vout()) {
         ss << txout;
+    }
+    return ss.GetHash();
+}
+
+uint256 GetUtxosHash(const ScriptExecutionContext &context) {
+    assert(!context.isLimited());
+    const size_t nInputs = context.tx().vin().size();
+    CHashWriter ss(SER_GETHASH, 0);
+    for (size_t i = 0; i < nInputs; ++i) {
+        const Coin &coin = context.coin(i);
+        ss << coin.GetTxOut();
     }
     return ss.GetHash();
 }
 
 } // namespace
 
-template <class T>
-PrecomputedTransactionData::PrecomputedTransactionData(const T &txTo) {
-    hashPrevouts = GetPrevoutHash(txTo);
-    hashSequence = GetSequenceHash(txTo);
-    hashOutputs = GetOutputsHash(txTo);
+void PrecomputedTransactionData::PopulateFromContext(const ScriptExecutionContext &context) {
+    hashPrevouts = GetPrevoutHash(context);
+    hashSequence = GetSequenceHash(context);
+    hashOutputs = GetOutputsHash(context);
+    if (!context.isLimited()) {
+        hashUtxos = GetUtxosHash(context);
+    } else {
+        hashUtxos.reset();
+    }
+    populated = true;
 }
 
-// explicit instantiation
-template PrecomputedTransactionData::PrecomputedTransactionData(
-    const CTransaction &txTo);
-template PrecomputedTransactionData::PrecomputedTransactionData(
-    const CMutableTransaction &txTo);
+SignatureHashMissingUtxoDataError::~SignatureHashMissingUtxoDataError() {}
 
-template <class T>
-uint256 SignatureHash(const CScript &scriptCode, const T &txTo,
-                      unsigned int nIn, SigHashType sigHashType,
-                      const Amount amount,
+uint256 SignatureHash(const CScript &scriptCode, const ScriptExecutionContext &context, SigHashType sigHashType,
                       const PrecomputedTransactionData *cache, uint32_t flags) {
-    assert(nIn < txTo.vin.size());
+    const unsigned nIn = context.inputIndex();
+    const CTransactionView &txTo = context.tx();
+    assert(nIn < txTo.vin().size());
 
     if (sigHashType.hasFork() && (flags & SCRIPT_ENABLE_SIGHASH_FORKID)) {
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
+        std::optional<uint256> hashUtxos;
 
         if (!sigHashType.hasAnyoneCanPay()) {
-            hashPrevouts = cache ? cache->hashPrevouts : GetPrevoutHash(txTo);
+            hashPrevouts = cache ? cache->hashPrevouts : GetPrevoutHash(context);
         }
 
-        if (!sigHashType.hasAnyoneCanPay() &&
-            (sigHashType.getBaseType() != BaseSigHashType::SINGLE) &&
-            (sigHashType.getBaseType() != BaseSigHashType::NONE)) {
-            hashSequence = cache ? cache->hashSequence : GetSequenceHash(txTo);
+        if (!sigHashType.hasAnyoneCanPay() && sigHashType.getBaseType() != BaseSigHashType::SINGLE
+            && sigHashType.getBaseType() != BaseSigHashType::NONE) {
+            hashSequence = cache ? cache->hashSequence : GetSequenceHash(context);
         }
 
-        if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) &&
-            (sigHashType.getBaseType() != BaseSigHashType::NONE)) {
-            hashOutputs = cache ? cache->hashOutputs : GetOutputsHash(txTo);
-        } else if ((sigHashType.getBaseType() == BaseSigHashType::SINGLE) &&
-                   (nIn < txTo.vout.size())) {
+        if (sigHashType.hasUtxos() && (flags & SCRIPT_ENABLE_TOKENS)) {
+            if (cache && cache->hashUtxos) {
+                hashUtxos = *cache->hashUtxos;
+            } else if (!context.isLimited()) {
+                hashUtxos = GetUtxosHash(context);
+            }
+        }
+
+        if (const auto bt = sigHashType.getBaseType(); bt != BaseSigHashType::SINGLE && bt != BaseSigHashType::NONE) {
+            hashOutputs = cache ? cache->hashOutputs : GetOutputsHash(context);
+        } else if (bt == BaseSigHashType::SINGLE && nIn < txTo.vout().size()) {
             CHashWriter ss(SER_GETHASH, 0);
-            ss << txTo.vout[nIn];
+            ss << txTo.vout()[nIn];
             hashOutputs = ss.GetHash();
         }
 
         CHashWriter ss(SER_GETHASH, 0);
         // Version
-        ss << txTo.nVersion;
+        ss << txTo.nVersion();
         // Input prevouts/nSequence (none/all, depending on flags)
         ss << hashPrevouts;
+        // SIGHASH_UTXOS requires Upgrade9 SCRIPT_ENABLE_TOKENS, otherwise skip
+        if (sigHashType.hasUtxos() && (flags & SCRIPT_ENABLE_TOKENS)) {
+            if (!hashUtxos) {
+                // This should never happen in production because in production we have real "non limited" contexts.
+                throw SignatureHashMissingUtxoDataError(
+                    strprintf("SignatureHash error: SIGHASH_UTXOS requested but missing utxo data,"
+                              " txid: %s, inputNum: %i", txTo.GetId().ToString(), nIn));
+            }
+            ss << *hashUtxos;
+        }
         ss << hashSequence;
-        // The input being signed (replacing the scriptSig with scriptCode +
-        // amount). The prevout may already be contained in hashPrevout, and the
-        // nSequence may already be contain in hashSequence.
-        ss << txTo.vin[nIn].prevout;
+        // The input being signed (replacing the scriptSig with [tokenBlob?] + scriptCode + amount). The prevout may
+        // already be contained in hashPrevout, and the nSequence may already be contained in hashSequence.
+        ss << txTo.vin()[nIn].prevout;
+        const CTxOut &prevTxOut = context.coin().GetTxOut();
+        if (prevTxOut.tokenDataPtr && (flags & SCRIPT_ENABLE_TOKENS)) {
+            // New! For tokens (Upgrade9). If we had tokenData we inject it as a blob of:
+            //    token::PREFIX_BYTE + ser_token_data
+            // right *before* scriptCode's length byte.  This *intentionally* makes it so that unupgraded software
+            // cannot send tokens (and thus cannot unintentionally burn tokens).
+            //
+            // Note: The serialization operation for token::OutputData may throw if the data it is serializing is not
+            // sane.  The data will always be sane when verifying or producing sigs in production. However, the below
+            // may throw in tests that intentionally sabotage the tokenData to be inconsistent.
+            ss << token::PREFIX_BYTE << *prevTxOut.tokenDataPtr;
+        }
         ss << scriptCode;
-        ss << amount;
-        ss << txTo.vin[nIn].nSequence;
+        ss << prevTxOut.nValue;
+        ss << txTo.vin()[nIn].nSequence;
         // Outputs (none/one/all, depending on flags)
         ss << hashOutputs;
         // Locktime
-        ss << txTo.nLockTime;
+        ss << txTo.nLockTime();
         // Sighash type
         ss << sigHashType;
 
         return ss.GetHash();
     }
 
-    static const uint256 one(uint256S(
-        "0000000000000000000000000000000000000000000000000000000000000001"));
-
     // Check for invalid use of SIGHASH_SINGLE
-    if ((sigHashType.getBaseType() == BaseSigHashType::SINGLE) &&
-        (nIn >= txTo.vout.size())) {
+    if (sigHashType.getBaseType() == BaseSigHashType::SINGLE && nIn >= txTo.vout().size()) {
         //  nOut out of range
+        static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
         return one;
     }
 
     // Wrapper to serialize only the necessary parts of the transaction being
     // signed
-    CTransactionSignatureSerializer<T> txTmp(txTo, scriptCode, nIn,
-                                             sigHashType);
+    const CTransactionViewSignatureSerializer txTmp(txTo, scriptCode, nIn, sigHashType);
 
     // Serialize and hash
     CHashWriter ss(SER_GETHASH, 0);
@@ -1778,10 +1987,10 @@ bool BaseSignatureChecker::VerifySignature(const std::vector<uint8_t> &vchSig,
     }
 }
 
-template <class T>
-bool GenericTransactionSignatureChecker<T>::CheckSig(
-    const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey,
-    const CScript &scriptCode, uint32_t flags) const {
+ContextOptSignatureChecker::~ContextOptSignatureChecker() {}
+
+bool TransactionSignatureChecker::CheckSig(const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey,
+                                           const CScript &scriptCode, uint32_t flags) const {
     CPubKey pubkey(vchPubKey);
     if (!pubkey.IsValid()) {
         return false;
@@ -1792,11 +2001,10 @@ bool GenericTransactionSignatureChecker<T>::CheckSig(
     if (vchSig.empty()) {
         return false;
     }
-    SigHashType sigHashType = GetHashType(vchSig);
+    SigHashType const sigHashType = GetHashType(vchSig);
     vchSig.pop_back();
 
-    uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, sigHashType, amount,
-                                    this->txdata, flags);
+    uint256 const sighash = SignatureHash(scriptCode, context, sigHashType, this->txdata, flags);
 
     if (!VerifySignature(vchSig, pubkey, sighash)) {
         return false;
@@ -1805,9 +2013,9 @@ bool GenericTransactionSignatureChecker<T>::CheckSig(
     return true;
 }
 
-template <class T>
-bool GenericTransactionSignatureChecker<T>::CheckLockTime(
-    const CScriptNum &nLockTime) const {
+bool TransactionSignatureChecker::CheckLockTime(const CScriptNum &nLockTime) const {
+    const CTransactionView &txTo = context.tx();
+    const unsigned nIn = context.inputIndex();
     // There are two kinds of nLockTime: lock-by-blockheight and
     // lock-by-blocktime, distinguished by whether nLockTime <
     // LOCKTIME_THRESHOLD.
@@ -1815,16 +2023,14 @@ bool GenericTransactionSignatureChecker<T>::CheckLockTime(
     // We want to compare apples to apples, so fail the script unless the type
     // of nLockTime being tested is the same as the nLockTime in the
     // transaction.
-    if (!((txTo->nLockTime < LOCKTIME_THRESHOLD &&
-           nLockTime < LOCKTIME_THRESHOLD) ||
-          (txTo->nLockTime >= LOCKTIME_THRESHOLD &&
-           nLockTime >= LOCKTIME_THRESHOLD))) {
+    if (!((txTo.nLockTime() < LOCKTIME_THRESHOLD && nLockTime < LOCKTIME_THRESHOLD)
+          || (txTo.nLockTime() >= LOCKTIME_THRESHOLD && nLockTime >= LOCKTIME_THRESHOLD))) {
         return false;
     }
 
     // Now that we know we're comparing apples-to-apples, the comparison is a
     // simple numeric one.
-    if (nLockTime > int64_t(txTo->nLockTime)) {
+    if (nLockTime > static_cast<int64_t>(txTo.nLockTime())) { // CScriptNum has many overloads - ensure the right one is selected
         return false;
     }
 
@@ -1837,22 +2043,23 @@ bool GenericTransactionSignatureChecker<T>::CheckLockTime(
     // Alternatively we could test all inputs, but testing just this input
     // minimizes the data required to prove correct CHECKLOCKTIMEVERIFY
     // execution.
-    if (CTxIn::SEQUENCE_FINAL == txTo->vin[nIn].nSequence) {
+    if (CTxIn::SEQUENCE_FINAL == txTo.vin()[nIn].nSequence) {
         return false;
     }
 
     return true;
 }
 
-template <class T>
-bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum &nSequence) const {
+bool TransactionSignatureChecker::CheckSequence(const CScriptNum &nSequence) const {
+    const CTransactionView &txTo = context.tx();
+    const unsigned nIn = context.inputIndex();
     // Relative lock times are supported by comparing the passed in operand to
     // the sequence number of the input.
-    const int64_t txToSequence = int64_t(txTo->vin[nIn].nSequence);
+    const int64_t txToSequence = static_cast<int64_t>(txTo.vin()[nIn].nSequence);
 
     // Fail if the transaction's version number is not set high enough to
     // trigger BIP 68 rules.
-    if (static_cast<uint32_t>(txTo->nVersion) < 2) {
+    if (static_cast<uint32_t>(txTo.nVersion()) < 2u) {
         return false;
     }
 
@@ -1900,12 +2107,8 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum &nSeq
     return true;
 }
 
-// explicit instantiation
-template class GenericTransactionSignatureChecker<CTransaction>;
-template class GenericTransactionSignatureChecker<CMutableTransaction>;
-
 bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_t flags, const BaseSignatureChecker &checker,
-                  ScriptExecutionMetrics &metricsOut, ScriptExecutionContextOpt const& context, ScriptError *serror) {
+                  ScriptExecutionMetrics &metricsOut, ScriptError *serror) {
     set_error(serror, ScriptError::UNKNOWN);
 
     // If FORKID is enabled, we also ensure strict encoding.
@@ -1920,14 +2123,14 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_
     ScriptExecutionMetrics metrics = {};
 
     std::vector<valtype> stack, stackCopy;
-    if ( ! EvalScript(stack, scriptSig, flags, checker, metrics, context, serror)) {
+    if ( ! EvalScript(stack, scriptSig, flags, checker, metrics, serror)) {
         // serror is set
         return false;
     }
     if (flags & SCRIPT_VERIFY_P2SH) {
         stackCopy = stack;
     }
-    if ( ! EvalScript(stack, scriptPubKey, flags, checker, metrics, context, serror)) {
+    if ( ! EvalScript(stack, scriptPubKey, flags, checker, metrics, serror)) {
         // serror is set
         return false;
     }
@@ -1939,7 +2142,7 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_
     }
 
     // Additional validation for spend-to-script-hash transactions:
-    if ((flags & SCRIPT_VERIFY_P2SH) && scriptPubKey.IsPayToScriptHash()) {
+    if (bool p2sh_32; (flags & SCRIPT_VERIFY_P2SH) && scriptPubKey.IsPayToScriptHash(flags, nullptr, &p2sh_32)) {
         // scriptSig must be literals-only or validation fails
         if (!scriptSig.IsPushOnly()) {
             return set_error(serror, ScriptError::SIG_PUSHONLY);
@@ -1958,16 +2161,21 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_
         popstack(stack);
 
         // Bail out early if SCRIPT_DISALLOW_SEGWIT_RECOVERY is not set, the
-        // redeem script is a p2sh segwit program, and it was the only item
+        // redeem script is a p2sh_20 segwit program, and it was the only item
         // pushed onto the stack.
-        if ((flags & SCRIPT_DISALLOW_SEGWIT_RECOVERY) == 0 && stack.empty() &&
+        //
+        // Note; We *never* allow this "unconditional" segwit recovery for
+        // p2sh_32 since segwit funds can only be inadvertently locked into
+        // p2sh_20 (legacy BTC) scripts, thus this special case for segwit
+        // recovery should never apply to p2sh_32.
+        if ((flags & SCRIPT_DISALLOW_SEGWIT_RECOVERY) == 0 && !p2sh_32 && stack.empty() &&
             pubKey2.IsWitnessProgram()) {
             // must set metricsOut for all successful returns
             metricsOut = metrics;
             return set_success(serror);
         }
 
-        if ( ! EvalScript(stack, pubKey2, flags, checker, metrics, context, serror)) {
+        if ( ! EvalScript(stack, pubKey2, flags, checker, metrics, serror)) {
             // serror is set
             return false;
         }

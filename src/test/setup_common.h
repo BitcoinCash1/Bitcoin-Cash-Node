@@ -70,7 +70,7 @@ struct BasicTestingSetup {
 
     explicit BasicTestingSetup(
         const std::string &chainName = CBaseChainParams::MAIN);
-    ~BasicTestingSetup();
+    virtual ~BasicTestingSetup();
 
     fs::path SetDataDir(const std::string &name);
 
@@ -111,7 +111,7 @@ struct TestingSetup : public BasicTestingSetup {
 
     explicit TestingSetup(
         const std::string &chainName = CBaseChainParams::MAIN);
-    ~TestingSetup();
+    ~TestingSetup() override;
 };
 
 class CBlock;
@@ -130,7 +130,7 @@ struct TestChain100Setup : public TestingSetup {
     CBlock CreateAndProcessBlock(const std::vector<CMutableTransaction> &txns,
                                  const CScript &scriptPubKey);
 
-    ~TestChain100Setup();
+    ~TestChain100Setup() override;
 
     // For convenience, coinbase transactions.
     std::vector<CTransactionRef> m_coinbase_txns;

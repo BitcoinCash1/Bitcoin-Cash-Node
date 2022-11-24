@@ -145,15 +145,13 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
         RandomScript(scriptCode);
         int nIn = InsecureRandRange(txTo.vin.size());
 
-        uint256 shref =
-            SignatureHashOld(scriptCode, CTransaction(txTo), nIn, nHashType);
-        uint256 shold = SignatureHash(scriptCode, CTransaction(txTo), nIn,
-                                      sigHashType, Amount::zero(), nullptr, 0);
+        uint256 shref = SignatureHashOld(scriptCode, CTransaction(txTo), nIn, nHashType);
+        const ScriptExecutionContext limitedContext{unsigned(nIn), CTxOut{Amount::zero(), scriptCode}, txTo};
+        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0);
         BOOST_CHECK(shold == shref);
 
         // Check the impact of the fork flag.
-        uint256 shreg = SignatureHash(scriptCode, CTransaction(txTo), nIn,
-                                      sigHashType, Amount::zero());
+        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
         if (sigHashType.hasFork()) {
             BOOST_CHECK(nHashType & SIGHASH_FORKID);
             BOOST_CHECK(shreg != shref);
@@ -233,12 +231,11 @@ BOOST_AUTO_TEST_CASE(sighash_from_data) {
             continue;
         }
 
-        uint256 shreg =
-            SignatureHash(scriptCode, *tx, nIn, sigHashType, Amount::zero());
+        const ScriptExecutionContext limitedContext{unsigned(nIn), CTxOut{Amount::zero(), scriptCode}, *tx};
+        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
         BOOST_CHECK_MESSAGE(shreg.GetHex() == sigHashRegHex, strTest);
 
-        uint256 shold = SignatureHash(scriptCode, *tx, nIn, sigHashType,
-                                      Amount::zero(), nullptr, 0);
+        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0);
         BOOST_CHECK_MESSAGE(shold.GetHex() == sigHashOldHex, strTest);
     }
 }

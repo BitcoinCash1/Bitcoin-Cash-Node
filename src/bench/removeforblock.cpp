@@ -9,6 +9,7 @@
 #include <miner.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
+#include <script/standard.h>
 #include <test/setup_common.h>
 #include <test/util.h>
 #include <txmempool.h>
@@ -26,10 +27,7 @@
 static const CScript REDEEM_SCRIPT = CScript()
     << OP_DROP << OP_TRUE;
 
-static const CScript SCRIPT_PUB_KEY = CScript()
-    << OP_HASH160
-    << ToByteVector(CScriptID(REDEEM_SCRIPT))
-    << OP_EQUAL;
+static const CScript SCRIPT_PUB_KEY = GetScriptForDestination(ScriptID(REDEEM_SCRIPT, false /* p2sh_20 */));
 
 static const CScript SCRIPT_SIG = CScript()
     << std::vector<uint8_t>(100, 0xff)

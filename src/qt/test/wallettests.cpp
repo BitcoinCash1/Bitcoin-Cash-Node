@@ -120,7 +120,7 @@ void ConfirmLegacyAddressUse() {
 
 QString NewAddress(bool legacy=false, bool p2sh=false) {
     auto destination = p2sh ?
-        CTxDestination(CScriptID()) : CTxDestination(CKeyID());
+        CTxDestination(ScriptID()) : CTxDestination(CKeyID());
     std::string destinationString = legacy ?
         EncodeLegacyAddr(destination, Params()) : EncodeCashAddr(destination, Params());
     return QString::fromStdString(destinationString);

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import random
 
-from .cdefs import MAX_TXOUT_PUBKEY_SCRIPT, MIN_TX_SIZE
+from .cdefs import MAX_TXOUT_PUBKEY_SCRIPT, MIN_TX_SIZE_MAGNETIC_ANOMALY
 from .messages import CTransaction, CTxOut, FromHex, ToHex
 from .script import CScript, OP_RETURN
 
 
-def pad_tx(tx, pad_to_size=MIN_TX_SIZE):
+def pad_tx(tx, pad_to_size=MIN_TX_SIZE_MAGNETIC_ANOMALY):
     """
     Pad a transaction with op_return junk data until it is at least pad_to_size, or
     leave it alone if it's already bigger than that.
@@ -62,7 +62,7 @@ def pad_tx(tx, pad_to_size=MIN_TX_SIZE):
     tx.rehash()
 
 
-def pad_raw_tx(rawtx_hex, min_size=MIN_TX_SIZE):
+def pad_raw_tx(rawtx_hex, min_size=MIN_TX_SIZE_MAGNETIC_ANOMALY):
     """
     Pad a raw transaction with OP_RETURN data until it reaches at least min_size
     """

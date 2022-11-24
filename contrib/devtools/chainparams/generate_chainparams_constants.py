@@ -13,6 +13,7 @@ as an argument:
     chainparams_test.txt
     chainparams_testnet4.txt
     chainparams_scalenet.txt
+    chainparams_chipnet.txt
 
 These files must consist of lines in the format
 
@@ -67,6 +68,9 @@ namespace ChainParamsConstants {{
     // Scalenet re-organizes above height 10,000 - use block 9,999 hash here.
     const BlockHash SCALENET_DEFAULT_ASSUME_VALID = BlockHash::fromHex("{}");
     const uint256 SCALENET_MINIMUM_CHAIN_WORK = uint256S("{}");
+
+    const BlockHash CHIPNET_DEFAULT_ASSUME_VALID = BlockHash::fromHex("{}");
+    const uint256 CHIPNET_MINIMUM_CHAIN_WORK = uint256S("{}");
 }} // namespace ChainParamsConstants\
 '''.format(
         # 'generated' is split out so this file is not identified as generated.
@@ -74,7 +78,8 @@ namespace ChainParamsConstants {{
         *process_constants(indir, 'chainparams_main.txt'),
         *process_constants(indir, 'chainparams_test.txt'),
         *process_constants(indir, 'chainparams_testnet4.txt'),
-        *process_constants(indir, 'chainparams_scalenet.txt'))
+        *process_constants(indir, 'chainparams_scalenet.txt'),
+        *process_constants(indir, 'chainparams_chipnet.txt'))
     )
 
 

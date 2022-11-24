@@ -896,10 +896,19 @@ auto CTxMemPool::recursiveDSProofSearch(const TxId &txId, DspDescendants *desc, 
         }
 
         // caller wants a score -- we abort early in that case if we reach a tx that cannot have a proof (not p2pkh)
-        if (score && !DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(*this, txit->GetTx())) {
-            // proof not possible for this tx, stop searching
-            *score = 0.0;
-            return;
+        if (score) {
+            bool isProtected{};
+            const bool isPossible = DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(*this, txit->GetTx(),
+                                                                                           &isProtected);
+            if (!isPossible) {
+                // proof not possible for this tx, stop searching
+                *score = 0.0;
+                return;
+            } else if (!isProtected) {
+                // This txn is not protected because some inputs are not signed with SIGHASH_ALL or some are signed
+                // with SIGHASH_ANYONECANPAY.
+                *score = std::min(0.25, *score);
+            }
         }
 
         // `txit` always refers to a mempool tx, in which case it may have unconfirmed parents,

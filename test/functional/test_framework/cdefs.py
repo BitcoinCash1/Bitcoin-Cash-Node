@@ -100,8 +100,11 @@ MAX_STANDARD_TX_SIGOPS = MAX_TX_SIGOPS_COUNT // 5
 # blocks (network rule)
 COINBASE_MATURITY = 100
 
-# Minimum size a transaction can have.
-MIN_TX_SIZE = 100
+# Minimum size a transaction can have after Magnetic Anomaly (post Nov. 15 2018 HF)
+MIN_TX_SIZE_MAGNETIC_ANOMALY = 100
+
+# Minimum size a transaction can have after Upgrade9 (post May 15 2023 HF)
+MIN_TX_SIZE_UPGRADE9 = 65
 
 # Maximum bytes in a TxOut pubkey script
 MAX_TXOUT_PUBKEY_SCRIPT = 10000

@@ -9,7 +9,7 @@ This file is modified from python-bitcoinlib.
 
 from .bignum import bn2vch
 import struct
-from typing import List, Dict
+from typing import Dict, List, Optional
 
 from .messages import (
     CTransaction,
@@ -18,6 +18,7 @@ from .messages import (
     ser_string,
     ser_uint256,
     sha256,
+    token,
     uint256_from_str,
 )
 
@@ -25,6 +26,7 @@ from .messages import (
 from .ripemd160 import ripemd160
 
 MAX_SCRIPT_ELEMENT_SIZE = 520
+MAX_SCRIPT_SIZE = 10000
 
 OPCODE_NAMES = {}  # type: Dict[CScriptOp, str]
 
@@ -263,6 +265,19 @@ OP_INPUTSEQUENCENUMBER = CScriptOp(0xcb)
 OP_OUTPUTVALUE = CScriptOp(0xcc)
 OP_OUTPUTBYTECODE = CScriptOp(0xcd)
 
+# Native Introspection of tokens(SCRIPT_ENABLE_TOKENS must be set)
+OP_UTXOTOKENCATEGORY = CScriptOp(0xce)
+OP_UTXOTOKENCOMMITMENT = CScriptOp(0xcf)
+OP_UTXOTOKENAMOUNT = CScriptOp(0xd0)
+OP_OUTPUTTOKENCATEGORY = CScriptOp(0xd1)
+OP_OUTPUTTOKENCOMMITMENT = CScriptOp(0xd2)
+OP_OUTPUTTOKENAMOUNT = CScriptOp(0xd3)
+
+OP_RESERVED3 = CScriptOp(0xd4)
+OP_RESERVED4 = CScriptOp(0xd5)
+
+SPECIAL_TOKEN_PREFIX = CScriptOp(token.PREFIX_BYTE[0])  # Not a real op-code, reserved for token prefix
+
 INVALIDOPCODE = CScriptOp(0xff)
 
 OPCODE_NAMES.update({
@@ -394,6 +409,15 @@ OPCODE_NAMES.update({
     OP_INPUTSEQUENCENUMBER: 'OP_INPUTSEQUENCENUMBER',
     OP_OUTPUTVALUE: 'OP_OUTPUTVALUE',
     OP_OUTPUTBYTECODE: 'OP_OUTPUTBYTECODE',
+    OP_UTXOTOKENCATEGORY: 'OP_UTXOTOKENCATEGORY',
+    OP_UTXOTOKENCOMMITMENT: 'OP_UTXOTOKENCOMMITMENT',
+    OP_UTXOTOKENAMOUNT: 'OP_UTXOTOKENAMOUNT',
+    OP_OUTPUTTOKENCATEGORY: 'OP_OUTPUTTOKENCATEGORY',
+    OP_OUTPUTTOKENCOMMITMENT: 'OP_OUTPUTTOKENCOMMITMENT',
+    OP_OUTPUTTOKENAMOUNT: 'OP_OUTPUTTOKENAMOUNT',
+    OP_RESERVED3: 'OP_RESERVED3',
+    OP_RESERVED4: 'OP_RESERVED4',
+    SPECIAL_TOKEN_PREFIX: 'SPECIAL_TOKEN_PREFIX',
 })
 
 
@@ -643,6 +667,7 @@ class CScript(bytes):
 SIGHASH_ALL = 1
 SIGHASH_NONE = 2
 SIGHASH_SINGLE = 3
+SIGHASH_UTXOS = 0x20
 SIGHASH_FORKID = 0x40
 SIGHASH_ANYONECANPAY = 0x80
 
@@ -722,17 +747,33 @@ def SignatureHash(script, txTo, inIdx, hashtype):
 # Performance optimization probably not necessary for python tests, however.
 
 
-def SignatureHashForkId(script, txTo, inIdx, hashtype, amount):
+def SignatureHashForkId(script, txTo, inIdx, hashtype, amount, *, tokenData=None, utxos: Optional[List[CTxOut]] = None):
 
     hashPrevouts = 0
     hashSequence = 0
     hashOutputs = 0
+    tokenDataBlob = b''
+    hashUtxosBlob = b''
 
     if not (hashtype & SIGHASH_ANYONECANPAY):
         serialize_prevouts = bytes()
         for i in txTo.vin:
             serialize_prevouts += i.prevout.serialize()
         hashPrevouts = uint256_from_str(hash256(serialize_prevouts))
+
+    if utxos:
+        assert utxos[inIdx].nValue == amount  # Basic sanity check
+        if not tokenData:
+            tokenData = utxos[inIdx].tokenData  # Convenience: grab token data so caller doesn't have to supply it
+        else:
+            assert tokenData == utxos[inIdx].tokenData  # If caller supplied it, it better be the same
+
+    if hashtype & SIGHASH_UTXOS:
+        assert utxos
+        serialize_sequence = bytes()
+        for utxo in utxos:
+            serialize_sequence += utxo.serialize()
+        hashUtxosBlob = hash256(serialize_sequence)
 
     if (not (hashtype & SIGHASH_ANYONECANPAY) and (hashtype & 0x1f)
             != SIGHASH_SINGLE and (hashtype & 0x1f) != SIGHASH_NONE):
@@ -751,6 +792,9 @@ def SignatureHashForkId(script, txTo, inIdx, hashtype, amount):
         serialize_outputs = txTo.vout[inIdx].serialize()
         hashOutputs = uint256_from_str(hash256(serialize_outputs))
 
+    if tokenData:
+        tokenDataBlob = token.PREFIX_BYTE + tokenData.serialize()
+
     return SignatureHashForkIdFromValues(
         txTo.nVersion,
         hashPrevouts,
@@ -761,7 +805,8 @@ def SignatureHashForkId(script, txTo, inIdx, hashtype, amount):
         txTo.vin[inIdx].nSequence,
         hashOutputs,
         txTo.nLockTime,
-        hashtype)
+        hashtype,
+        tokenDataBlob=tokenDataBlob, hashUtxosBlob=hashUtxosBlob)
 
 
 def SignatureHashForkIdFromValues(
@@ -774,13 +819,15 @@ def SignatureHashForkIdFromValues(
         nSequence,
         hashOutputs,
         nLockTime,
-        hashtype):
+        hashtype, *, tokenDataBlob=b'', hashUtxosBlob=b''):
 
     ss = bytes()
     ss += struct.pack("<i", nVersion)
     ss += ser_uint256(hashPrevouts)
+    ss += hashUtxosBlob  # Optionally support signing SIGHASH_UTXOS
     ss += ser_uint256(hashSequence)
     ss += prevout
+    ss += tokenDataBlob  # Optionally support signing token-containing inputs
     ss += ser_string(script)
     ss += struct.pack("<q", amount)
     ss += struct.pack("<I", nSequence)

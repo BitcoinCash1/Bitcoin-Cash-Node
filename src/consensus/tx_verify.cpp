@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 The Bitcoin developers
+// Copyright (c) 2018-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,10 +37,24 @@ static bool IsFinalTx(const CTransaction &tx, int nBlockHeight,
     return true;
 }
 
+static uint64_t GetMinimumTxSize(const Consensus::Params &params, int nHeightPrev, int64_t nMedianTimePastPrev) {
+    if (IsUpgrade9Enabled(params, nMedianTimePastPrev)) {
+        return MIN_TX_SIZE_UPGRADE9;
+    } else if (IsMagneticAnomalyEnabled(params, nHeightPrev)) {
+        return MIN_TX_SIZE_MAGNETIC_ANOMALY;
+    }
+    return 0;
+}
+
+uint64_t GetMinimumTxSize(const Consensus::Params &params, const CBlockIndex *pindexPrev) {
+    if (!pindexPrev) return 0;
+    return GetMinimumTxSize(params, pindexPrev->nHeight, pindexPrev->GetMedianTimePast());
+}
+
 bool ContextualCheckTransaction(const Consensus::Params &params,
                                 const CTransaction &tx, CValidationState &state,
                                 int nHeight, int64_t nLockTimeCutoff,
-                                int64_t nMedianTimePast) {
+                                int64_t nMedianTimePastPrev) {
     if (!IsFinalTx(tx, nHeight, nLockTimeCutoff)) {
         // While this is only one transaction, we use txns in the error to
         // ensure continuity with other clients.
@@ -48,10 +62,18 @@ bool ContextualCheckTransaction(const Consensus::Params &params,
                          "non-final transaction");
     }
 
-    if (IsMagneticAnomalyEnabled(params, nHeight)) {
-        // Size limit
-        if (::GetSerializeSize(tx, PROTOCOL_VERSION) < MIN_TX_SIZE) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-undersize");
+    // Enforce minimum tx size, if any
+    // Note: nHeight is height of *this* block (and nMedianTimePastPrev is MTP of *prev* block),
+    // but Is*Enabled() expects nHeight and MTP of *prev* block.
+    const uint64_t minTxSize = GetMinimumTxSize(params, nHeight - 1, nMedianTimePastPrev);
+    if (minTxSize && ::GetSerializeSize(tx, PROTOCOL_VERSION) < minTxSize) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-txns-undersize");
+    }
+
+    if (IsUpgrade9Enabled(params, nMedianTimePastPrev)) {
+        // CHIP 2021-01 Restrict Transaction Version
+        if (tx.nVersion > CTransaction::MAX_CONSENSUS_VERSION || tx.nVersion < CTransaction::MIN_CONSENSUS_VERSION) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-txns-version");
         }
     }
 
@@ -177,6 +199,12 @@ bool CheckTxInputs(const CTransaction &tx, CValidationState &state,
                 false, REJECT_INVALID, "bad-txns-premature-spend-of-coinbase",
                 strprintf("tried to spend coinbase at depth %d",
                           nSpendHeight - coin.GetHeight()));
+        }
+
+        // Fail now if the locking script is guaranteed to fail evaluation later on in the pipeline
+        if (coin.GetTxOut().scriptPubKey.IsUnspendable()) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-txns-input-scriptpubkey-unspendable", false,
+                             strprintf("%s: input scriptPubKey is unspendable", __func__));
         }
 
         // Check for negative or overflow input values

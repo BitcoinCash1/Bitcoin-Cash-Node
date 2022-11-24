@@ -134,8 +134,6 @@ UniValue generateBlocks(const Config &config,
         nHeightEnd = nHeight + nGenerate;
     }
 
-    const uint64_t nExcessiveBlockSize = config.GetExcessiveBlockSize();
-
     unsigned int nExtraNonce = 0;
     UniValue::Array blockHashes;
     while (nHeight < nHeightEnd && !ShutdownRequested()) {
@@ -156,8 +154,7 @@ UniValue generateBlocks(const Config &config,
 
         {
             LOCK(cs_main);
-            IncrementExtraNonce(pblock, ::ChainActive().Tip(),
-                                nExcessiveBlockSize, nExtraNonce);
+            IncrementExtraNonce(pblock, ::ChainActive().Tip(), config, nExtraNonce);
         }
 
         while (nMaxTries > 0 && pblock->nNonce < nInnerLoopCount &&

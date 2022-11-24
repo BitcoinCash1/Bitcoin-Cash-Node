@@ -405,12 +405,17 @@ static UniValue getdsproofscore(const Config &,
                               "           ancestors does not support dsproofs (not P2PKH), so confidence in\n"
                               "           this tx should be low.\n"
                               "\n"
-                              "           A value of 0.25 indicates that up to the first 20,000 ancestors were\n"
-                              "           checked and all have no proofs but *can* have proofs. Since the tx\n"
-                              "           in question has a very large mempool ancestor set, double-spend\n"
-                              "           confidence should be considered medium-to-low. (This value may also\n"
-                              "           be returned for transactions which exceed depth 1,000 in an\n"
-                              "           unconfirmed ancestor chain).\n"},
+                              "           A value of 0.25 indicates that either:\n"
+                              "             - This tx or one of its ancestors did not have all inputs signed\n"
+                              "               with SIGHASH_ALL or one of said inputs was signed with\n"
+                              "               SIGHASH_ANYONECANPAY (which indicates very weak dsproof\n"
+                              "               protection), or;\n"
+                              "             - Up to the first 20,000 ancestors were checked and all have no\n"
+                              "               proofs but *can* have proofs. Since the tx in question has a\n"
+                              "               very large mempool ancestor set, double-spend confidence should\n"
+                              "               be considered medium-to-low. (This value may also be returned\n"
+                              "               for transactions which exceed depth 1,000 in an unconfirmed\n"
+                              "               ancestor chain).\n"},
                 },
                 RPCExamples{HelpExampleCli("getdsproofscore", "d3aac244e46f4bc5e2140a07496a179624b42d12600bfeafc358154ec89a720c") +
                             HelpExampleRpc("getdsproofscore", "d3aac244e46f4bc5e2140a07496a179624b42d12600bfeafc358154ec89a720c")}

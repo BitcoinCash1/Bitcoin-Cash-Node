@@ -9,6 +9,9 @@
 #include <random.h>
 #include <script/interpreter.h>
 #include <script/script.h>
+#include <tinyformat.h>
+#include <util/defer.h>
+#include <util/strencodings.h>
 
 #include <test/setup_common.h>
 
@@ -36,24 +39,42 @@ auto genArr(F&& f) {
 }
 
 static
+std::string ToString(const stacktype &s) {
+    std::string ret = "[";
+    int ctr = 0;
+    for (const auto &v : s) {
+        if (ctr++) ret += ", ";
+        ret += "\"" + HexStr(v) + "\"";
+    }
+    ret += "]";
+    return ret;
+}
+
+static
 void CheckErrorWithFlags(uint32_t flags, stacktype const& original_stack, CScript const& script, ScriptExecutionContextOpt const& context, ScriptError expected) {
-    BaseSignatureChecker sigchecker;
+    const ContextOptSignatureChecker sigchecker(context);
     ScriptError err = ScriptError::OK;
     stacktype stack{original_stack};
-    bool r = EvalScript(stack, script, flags, sigchecker, context, &err);
-    BOOST_CHECK(!r);
-    BOOST_CHECK(err == expected);
+    bool r = EvalScript(stack, script, flags, sigchecker, &err);
+    BOOST_CHECK_MESSAGE(!r, strprintf("CheckError Result: %d for script: \"%s\" with stack: %s, resulting stack: %s, "
+                                      "flags: %x",
+                                      int(r), HexStr(script), ToString(original_stack), ToString(stack), flags));
+    BOOST_CHECK_MESSAGE(err == expected,
+                        strprintf("err == expected: %s == %s", ScriptErrorString(err), ScriptErrorString(expected)));
 }
 
 static
 void CheckPassWithFlags(uint32_t flags, stacktype const& original_stack, CScript const& script, ScriptExecutionContextOpt const& context, stacktype const& expected) {
-    BaseSignatureChecker sigchecker;
+    const ContextOptSignatureChecker sigchecker(context);
     ScriptError err = ScriptError::OK;
     stacktype stack{original_stack};
-    bool r = EvalScript(stack, script, flags, sigchecker, context, &err);
-    BOOST_CHECK(r);
+    bool r = EvalScript(stack, script, flags, sigchecker, &err);
+    BOOST_CHECK_MESSAGE(r, strprintf("CheckPass Result: %d for script: \"%s\" with stack: %s, resulting stack: %s, "
+                                     "flags: %x",
+                                     int(r), HexStr(script), ToString(original_stack), ToString(stack), flags));
     BOOST_CHECK(err == ScriptError::OK);
-    BOOST_CHECK(stack == expected);
+    BOOST_CHECK_MESSAGE(stack == expected,
+                        strprintf("stack == expected: %s == %s", ToString(stack), ToString(expected)));
 }
 
 static
@@ -92,6 +113,7 @@ CScript MakeOversizedScript(bool pushOnly = false) {
 
 BOOST_AUTO_TEST_CASE(opcodes_basic) {
     uint32_t const flags = MANDATORY_SCRIPT_VERIFY_FLAGS | SCRIPT_NATIVE_INTROSPECTION;
+    uint32_t const flags_tokens = flags | SCRIPT_ENABLE_TOKENS;
     uint32_t const flags_inactive = flags & ~SCRIPT_NATIVE_INTROSPECTION;
 
     CCoinsView dummy;
@@ -109,7 +131,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         {TxId(uint256S("8024808fd4e7959b342f0b1e4c1254edb1f60edfcb928463a8098c9f3c6eba86")), 2},
         {TxId(uint256S("109dafc04e629809fbf64c04abe76fe2835398848c28b44cfddb203ee91b5816")), 8},
         {TxId(uint256S("30824bf6be8c656d894f48b2ee900130d720fe969bcce4f19c8d24fa8ba83145")), 4},
-        {TxId(uint256S("eeedb9492f570482e1b4460894b22f83163cf8053cd8ae81d9604c6f0cf8a9bb")), 0},
+        {TxId(uint256S("eeedb9492f570482e1b4460894b22f83163cf8053cd8ae81d9604c6f0cf8a9bb")), 0}, // token genesis in
         {TxId(uint256S("81766a636f99138dee8200bfba55ff124bcdb424cde8e932ccb8e4890004f984")), 3},
         {TxId(uint256S("943aebc64feed8112af2bc065297bc84f1b28940e8ddb0ff35948963886c0e40")), 2},
         {TxId(uint256S("1b86fb3052e98e86254ebaec891442c960f803b2ce4b40f470fd9df6dca18893")), 6},
@@ -119,7 +141,11 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         {TxId(uint256S("f79103534dfe073d2de397673b72baf2b75d6ae21005c5685305878a4c6cbcab")), 0},
     };
 
-    size_t const oversized_in = std::size(ins) - 1; // this input's scriptPubKey and scriptSig both exceed MAX_SCRIPT_ELEMENT_SIZE
+    constexpr size_t oversized_in = std::size(ins) - 1; // this input's scriptPubKey and scriptSig both exceed MAX_SCRIPT_ELEMENT_SIZE
+    constexpr size_t token_genesis_in = 11; // this one spends index0 of its outputs so it is the only legal one
+    static_assert(token_genesis_in < std::size(ins));
+    static_assert(oversized_in != token_genesis_in);
+
 
     constexpr auto vals = genArr<Amount, std::size(ins)>([](auto inNum) {
         return (2000 + int(inNum) * 1000) * Amount::satoshi();
@@ -142,13 +168,43 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
     Amount const& val1 = vals[1];
     CScript const& coinScriptPubKey0 = coinScriptPubKeys[0];
     CScript const& coinScriptPubKey1 = coinScriptPubKeys[1];
+    CScript const& coinScriptPubKey2 = coinScriptPubKeys[2];
 
     CMutableTransaction tx;
     tx.vin.resize(std::size(ins));
 
+    const token::OutputData tokenInputData[] = {
+        // NFT with 3-byte commitment
+        {token::Id{uint256S("1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d")},
+         token::SafeAmount::fromIntUnchecked(42), token::NFTCommitment{3u, uint8_t(0x5e)}, true /* hasNFT */},
+        // NFT with 0-byte commitment
+        {token::Id{uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")},
+         token::SafeAmount::fromIntUnchecked(1337), {} /* 0-byte commitment */, true /* hasNFT */, true /* mutable */ },
+        // NFT with 520-byte commitment
+        {token::Id{uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")},
+         token::SafeAmount::fromIntUnchecked(1337), token::NFTCommitment(520u, uint8_t(0xaa)), true /* hasNFT */,
+         true /* mutable */},
+        // NFT with 521-byte commitment
+        {token::Id{uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")},
+         token::SafeAmount::fromIntUnchecked(1337), token::NFTCommitment(521u, uint8_t(0xbb)), true /* hasNFT */,
+         false /* mutable */, true /* minting */},
+        // FT-only
+        {token::Id{uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")},
+         token::SafeAmount::fromIntUnchecked(100)},
+    };
+    constexpr size_t n_token_ins = std::size(tokenInputData);
+    static_assert(n_token_ins < oversized_in);
+
+
     {
         for (size_t i = 0; i < std::size(ins); ++i) {
-            coins.AddCoin(ins[i], Coin(CTxOut(vals[i], coinScriptPubKeys[i]), 1, false), false);
+            token::OutputDataPtr pdata;
+            if (i < n_token_ins) {
+                // this in also has its own token it's bringing forward...
+                pdata = tokenInputData[i];
+            }
+            Coin coin(CTxOut(vals[i], coinScriptPubKeys[i], std::move(pdata)), 1, false);
+            coins.AddCoin(ins[i], std::move(coin), false);
             tx.vin[i].prevout = ins[i];
             if (i == oversized_in) {
                 // large scriptsig here (lots of smaller pushes)
@@ -160,7 +216,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         }
     }
 
-    tx.vout.resize(4);
+    tx.vout.resize(7);
     tx.vout[0].nValue = 1000 * Amount::satoshi();
     tx.vout[0].scriptPubKey = CScript() << OP_2;
     tx.vout[1].nValue = 1900 * Amount::satoshi();
@@ -170,24 +226,52 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
     tx.vout[3].nValue = 3100 * Amount::satoshi();
     // We append OP_CODESEPARATOR to the scriptPubKey to check that OP_OUTPUTBYTECODE ignores this op-code.
     tx.vout[3].scriptPubKey = MakeOversizedScript() << OP_CODESEPARATOR;
+    tx.vout[4].nValue = 4240 * Amount::satoshi();
+    tx.vout[4].scriptPubKey = CScript() << OP_5;
+    tx.vout[5].nValue = 4241 * Amount::satoshi();
+    tx.vout[5].scriptPubKey = CScript() << OP_6;
+    // no token on [6]
+    tx.vout[6].nValue = 4242 * Amount::satoshi();
+    tx.vout[6].scriptPubKey = CScript() << OP_7;
     tx.nVersion = 101;
     tx.nLockTime = 10;
+    size_t const oversized_out = 3;
 
-    size_t const oversized_out = tx.vout.size() - 1;
+    // setup a token genesis output and a normal token output (will be used for testing token introspection)
+    const token::OutputData outputTokens[] = {
+        //[0] is a genesis token, comes from prevtxid of to token_genesis_out_idx (11)
+        {
+            token::Id{tx.vin[token_genesis_in].prevout.GetTxId()}, // category Id
+            token::SafeAmount::fromIntUnchecked(123456),  // FT amount
+            token::NFTCommitment{10u, uint8_t(0xbf)},  // commitment = "bf" * 10
+            true, false, true /* hasNFT, isMutable, isMinting */
+        },
+        // the rest are just the input tokens forwarded out to the outputs
+        tokenInputData[0], tokenInputData[1], tokenInputData[2], tokenInputData[3], tokenInputData[4],
+    };
+    constexpr size_t nOutputTokens = std::size(outputTokens);
+    static_assert(nOutputTokens == std::size(tokenInputData) + 1);
+    assert(nOutputTokens < tx.vout.size());
+    for (size_t i = 0; i < nOutputTokens; ++i) {
+        tx.vout.at(i).tokenDataPtr = outputTokens[i];
+    }
 
     auto const context = ScriptExecutionContext::createForAllInputs(tx, coins);
 
     std::vector<ScriptExecutionContext> limited_context;
     limited_context.reserve(context.size());
     for (auto& ctx : context) {
-        limited_context.emplace_back(ctx.inputIndex(), ctx.coinScriptPubKey(), ctx.coinAmount(), tx,
-                                     ctx.coin().GetHeight(), ctx.coin().IsCoinBase());
+        limited_context.emplace_back(ctx.inputIndex(), ctx.coin().GetTxOut(), tx, ctx.coin().GetHeight(),
+                                     ctx.coin().IsCoinBase());
     }
 
     BOOST_CHECK(context.size() == tx.vin.size());
 
+    BOOST_TEST_MESSAGE("Native Introspection (nullary) tests ...");
+
     // OP_INPUTINDEX (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_INPUTINDEX ...");
         valtype const expected0 (CScriptNum::fromInt(0).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_INPUTINDEX, context[0], {expected0});
 
@@ -202,6 +286,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_ACTIVEBYTECODE (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_ACTIVEBYTECODE ...");
         auto const bytecode0 = CScript() << OP_ACTIVEBYTECODE << OP_9;
         auto const bytecode1 = CScript() << OP_ACTIVEBYTECODE << OP_10;
 
@@ -252,6 +337,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_TXVERSION (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_TXVERSION ...");
         valtype const expected (CScriptNum::fromInt(tx.nVersion).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_TXVERSION, context[0], {expected});
         CheckPassWithFlags(flags, {}, CScript() << OP_TXVERSION, context[1], {expected});
@@ -264,6 +350,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_TXINPUTCOUNT (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_TXINPUTCOUNT ...");
         valtype const expected (CScriptNum::fromInt(tx.vin.size()).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_TXINPUTCOUNT, context[0], {expected});
         CheckPassWithFlags(flags, {}, CScript() << OP_TXINPUTCOUNT, context[1], {expected});
@@ -276,6 +363,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_TXOUTPUTCOUNT (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_TXOUTPUTCOUNT ...");
         valtype const expected (CScriptNum::fromInt(tx.vout.size()).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_TXOUTPUTCOUNT, context[0], {expected});
         CheckPassWithFlags(flags, {}, CScript() << OP_TXOUTPUTCOUNT, context[1], {expected});
@@ -288,6 +376,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_TXLOCKTIME (nullary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_TXLOCKTIME ...");
         valtype const expected (CScriptNum::fromInt(tx.nLockTime).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_TXLOCKTIME, context[0], {expected});
         CheckPassWithFlags(flags, {}, CScript() << OP_TXLOCKTIME, context[1], {expected});
@@ -298,8 +387,11 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         CheckErrorWithFlags(flags_inactive, {}, CScript() << OP_TXLOCKTIME, context[0], ScriptError::BAD_OPCODE);
     }
 
+    BOOST_TEST_MESSAGE("Native Introspection (unary) tests ...");
+
     // OP_UTXOVALUE (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_UTXOVALUE ...");
         valtype const expected0 (CScriptNum::fromInt(val0 / SATOSHI).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_UTXOVALUE, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_UTXOVALUE, context[1], {expected0});
@@ -330,15 +422,39 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_UTXOBYTECODE (unary)
     {
-        valtype const expected0 (coinScriptPubKey0.begin(), coinScriptPubKey0.end());
+        BOOST_TEST_MESSAGE("Testing OP_UTXOBYTECODE ...");
+        token::WrappedScriptPubKey wspk0;
+        token::WrapScriptPubKey(wspk0, token::OutputDataPtr{tokenInputData[0]}, coinScriptPubKey0, INIT_PROTO_VERSION);
+        valtype const expected0 (wspk0.begin(), wspk0.end()),
+                      expected0_tokens(coinScriptPubKey0.begin(), coinScriptPubKey0.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_UTXOBYTECODE, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_UTXOBYTECODE, context[1], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_UTXOBYTECODE, limited_context[0], {expected0});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOBYTECODE, context[0], {expected0_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOBYTECODE, context[1], {expected0_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOBYTECODE, limited_context[0], {expected0_tokens});
 
-        valtype const expected1 (coinScriptPubKey1.begin(), coinScriptPubKey1.end());
+        token::WrappedScriptPubKey wspk1;
+        token::WrapScriptPubKey(wspk1, token::OutputDataPtr{tokenInputData[1]}, coinScriptPubKey1, INIT_PROTO_VERSION);
+        valtype const expected1 (wspk1.begin(), wspk1.end()),
+                      expected1_tokens(coinScriptPubKey1.begin(), coinScriptPubKey1.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_1 << OP_UTXOBYTECODE, context[0], {expected1});
         CheckPassWithFlags(flags, {}, CScript() << OP_1 << OP_UTXOBYTECODE, context[1], {expected1});
         CheckPassWithFlags(flags, {}, CScript() << OP_1 << OP_UTXOBYTECODE, limited_context[1], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_1 << OP_UTXOBYTECODE, context[0], {expected1_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_1 << OP_UTXOBYTECODE, context[1], {expected1_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_1 << OP_UTXOBYTECODE, limited_context[1], {expected1_tokens});
+
+        // This input has a wrapped spk pre-token-activation that exceeds 520b limit due to oversized token data, so it
+        // should fail because pre-token-activation we push the entire token blob.  Post-token-activation it will just
+        // push the spk without the token data, so it will succeed.
+        valtype const expected2_tokens(coinScriptPubKey2.begin(), coinScriptPubKey2.end());
+        CheckErrorWithFlags(flags, {}, CScript() << OP_2 << OP_UTXOBYTECODE, context[0], ScriptError::PUSH_SIZE);
+        CheckErrorWithFlags(flags, {}, CScript() << OP_2 << OP_UTXOBYTECODE, context[1], ScriptError::PUSH_SIZE);
+        CheckErrorWithFlags(flags, {}, CScript() << OP_2 << OP_UTXOBYTECODE, context[2], ScriptError::PUSH_SIZE);
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_2 << OP_UTXOBYTECODE, context[0], {expected2_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_2 << OP_UTXOBYTECODE, context[1], {expected2_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_2 << OP_UTXOBYTECODE, limited_context[2], {expected2_tokens});
 
         // failure (missing arg)
         CheckErrorWithFlags(flags, {}, CScript() << OP_UTXOBYTECODE, context[0], ScriptError::INVALID_STACK_OPERATION);
@@ -350,6 +466,8 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         // failure (MAX_SCRIPT_ELEMENT_SIZE exceeded)
         for (auto const& ctx : context) {
             CheckErrorWithFlags(flags, {}, CScript() << ScriptInt::fromInt(oversized_in).value() << OP_UTXOBYTECODE,
+                                ctx, ScriptError::PUSH_SIZE);
+            CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(oversized_in).value() << OP_UTXOBYTECODE,
                                 ctx, ScriptError::PUSH_SIZE);
         }
         // failure (no context)
@@ -365,6 +483,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_OUTPOINTTXHASH (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPOINTTXHASH ...");
         valtype const expected0 (in0.GetTxId().begin(), in0.GetTxId().end());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPOINTTXHASH, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPOINTTXHASH, context[1], {expected0});
@@ -388,6 +507,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_OUTPOINTINDEX (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPOINTINDEX ...");
         valtype const expected0 (CScriptNum::fromInt(in0.GetN()).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPOINTINDEX, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPOINTINDEX, context[1], {expected0});
@@ -411,6 +531,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_INPUTBYTECODE (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_INPUTBYTECODE ...");
         valtype const expected0 (tx.vin[0].scriptSig.begin(), tx.vin[0].scriptSig.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_INPUTBYTECODE, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_INPUTBYTECODE, context[1], {expected0});
@@ -439,6 +560,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_INPUTSEQUENCENUMBER (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_INPUTSEQUENCENUMBER ...");
         valtype const expected0 (CScriptNum::fromInt(tx.vin[0].nSequence).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_INPUTSEQUENCENUMBER, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_INPUTSEQUENCENUMBER, context[1], {expected0});
@@ -462,6 +584,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_OUTPUTVALUE (unary)
     {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPUTVALUE ...");
         valtype const expected0 (CScriptNum::fromInt(tx.vout[0].nValue / SATOSHI).value().getvch());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPUTVALUE, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPUTVALUE, context[1], {expected0});
@@ -489,17 +612,46 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
 
     // OP_OUTPUTBYTECODE (unary)
     {
-        valtype const expected0 (tx.vout[0].scriptPubKey.begin(), tx.vout[0].scriptPubKey.end());
+        BOOST_TEST_MESSAGE("Testing OP_OUTPUTBYTECODE ...");
+        token::WrappedScriptPubKey wspk0;
+        token::WrapScriptPubKey(wspk0, tx.vout.at(0).tokenDataPtr, tx.vout.at(0).scriptPubKey, INIT_PROTO_VERSION);
+        valtype const expected0 (wspk0.begin(), wspk0.end()),
+                      expected0_tokens (tx.vout[0].scriptPubKey.begin(), tx.vout[0].scriptPubKey.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, context[0], {expected0});
         CheckPassWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, context[1], {expected0});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, context[0], {expected0_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, context[1], {expected0_tokens});
 
-        valtype const expected1 (tx.vout[1].scriptPubKey.begin(), tx.vout[1].scriptPubKey.end());
+        token::WrappedScriptPubKey wspk1;
+        token::WrapScriptPubKey(wspk1, tx.vout.at(1).tokenDataPtr, tx.vout.at(1).scriptPubKey, INIT_PROTO_VERSION);
+        valtype const expected1 (wspk1.begin(), wspk1.end()),
+                      expected1_tokens (tx.vout[1].scriptPubKey.begin(), tx.vout[1].scriptPubKey.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_1 << OP_OUTPUTBYTECODE, context[0], {expected1});
         CheckPassWithFlags(flags, {}, CScript() << OP_1 << OP_OUTPUTBYTECODE, context[1], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_1 << OP_OUTPUTBYTECODE, context[0], {expected1_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_1 << OP_OUTPUTBYTECODE, context[1], {expected1_tokens});
 
-        valtype const expected2 (tx.vout[2].scriptPubKey.begin(), tx.vout[2].scriptPubKey.end());
+        token::WrappedScriptPubKey wspk2;
+        token::WrapScriptPubKey(wspk2, tx.vout.at(2).tokenDataPtr, tx.vout.at(2).scriptPubKey, INIT_PROTO_VERSION);
+        valtype const expected2 (wspk2.begin(), wspk2.end()),
+                      expected2_tokens (tx.vout[2].scriptPubKey.begin(), tx.vout[2].scriptPubKey.end());
         CheckPassWithFlags(flags, {}, CScript() << OP_2 << OP_OUTPUTBYTECODE, context[0], {expected2});
         CheckPassWithFlags(flags, {}, CScript() << OP_2 << OP_OUTPUTBYTECODE, context[1], {expected2});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_2 << OP_OUTPUTBYTECODE, context[0], {expected2_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_2 << OP_OUTPUTBYTECODE, context[1], {expected2_tokens});
+
+        token::WrappedScriptPubKey wspk4;
+        token::WrapScriptPubKey(wspk4, tx.vout.at(4).tokenDataPtr, tx.vout.at(4).scriptPubKey, INIT_PROTO_VERSION);
+        valtype const expected4_tokens (tx.vout[4].scriptPubKey.begin(), tx.vout[4].scriptPubKey.end());
+        // This one has an oversized token, so the push fails pre-token-activation because it attempts to push a
+        // byte blob that is >520b
+        CheckErrorWithFlags(flags, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, context[0], ScriptError::PUSH_SIZE);
+        CheckErrorWithFlags(flags, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, context[1], ScriptError::PUSH_SIZE);
+        CheckErrorWithFlags(flags, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, limited_context[4], ScriptError::PUSH_SIZE);
+        // But post-token activation it works ok because then we strip the token data from the pushed blob
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, context[0], {expected4_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, context[1], {expected4_tokens});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << OP_4 << OP_OUTPUTBYTECODE, limited_context[3], {expected4_tokens});
 
         // failure (missing arg)
         CheckErrorWithFlags(flags, {}, CScript() << OP_OUTPUTBYTECODE, context[0], ScriptError::INVALID_STACK_OPERATION);
@@ -512,11 +664,270 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         for (auto const& ctx : context) {
             CheckErrorWithFlags(flags, {}, CScript() << ScriptInt::fromInt(oversized_out).value() << OP_OUTPUTBYTECODE,
                                 ctx, ScriptError::PUSH_SIZE);
+            CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(oversized_out).value() << OP_OUTPUTBYTECODE,
+                                ctx, ScriptError::PUSH_SIZE);
         }
         // failure (no context)
         CheckErrorWithFlags(flags, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, {}, ScriptError::CONTEXT_NOT_PRESENT);
         // failure (not activated)
         CheckErrorWithFlags(flags_inactive, {}, CScript() << OP_0 << OP_OUTPUTBYTECODE, context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // --- Token Introspection ---
+    BOOST_TEST_MESSAGE("Native Token Introspection (unary) tests ...");
+
+    // OP_UTXOTOKENCATEGORY (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_UTXOTOKENCATEGORY ...");
+        for (size_t token_containing_in = 0; token_containing_in < n_token_ins; ++token_containing_in) {
+            const auto &tokenData = tokenInputData[token_containing_in];
+            valtype expected (tokenData.GetId().begin(), tokenData.GetId().end());
+            if (const auto c = tokenData.GetCapability(); c == token::Capability::Minting || c == token::Capability::Mutable) {
+                // 0x01 or 0x02 appended for these types of tokens
+                expected.push_back(static_cast<uint8_t>(c));
+            }
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(token_containing_in) << OP_UTXOTOKENCATEGORY;
+            CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, limited_context[token_containing_in], {expected});
+        }
+        assert(n_token_ins + 1 < std::size(ins));
+        const auto sn = ScriptInt::fromIntUnchecked(n_token_ins + 1);
+        valtype const expected1{}; // empty bytes for this op-code when there is no token for the input
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCATEGORY, context[0], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCATEGORY, context[1], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCATEGORY, limited_context[n_token_ins + 1], {expected1});
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_UTXOTOKENCATEGORY, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vin.size()).value() << OP_UTXOTOKENCATEGORY,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_UTXOTOKENCATEGORY,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOTOKENCATEGORY, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (limited context but querying sibling input)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(1)
+                                                        << OP_UTXOTOKENCATEGORY, limited_context[0],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(0)
+                                                        << OP_UTXOTOKENCATEGORY, limited_context[1],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_UTXOTOKENCATEGORY,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_UTXOTOKENCATEGORY,
+                            context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // OP_UTXOTOKENCOMMITMENT (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_UTXOTOKENCOMMITMENT ...");
+        for (size_t token_containing_in = 0; token_containing_in < n_token_ins; ++token_containing_in) {
+            const auto &tokenData = tokenInputData[token_containing_in];
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(token_containing_in) << OP_UTXOTOKENCOMMITMENT;
+            if (tokenData.GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE) {
+                valtype expected;
+                if (tokenData.HasNFT()) {
+                    expected = valtype(tokenData.GetCommitment().begin(), tokenData.GetCommitment().end());
+                } // else everything else, we expect an empty vector
+                CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+                CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+                CheckPassWithFlags(flags_tokens, {}, script, limited_context[token_containing_in], {expected});
+            } else {
+                // failure (commitment too large to push onto stack)
+                CheckErrorWithFlags(flags_tokens, {}, script, context[token_containing_in], ScriptError::PUSH_SIZE);
+            }
+        }
+        assert(n_token_ins + 1 < std::size(ins));
+        const auto sn = ScriptInt::fromIntUnchecked(n_token_ins + 1);
+        valtype const expected1{}; // empty bytes for this op-code when there is no token for the input
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCOMMITMENT, context[0], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCOMMITMENT, context[1], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENCOMMITMENT, limited_context[n_token_ins + 1], {expected1});
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_UTXOTOKENCOMMITMENT, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vin.size()).value() << OP_UTXOTOKENCOMMITMENT,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_UTXOTOKENCOMMITMENT,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOTOKENCOMMITMENT, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (limited context but querying sibling input)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(1)
+                                                        << OP_UTXOTOKENCOMMITMENT, limited_context[0],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(0)
+                                                        << OP_UTXOTOKENCOMMITMENT, limited_context[1],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_UTXOTOKENCOMMITMENT,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_UTXOTOKENCOMMITMENT,
+                            context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // OP_UTXOTOKENAMOUNT (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_UTXOTOKENAMOUNT ...");
+        for (size_t token_containing_in = 0; token_containing_in < n_token_ins; ++token_containing_in) {
+            const auto &tokenData = tokenInputData[token_containing_in];
+            const valtype expected = CScriptNum::fromInt(tokenData.GetAmount().getint64()).value().getvch();
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(token_containing_in) << OP_UTXOTOKENAMOUNT;
+            CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, limited_context[token_containing_in], {expected});
+        }
+        assert(n_token_ins + 1 < std::size(ins));
+        const auto sn = ScriptInt::fromIntUnchecked(n_token_ins + 1);
+        valtype const expected1 = CScriptNum::fromInt(0).value().getvch(); // VM number 0 (empty vector)
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENAMOUNT, context[0], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENAMOUNT, context[1], {expected1});
+        CheckPassWithFlags(flags_tokens, {}, CScript() << sn << OP_UTXOTOKENAMOUNT, limited_context[n_token_ins + 1], {expected1});
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_UTXOTOKENAMOUNT, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vin.size()).value() << OP_UTXOTOKENAMOUNT,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_UTXOTOKENAMOUNT,
+                            context[1], ScriptError::INVALID_TX_INPUT_INDEX);
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_UTXOTOKENAMOUNT, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (limited context but querying sibling input)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(1)
+                                                        << OP_UTXOTOKENAMOUNT, limited_context[0],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromIntUnchecked(0)
+                                                        << OP_UTXOTOKENAMOUNT, limited_context[1],
+                            ScriptError::LIMITED_CONTEXT_NO_SIBLING_INFO);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_UTXOTOKENAMOUNT,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_UTXOTOKENAMOUNT,
+                            context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // OP_OUTPUTTOKENCATEGORY (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPUTTOKENCATEGORY ...");
+        // Ensure the first outputs have token data and the last one does not for this test.
+        assert(!tx.vout.empty() && !tx.vout.back().tokenDataPtr && tx.vout.front().tokenDataPtr);
+        for (size_t i = 0; i < tx.vout.size(); ++i) {
+            const auto &pdata = tx.vout[i].tokenDataPtr;
+            valtype expected{};
+            if (pdata) {
+                expected.assign(pdata->GetId().begin(), pdata->GetId().end());
+                if (const auto c = pdata->GetCapability(); c == token::Capability::Minting || c == token::Capability::Mutable) {
+                    // 0x01 or 0x02 appended for these types of tokens
+                    expected.push_back(static_cast<uint8_t>(c));
+                }
+            } // else empty bytes if the output has no tokens (the last output has no tokens in this test)
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(i) << OP_OUTPUTTOKENCATEGORY;
+            CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, limited_context[i], {expected});
+        }
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_OUTPUTTOKENCATEGORY, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vout.size()).value() << OP_OUTPUTTOKENCATEGORY,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_OUTPUTTOKENCATEGORY,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTTOKENCATEGORY, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_OUTPUTTOKENCATEGORY,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_OUTPUTTOKENCATEGORY,
+                            context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // OP_OUTPUTTOKENCOMMITMENT (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPUTTOKENCOMMITMENT ...");
+        // Ensure the first outputs have token data and the last one does not for this test.
+        assert(!tx.vout.empty() && !tx.vout.back().tokenDataPtr && tx.vout.front().tokenDataPtr);
+        for (size_t i = 0; i < tx.vout.size(); ++i) {
+            const auto &pdata = tx.vout[i].tokenDataPtr;
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(i) << OP_OUTPUTTOKENCOMMITMENT;
+            if (!pdata || pdata->GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE) {
+                valtype expected{};
+                if (pdata && pdata->HasNFT()) {
+                    expected.assign(pdata->GetCommitment().begin(), pdata->GetCommitment().end());
+                } // else empty bytes if the output has no commitment (the last output has no tokens in this test, thus no commitment)
+                CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+                CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+                CheckPassWithFlags(flags_tokens, {}, script, limited_context[i], {expected});
+            } else {
+                // failure (commitment too large to push onto stack)
+                CheckErrorWithFlags(flags_tokens, {}, script, limited_context[i], ScriptError::PUSH_SIZE);
+            }
+        }
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_OUTPUTTOKENCOMMITMENT, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vout.size()).value() << OP_OUTPUTTOKENCOMMITMENT,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_OUTPUTTOKENCOMMITMENT,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTTOKENCOMMITMENT, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_OUTPUTTOKENCOMMITMENT,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_OUTPUTTOKENCOMMITMENT,
+                            context[0], ScriptError::BAD_OPCODE);
+    }
+
+    // OP_OUTPUTTOKENAMOUNT (unary)
+    {
+        BOOST_TEST_MESSAGE("Testing OP_OUTPUTTOKENAMOUNT ...");
+        // Ensure the first outputs have token data and the last one does not for this test.
+        assert(!tx.vout.empty() && !tx.vout.back().tokenDataPtr && tx.vout.front().tokenDataPtr);
+        for (size_t i = 0; i < tx.vout.size(); ++i) {
+            const auto &pdata = tx.vout[i].tokenDataPtr;
+            valtype const expected = pdata ? CScriptNum::fromInt(pdata->GetAmount().getint64()).value().getvch()
+                                             // missing token data is the same as amount == 0
+                                           : CScriptNum::fromInt(0).value().getvch();
+            const auto script = CScript() << ScriptInt::fromIntUnchecked(i) << OP_OUTPUTTOKENAMOUNT;
+            CheckPassWithFlags(flags_tokens, {}, script, context[0], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, context[1], {expected});
+            CheckPassWithFlags(flags_tokens, {}, script, limited_context[i], {expected});
+        }
+
+        // failure (missing arg)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_OUTPUTTOKENAMOUNT, context[0], ScriptError::INVALID_STACK_OPERATION);
+        // failure (out of range)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(tx.vout.size()).value() << OP_OUTPUTTOKENAMOUNT,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << ScriptInt::fromInt(-1).value() << OP_OUTPUTTOKENAMOUNT,
+                            context[1], ScriptError::INVALID_TX_OUTPUT_INDEX);
+        // failure: intentionally sabotage the VM by forcing a very illegal value (INT64_MIN) for the token amount
+        // (can't normally happen in real code since this is outside consensus)
+        {
+            const auto origAmount = tx.vout.front().tokenDataPtr->GetAmount();
+            Defer d([&]{ tx.vout.front().tokenDataPtr->SetAmount(origAmount);}); // restore original amount on scope end
+            // set INT64_MIN...
+            tx.vout.front().tokenDataPtr->SetAmount(token::SafeAmount::fromIntUnchecked(std::numeric_limits<int64_t>::min()));
+            // We expect an "Unknown" error because pushing INT64_MIN to the stack fails in the VM, since it would
+            // be a 9-byte int64 and that is forbidden. This causes an exception to be thrown in script VM,
+            // aborting execution with an "Unknown" error...
+            CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTTOKENAMOUNT, context[0], ScriptError::UNKNOWN);
+        }
+        // failure (no context)
+        CheckErrorWithFlags(flags_tokens, {}, CScript() << OP_0 << OP_OUTPUTTOKENAMOUNT, {}, ScriptError::CONTEXT_NOT_PRESENT);
+        // failure (not activated)
+        CheckErrorWithFlags(flags /* no tokens */, {}, CScript() << OP_0 << OP_OUTPUTTOKENAMOUNT,
+                            context[0], ScriptError::BAD_OPCODE);
+        CheckErrorWithFlags(flags_inactive /* no introspection */, {}, CScript() << OP_0 << OP_OUTPUTTOKENAMOUNT,
+                            context[0], ScriptError::BAD_OPCODE);
     }
 }
 

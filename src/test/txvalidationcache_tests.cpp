@@ -15,6 +15,7 @@
 #include <script/scriptcache.h>
 #include <script/sighashtype.h>
 #include <script/sign.h>
+#include <script/standard.h>
 #include <txmempool.h>
 #include <util/time.h>
 #include <validation.h>
@@ -57,9 +58,8 @@ BOOST_FIXTURE_TEST_CASE(tx_mempool_block_doublespend, TestChain100Setup) {
 
         // Sign:
         std::vector<uint8_t> vchSig;
-        uint256 hash = SignatureHash(scriptPubKey, CTransaction(spends[i]), 0,
-                                     SigHashType().withFork(),
-                                     m_coinbase_txns[0]->vout[0].nValue);
+        uint256 hash = SignatureHash(scriptPubKey, ScriptExecutionContext{0, m_coinbase_txns[0]->vout[0], spends[i]},
+                                     SigHashType().withFork(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         spends[i].vin[0].scriptSig << vchSig;
@@ -98,7 +98,7 @@ static inline bool
 CheckInputs(const CTransaction &tx, CValidationState &state,
             const CCoinsViewCache &view, bool fScriptChecks,
             const uint32_t flags, bool sigCacheStore, bool scriptCacheStore,
-            const PrecomputedTransactionData &txdata, int &nSigChecksOut,
+            PrecomputedTransactionData &txdata, int &nSigChecksOut,
             std::vector<CScriptCheck> *pvChecks,
             CheckInputsLimiter *pBlockLimitSigChecks = nullptr)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
@@ -127,7 +127,7 @@ ValidateCheckInputsForAllFlags(const CTransaction &tx, uint32_t failing_flags,
                                uint32_t required_flags, bool add_to_cache,
                                int expected_sigchecks)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
-    PrecomputedTransactionData txdata(tx);
+    PrecomputedTransactionData txdata;
 
     MMIXLinearCongruentialGenerator lcg;
     for (int i = 0; i < 4096; i++) {
@@ -186,16 +186,15 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         InitScriptExecutionCache();
     }
 
-    CScript p2pk_scriptPubKey =
-        CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
-    CScript p2sh_scriptPubKey =
-        GetScriptForDestination(CScriptID(p2pk_scriptPubKey));
-    CScript p2pkh_scriptPubKey =
-        GetScriptForDestination(coinbaseKey.GetPubKey().GetID());
+    CScript p2pk_scriptPubKey = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
+    CScript p2sh_scriptPubKey = GetScriptForDestination(ScriptID(p2pk_scriptPubKey, false /*=p2sh20*/));
+    CScript p2sh_32_scriptPubKey = GetScriptForDestination(ScriptID(p2pk_scriptPubKey, true /*=p2sh32*/));
+    CScript p2pkh_scriptPubKey = GetScriptForDestination(coinbaseKey.GetPubKey().GetID());
 
     CBasicKeyStore keystore;
     BOOST_CHECK(keystore.AddKey(coinbaseKey));
-    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey));
+    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, false /*=p2sh20*/));
+    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, true /*=p2sh32*/));
 
     CMutableTransaction funding_tx;
     // Needed when spending the output of this transaction
@@ -213,9 +212,9 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         noppyScriptPubKey << OP_IF << OP_NOP10 << OP_ENDIF << OP_1;
         funding_tx.vout[0].scriptPubKey = noppyScriptPubKey;
         std::vector<uint8_t> fundingVchSig;
-        uint256 fundingSigHash = SignatureHash(
-            p2pk_scriptPubKey, CTransaction(funding_tx), 0,
-            SigHashType().withFork(), m_coinbase_txns[0]->vout[0].nValue);
+        const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx};
+        uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(),
+                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx.vin[0].scriptSig << fundingVchSig;
@@ -238,19 +237,19 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
     spend_tx.nVersion = 1;
     spend_tx.vin.resize(1);
     spend_tx.vin[0].prevout = COutPoint(funding_tx.GetId(), 0);
-    spend_tx.vout.resize(4);
+    spend_tx.vout.resize(5);
     spend_tx.vout[0].nValue = 11 * CENT;
     spend_tx.vout[0].scriptPubKey = p2sh_scriptPubKey;
     spend_tx.vout[1].nValue = 11 * CENT;
-    spend_tx.vout[1].scriptPubKey =
-        CScript() << OP_CHECKLOCKTIMEVERIFY << OP_DROP
-                  << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
+    spend_tx.vout[1].scriptPubKey = CScript() << OP_CHECKLOCKTIMEVERIFY << OP_DROP
+                                              << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
     spend_tx.vout[2].nValue = 11 * CENT;
-    spend_tx.vout[2].scriptPubKey =
-        CScript() << OP_CHECKSEQUENCEVERIFY << OP_DROP
-                  << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
+    spend_tx.vout[2].scriptPubKey = CScript() << OP_CHECKSEQUENCEVERIFY << OP_DROP
+                                              << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
     spend_tx.vout[3].nValue = 11 * CENT;
     spend_tx.vout[3].scriptPubKey = p2sh_scriptPubKey;
+    spend_tx.vout[4].nValue = 11 * CENT;
+    spend_tx.vout[4].scriptPubKey = p2sh_32_scriptPubKey;
 
     // "Sign" the main transaction that we spend from.
     {
@@ -267,7 +266,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         LOCK(cs_main);
 
         CValidationState state;
-        PrecomputedTransactionData ptd_spend_tx(tx);
+        PrecomputedTransactionData ptd_spend_tx;
         int nSigChecksDummy;
 
         BOOST_CHECK(!CheckInputs(tx, state, pcoinsTip.get(), true,
@@ -318,6 +317,27 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
                                        SCRIPT_VERIFY_P2SH, 0, true, 0);
     }
 
+    // Test P2SH_32: construct a transaction that is valid without P2SH_32, and then
+    // test validity with P2SH_32.
+    {
+        CMutableTransaction invalid_under_p2sh_32_tx;
+        invalid_under_p2sh_32_tx.nVersion = 1;
+        invalid_under_p2sh_32_tx.vin.resize(1);
+        invalid_under_p2sh_32_tx.vin[0].prevout = COutPoint(spend_tx.GetId(), 4);
+        invalid_under_p2sh_32_tx.vout.resize(1);
+        invalid_under_p2sh_32_tx.vout[0].nValue = 11 * CENT;
+        invalid_under_p2sh_32_tx.vout[0].scriptPubKey = p2pk_scriptPubKey;
+        std::vector<uint8_t> vchSig2(p2pk_scriptPubKey.begin(), p2pk_scriptPubKey.end());
+        invalid_under_p2sh_32_tx.vin[0].scriptSig << vchSig2;
+
+        ValidateCheckInputsForAllFlags(CTransaction(invalid_under_p2sh_32_tx),
+                                       /* failing flags */
+                                       SCRIPT_ENABLE_P2SH_32,
+                                       /* required flags */
+                                       SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_NULLFAIL | SCRIPT_VERIFY_CLEANSTACK,
+                                       true, 0);
+    }
+
     // Test CHECKLOCKTIMEVERIFY
     {
         CMutableTransaction invalid_with_cltv_tx;
@@ -332,9 +352,9 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
 
         // Sign
         std::vector<uint8_t> vchSig;
-        uint256 hash = SignatureHash(
-            spend_tx.vout[1].scriptPubKey, CTransaction(invalid_with_cltv_tx),
-            0, SigHashType().withFork(), spend_tx.vout[1].nValue);
+        const ScriptExecutionContext limited_context{0, spend_tx.vout[1], invalid_with_cltv_tx};
+        uint256 hash = SignatureHash(spend_tx.vout[1].scriptPubKey, limited_context, SigHashType().withFork(),
+                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         invalid_with_cltv_tx.vin[0].scriptSig = CScript() << vchSig << ScriptInt::fromIntUnchecked(101);
@@ -348,7 +368,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         CValidationState state;
 
         CTransaction transaction(invalid_with_cltv_tx);
-        PrecomputedTransactionData txdata(transaction);
+        PrecomputedTransactionData txdata;
 
         int nSigChecksRet;
         BOOST_CHECK(CheckInputs(transaction, state, pcoinsTip.get(), true,
@@ -370,9 +390,9 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
 
         // Sign
         std::vector<uint8_t> vchSig;
-        uint256 hash = SignatureHash(
-            spend_tx.vout[2].scriptPubKey, CTransaction(invalid_with_csv_tx), 0,
-            SigHashType().withFork(), spend_tx.vout[2].nValue);
+        const ScriptExecutionContext limited_context{0, spend_tx.vout[2], invalid_with_csv_tx};
+        uint256 hash = SignatureHash(spend_tx.vout[2].scriptPubKey, limited_context, SigHashType().withFork(),
+                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         invalid_with_csv_tx.vin[0].scriptSig = CScript() << vchSig << ScriptInt::fromIntUnchecked(101);
@@ -386,7 +406,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         CValidationState state;
 
         CTransaction transaction(invalid_with_csv_tx);
-        PrecomputedTransactionData txdata(transaction);
+        PrecomputedTransactionData txdata;
 
         int nSigChecksRet;
         BOOST_CHECK(CheckInputs(transaction, state, pcoinsTip.get(), true,
@@ -413,23 +433,21 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         {
             SignatureData sigdata;
 
-            auto const context = std::nullopt; // No introspection necessary (p2pk)
+            const ScriptExecutionContext limited_context{0, spend_tx.vout[0], tx};
 
-            BOOST_CHECK(ProduceSignature(
-                keystore,
-                MutableTransactionSignatureCreator(&tx, 0, 11 * CENT, SigHashType().withFork()),
-                spend_tx.vout[0].scriptPubKey, sigdata, context));
+            BOOST_CHECK(ProduceSignature(keystore,
+                                         TransactionSignatureCreator(limited_context, SigHashType().withFork()),
+                                         spend_tx.vout[0].scriptPubKey, sigdata, STANDARD_SCRIPT_VERIFY_FLAGS));
             UpdateInput(tx.vin[0], sigdata);
         }
         {
             SignatureData sigdata;
 
-            auto const context = std::nullopt; // No introspection necessary (simple p2sh that wraps p2pk)
+            const ScriptExecutionContext limited_context{1, spend_tx.vout[3], tx};
 
-            BOOST_CHECK(ProduceSignature(
-                keystore,
-                MutableTransactionSignatureCreator(&tx, 1, 11 * CENT, SigHashType().withFork()),
-                spend_tx.vout[3].scriptPubKey, sigdata, context));
+            BOOST_CHECK(ProduceSignature(keystore,
+                                         TransactionSignatureCreator(limited_context, SigHashType().withFork()),
+                                         spend_tx.vout[3].scriptPubKey, sigdata, STANDARD_SCRIPT_VERIFY_FLAGS));
             UpdateInput(tx.vin[1], sigdata);
         }
 
@@ -445,7 +463,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
 
             CValidationState state;
             CTransaction transaction(tx);
-            PrecomputedTransactionData txdata(transaction);
+            PrecomputedTransactionData txdata;
             const uint32_t flags =
                 STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENFORCE_SIGCHECKS;
             int nSigChecksDummy;
@@ -537,7 +555,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
 
         CValidationState state;
         CTransaction transaction(tx);
-        PrecomputedTransactionData txdata(transaction);
+        PrecomputedTransactionData txdata;
 
         // This transaction is now invalid because the second signature is
         // missing.

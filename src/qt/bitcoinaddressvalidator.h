@@ -17,13 +17,9 @@ class BitcoinAddressEntryValidator : public QValidator {
     Q_OBJECT
 
 public:
-    explicit BitcoinAddressEntryValidator(const std::string &cashaddrprefixIn,
-                                          QObject *parent);
+    explicit BitcoinAddressEntryValidator(QObject *parent);
 
     State validate(QString &input, int &pos) const override;
-
-private:
-    std::string cashaddrprefix;
 };
 
 /** Bitcoin Cash address widget validator, checks for a valid Bitcoin Cash address.

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 The Bitcoin developers
+// Copyright (c) 2018-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -97,4 +97,16 @@ bool IsUpgrade8Enabled(const Consensus::Params &params, const CBlockIndex *pinde
     }
 
     return pindexPrev->nHeight >= params.upgrade8Height;
+}
+
+bool IsUpgrade9Enabled(const Consensus::Params &params, const int64_t nMedianTimePast) {
+    return nMedianTimePast >= gArgs.GetArg("-upgrade9activationtime", params.upgrade9ActivationTime);
+}
+
+bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev) {
+    if (pindexPrev == nullptr) {
+        return false;
+    }
+
+    return IsUpgrade9Enabled(params, pindexPrev->GetMedianTimePast());
 }

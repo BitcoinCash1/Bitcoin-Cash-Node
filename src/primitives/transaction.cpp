@@ -9,18 +9,22 @@
 #include <tinyformat.h>
 #include <util/strencodings.h>
 
-std::string COutPoint::ToString() const {
-    return strprintf("COutPoint(%s, %u)", txid.ToString().substr(0, 10), n);
+#include <algorithm>
+
+std::string COutPoint::ToString(bool fVerbose) const {
+    const std::string::size_type cutoff = fVerbose ? std::string::npos : 10;
+    return strprintf("COutPoint(%s, %u)", txid.ToString().substr(0, cutoff), n);
 }
 
-std::string CTxIn::ToString() const {
+std::string CTxIn::ToString(bool fVerbose) const {
+    const std::string::size_type cutoff = fVerbose ? std::string::npos : 24;
     std::string str;
     str += "CTxIn(";
-    str += prevout.ToString();
+    str += prevout.ToString(fVerbose);
     if (prevout.IsNull()) {
         str += strprintf(", coinbase %s", HexStr(scriptSig));
     } else {
-        str += strprintf(", scriptSig=%s", HexStr(scriptSig).substr(0, 24));
+        str += strprintf(", scriptSig=%s", HexStr(scriptSig).substr(0, cutoff));
     }
     if (nSequence != SEQUENCE_FINAL) {
         str += strprintf(", nSequence=%u", nSequence);
@@ -29,10 +33,12 @@ std::string CTxIn::ToString() const {
     return str;
 }
 
-std::string CTxOut::ToString() const {
-    return strprintf("CTxOut(nValue=%d.%08d, scriptPubKey=%s)", nValue / COIN,
+std::string CTxOut::ToString(bool fVerbose) const {
+    const std::string::size_type cutoff = fVerbose ? std::string::npos : 30;
+    return strprintf("CTxOut(nValue=%d.%08d, scriptPubKey=%s%s)", nValue / COIN,
                      (nValue % COIN) / SATOSHI,
-                     HexStr(scriptPubKey).substr(0, 30));
+                     HexStr(scriptPubKey).substr(0, cutoff),
+                     tokenDataPtr ? (" " + tokenDataPtr->ToString(fVerbose)) : "");
 }
 
 CMutableTransaction::CMutableTransaction()
@@ -51,6 +57,29 @@ TxId CMutableTransaction::GetId() const {
 
 TxHash CMutableTransaction::GetHash() const {
     return TxHash(ComputeCMutableTransactionHash(*this));
+}
+
+void CMutableTransaction::SortInputsBip69() {
+    std::sort(vin.begin(), vin.end(), [](const CTxIn &a, const CTxIn &b){
+        // COutPoint operator< does sort in accordance with Bip69, so just use that.
+        return a.prevout < b.prevout;
+    });
+}
+
+void CMutableTransaction::SortOutputsBip69() {
+    std::sort(vout.begin(), vout.end(), [](const CTxOut &a, const CTxOut &b){
+        if (a.nValue == b.nValue) {
+            // Note: prevector operator< does NOT properly order scriptPubKeys lexicographically. So instead we
+            // use std::lexicographical_compare
+            const auto &spkA = a.scriptPubKey, &spkB = b.scriptPubKey;
+            if (spkA == spkB) {
+                // SPK's equal, drill down to comparing tokenData (see token::OutputData::operator<)
+                return a.tokenDataPtr < b.tokenDataPtr;
+            }
+            return std::lexicographical_compare(spkA.begin(), spkA.end(), spkB.begin(), spkB.end());
+        }
+        return a.nValue < b.nValue;
+    });
 }
 
 uint256 CTransaction::ComputeHash() const {
@@ -91,17 +120,18 @@ unsigned int CTransaction::GetTotalSize() const {
     return ::GetSerializeSize(*this, PROTOCOL_VERSION);
 }
 
-std::string CTransaction::ToString() const {
+std::string CTransaction::ToString(bool fVerbose) const {
+    const std::string::size_type cutoff = fVerbose ? std::string::npos : 10;
     std::string str;
     str += strprintf("CTransaction(txid=%s, ver=%d, vin.size=%u, vout.size=%u, "
                      "nLockTime=%u)\n",
-                     GetId().ToString().substr(0, 10), nVersion, vin.size(),
+                     GetId().ToString().substr(0, cutoff), nVersion, vin.size(),
                      vout.size(), nLockTime);
     for (const auto &nVin : vin) {
-        str += "    " + nVin.ToString() + "\n";
+        str += "    " + nVin.ToString(fVerbose) + "\n";
     }
     for (const auto &nVout : vout) {
-        str += "    " + nVout.ToString() + "\n";
+        str += "    " + nVout.ToString(fVerbose) + "\n";
     }
     return str;
 }

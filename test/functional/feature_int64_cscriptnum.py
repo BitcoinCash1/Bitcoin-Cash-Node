@@ -53,8 +53,6 @@ from test_framework.util import assert_equal
 # Overflow failure
 OVERFLOW_ERROR_BAD_OPERAND = ('mandatory-script-verify-flag-failed '
                               '(Given operand is not a number within the valid range [-2^63 + 1, 2^63 - 1])')
-# Overflow if one of the operands coming in from a push off the stack is out-of-range (known issue with interpreter)
-OVERFLOW_ERROR_UNK = 'mandatory-script-verify-flag-failed (unknown error)'
 # OP_NUM2BIN failure when we try to encode a number that won't fit within the requested size
 IMPOSSIBLE_ENCODING_ERROR = 'mandatory-script-verify-flag-failed (The requested encoding is impossible to satisfy)'
 # OP_PICK if the index is out of bounds
@@ -361,7 +359,7 @@ class Int64CScriptNum(BitcoinTestFramework):
         tx0, tx = create_fund_and_spend_tx(ssextra, rsextra)
         node.p2p.send_txs_and_test([tx0], node)
         node.p2p.send_txs_and_test([tx], node, success=False, expect_disconnect=True,
-                                   reject_reason=OVERFLOW_ERROR_UNK)
+                                   reject_reason=OVERFLOW_ERROR_BAD_OPERAND)
         mempool += [tx0.hash]
         assert_equal(node.getrawmempool(), mempool)
         self.reconnect_p2p()  # we lost the connection from above bad tx, reconnect

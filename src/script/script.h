@@ -7,6 +7,7 @@
 
 #include <crypto/common.h>
 #include <prevector.h>
+#include <script/script_error.h>
 #include <serialize.h>
 
 #include <cassert>
@@ -36,7 +37,7 @@ static const int MAX_STACK_SIZE = 1000;
 
 // Threshold for nLockTime: below this value it is interpreted as block number,
 // otherwise as UNIX timestamp. Thresold is Tue Nov 5 00:53:20 1985 UTC
-static const unsigned int LOCKTIME_THRESHOLD = 500000000;
+static const uint32_t LOCKTIME_THRESHOLD = 500'000'000u;
 
 template <typename T> std::vector<uint8_t> ToByteVector(const T &in) {
     return std::vector<uint8_t>(in.begin(), in.end());
@@ -206,11 +207,23 @@ enum opcodetype {
     OP_OUTPUTVALUE = 0xcc,
     OP_OUTPUTBYTECODE = 0xcd,
 
-    OP_RESERVED3 = 0xce,
-    OP_RESERVED4 = 0xcf,
+    // Native Introspection of tokens (SCRIPT_ENABLE_TOKENS must be set)
+    OP_UTXOTOKENCATEGORY = 0xce,
+    OP_UTXOTOKENCOMMITMENT = 0xcf,
+    OP_UTXOTOKENAMOUNT = 0xd0,
+    OP_OUTPUTTOKENCATEGORY = 0xd1,
+    OP_OUTPUTTOKENCOMMITMENT = 0xd2,
+    OP_OUTPUTTOKENAMOUNT = 0xd3,
+
+    OP_RESERVED3 = 0xd4,
+    OP_RESERVED4 = 0xd5,
 
     // The first op_code value after all defined opcodes
     FIRST_UNDEFINED_OP_VALUE,
+
+    // Invalid opcode if executed, but used for special token prefix if at
+    // position 0 in scriptPubKey. See: primitives/token.h
+    SPECIAL_TOKEN_PREFIX = 0xef,
 
     INVALIDOPCODE = 0xff,   ///< Not a real OPCODE!
 };
@@ -227,9 +240,10 @@ const char *GetOpName(opcodetype opcode);
 bool CheckMinimalPush(const std::vector<uint8_t> &data, opcodetype opcode);
 
 struct scriptnum_error : std::runtime_error {
+    ScriptError scriptError;
     explicit
-    scriptnum_error(const std::string &str)
-        : std::runtime_error(str)
+    scriptnum_error(const std::string &str, ScriptError err = ScriptError::UNKNOWN)
+        : std::runtime_error(str), scriptError(err)
     {}
 };
 
@@ -594,10 +608,12 @@ private:
             throw scriptnum_error("maxIntegerSize cannot be greater than 8");
         }
         if (vch.size() > maxIntegerSize) {
-            throw scriptnum_error("script number overflow");
+            throw scriptnum_error("script number overflow",
+                                  maxIntegerSize == 8 ? ScriptError::INVALID_NUMBER_RANGE_64_BIT
+                                                      : ScriptError::INVALID_NUMBER_RANGE);
         }
         if (fRequireMinimal && ! IsMinimallyEncoded(vch, maxIntegerSize)) {
-            throw scriptnum_error("non-minimally encoded script number");
+            throw scriptnum_error("non-minimally encoded script number", ScriptError::MINIMALNUM);
         }
         return set_vch(vch);
     }
@@ -756,7 +772,20 @@ public:
         return (opcodetype)(OP_1 + n - 1);
     }
 
-    bool IsPayToScriptHash() const;
+    /**
+     * @brief IsPayToScriptHash - Returns true if this script follows the p2sh_20 (or p2sh_32) scriptPubKey template.
+     * @param flags - If SCRIPT_ENABLE_P2SH_32 is in flags, then we will also detect p2sh_32, otherwise we will never
+     *                detect p2sh_32 and return false for any p2sh_32 scriptPubKeys.
+     * @param hash_out - Optional out param. If not nullptr, and if the return value is true, then *hash_out will
+     *                   receive a copy of the actual hash bytes embedded in the scriptPubKey. Note that *hash_out is
+     *                   not modified on false return, and is only modified on true return.
+     * @param is_p2sh_32 - Optional out param.  If not nullptr, *is_p2sh_32 is set to false always unless
+     *                     SCRIPT_ENABLE_P2SH_32 is set in `flags` and the scriptPubKey in question follows the p2sh_32,
+     *                     scriptPubKey template, in which case *is_p2sh_32 is set to true.
+     * @return true if the script is p2sh_20, or true if flags contains SCRIPT_ENABLE_P2SH_32 and the script is p2sh_32,
+     *         false otherwise.
+     */
+    bool IsPayToScriptHash(uint32_t flags, std::vector<uint8_t> *hash_out = nullptr, bool *is_p2sh_32 = nullptr) const;
     bool IsPayToPubKeyHash() const;
     bool IsCommitment(const std::vector<uint8_t> &data) const;
     bool IsWitnessProgram(int &version, std::vector<uint8_t> &program) const;
@@ -776,10 +805,14 @@ public:
      * Returns whether the script is guaranteed to fail at execution, regardless
      * of the initial stack. This allows outputs to be pruned instantly when
      * entering the UTXO set.
+     *
+     * Note that this function is called by Consensus::CheckTxInputs in
+     * tx_verify.cpp, so modifying this function's pre/post conditions will
+     * modify consensus!
      */
     bool IsUnspendable() const {
-        return (size() > 0 && *begin() == OP_RETURN) ||
-               (size() > MAX_SCRIPT_SIZE);
+        const auto sz = size();
+        return (sz > 0u && *begin() == OP_RETURN) || (sz > MAX_SCRIPT_SIZE);
     }
 
     void clear() {

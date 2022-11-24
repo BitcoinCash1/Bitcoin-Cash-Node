@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2019 The Bitcoin developers
+// Copyright (c) 2017-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,9 +8,13 @@
 
 #include <amount.h>
 #include <feerate.h>
+#include <primitives/token.h> // Token & NFT support
 #include <primitives/txid.h>
 #include <script/script.h>
 #include <serialize.h>
+
+#include <algorithm>
+#include <utility> // for std::move
 
 static const int SERIALIZE_TRANSACTION = 0x00;
 
@@ -49,7 +53,7 @@ public:
         return !(a == b);
     }
 
-    std::string ToString() const;
+    std::string ToString(bool fVerbose = false) const;
 };
 
 /**
@@ -117,7 +121,7 @@ public:
 
     friend bool operator!=(const CTxIn &a, const CTxIn &b) { return !(a == b); }
 
-    std::string ToString() const;
+    std::string ToString(bool fVerbose = false) const;
 };
 
 /**
@@ -128,30 +132,50 @@ class CTxOut {
 public:
     Amount nValue;
     CScript scriptPubKey;
+    token::OutputDataPtr tokenDataPtr; ///< may be null (indicates no token data for this output)
 
     CTxOut() { SetNull(); }
 
-    CTxOut(Amount nValueIn, CScript scriptPubKeyIn)
-        : nValue(nValueIn), scriptPubKey(scriptPubKeyIn) {}
+    CTxOut(Amount nValueIn, const CScript &scriptPubKeyIn, const token::OutputDataPtr &tokenDataIn = {})
+        : nValue(nValueIn), scriptPubKey(scriptPubKeyIn), tokenDataPtr(tokenDataIn) {}
 
-    SERIALIZE_METHODS(CTxOut, obj) { READWRITE(obj.nValue, obj.scriptPubKey); }
+    CTxOut(Amount nValueIn, const CScript &scriptPubKeyIn, token::OutputDataPtr &&tokenDataIn)
+        : nValue(nValueIn), scriptPubKey(scriptPubKeyIn), tokenDataPtr(std::move(tokenDataIn)) {}
+
+    SERIALIZE_METHODS(CTxOut, obj) {
+        READWRITE(obj.nValue);
+        if (!ser_action.ForRead() && !obj.tokenDataPtr) {
+            // fast-path for writing with no token data, just write out the scriptPubKey directly
+            READWRITE(obj.scriptPubKey);
+        } else {
+            token::WrappedScriptPubKey wspk;
+            SER_WRITE(obj, token::WrapScriptPubKey(wspk, obj.tokenDataPtr, obj.scriptPubKey, s.GetVersion()));
+            READWRITE(wspk);
+            SER_READ(obj, token::UnwrapScriptPubKey(wspk, obj.tokenDataPtr, obj.scriptPubKey, s.GetVersion()));
+        }
+    }
 
     void SetNull() {
         nValue = -SATOSHI;
         scriptPubKey.clear();
+        tokenDataPtr.reset();
     }
 
     bool IsNull() const { return nValue == -SATOSHI; }
 
+    bool HasUnparseableTokenData() const {
+        return !tokenDataPtr && !scriptPubKey.empty() && scriptPubKey[0] == token::PREFIX_BYTE;
+    }
+
     friend bool operator==(const CTxOut &a, const CTxOut &b) {
-        return (a.nValue == b.nValue && a.scriptPubKey == b.scriptPubKey);
+        return a.nValue == b.nValue && a.scriptPubKey == b.scriptPubKey && a.tokenDataPtr == b.tokenDataPtr;
     }
 
     friend bool operator!=(const CTxOut &a, const CTxOut &b) {
         return !(a == b);
     }
 
-    std::string ToString() const;
+    std::string ToString(bool fVerbose = false) const;
 };
 
 class CMutableTransaction;
@@ -194,13 +218,22 @@ using CTransactionRef = std::shared_ptr<const CTransaction>;
 class CTransaction final {
 public:
     // Default transaction version.
-    static const int32_t CURRENT_VERSION = 2;
+    static constexpr int32_t CURRENT_VERSION = 2;
+
+    // Note: These two values are used until Upgrade9 activates (May 2023),
+    // after which time they will no longer be relevant since version
+    // enforcement will be done by the consensus layer.
+    static constexpr int32_t MIN_STANDARD_VERSION = 1, MAX_STANDARD_VERSION = 2;
 
     // Changing the default transaction version requires a two step process:
-    // first adapting relay policy by bumping MAX_STANDARD_VERSION, and then
+    // First adapting relay policy by bumping MAX_CONSENSUS_VERSION, and then
     // later date bumping the default CURRENT_VERSION at which point both
-    // CURRENT_VERSION and MAX_STANDARD_VERSION will be equal.
-    static const int32_t MAX_STANDARD_VERSION = 2;
+    // CURRENT_VERSION and MAX_CONSENSUS_VERSION will be equal.
+    //
+    // Note: These values are ignored until Upgrade9 (May 2023) is activated,
+    // after which time versions outside the range [MIN_CONSENSUS_VERSION,
+    // MAX_CONSENSUS_VERSION] are rejected by consensus.
+    static constexpr int32_t MIN_CONSENSUS_VERSION = 1, MAX_CONSENSUS_VERSION = 2;
 
     // The local variables are made const to prevent unintended modification
     // without updating the cached hash value. However, CTransaction is not
@@ -272,6 +305,21 @@ public:
         return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
+    /// @return true if this transaction has any vouts with non-null token::OutputData
+    bool HasTokenOutputs() const {
+        return std::any_of(vout.begin(), vout.end(), [](const CTxOut &out){ return bool(out.tokenDataPtr); });
+    }
+
+    /// @return true if any vouts have scriptPubKey[0] == token::PREFIX_BYTE,
+    /// and if the vout has tokenDataPtr == nullptr.  This indicates badly
+    /// formatted and/or unparseable token data embedded in the scriptPubKey.
+    /// Before token activation we allow such scriptPubKeys to appear in
+    /// vouts, but after activation of native tokens such txns are rejected by
+    /// consensus (see: CheckTxTokens() in consensus/tokens.cpp).
+    bool HasOutputsWithUnparseableTokenData() const {
+        return std::any_of(vout.begin(), vout.end(), [](const CTxOut &out){ return out.HasUnparseableTokenData(); });
+    }
+
     friend bool operator==(const CTransaction &a, const CTransaction &b) {
         return a.GetHash() == b.GetHash();
     }
@@ -280,7 +328,7 @@ public:
         return !(a == b);
     }
 
-    std::string ToString() const;
+    std::string ToString(bool fVerbose = false) const;
 };
 #if defined(__x86_64__)
 static_assert(sizeof(CTransaction) == 88,
@@ -325,6 +373,13 @@ public:
                            const CMutableTransaction &b) {
         return a.GetHash() == b.GetHash();
     }
+
+    /// Mutates this txn. Sorts the inputs according to BIP-69
+    void SortInputsBip69();
+    /// Mutates this txn. Sorts the outputs according to BIP-69
+    void SortOutputsBip69();
+    /// Convenience: Calls the above two functions.
+    void SortBip69() { SortInputsBip69(); SortOutputsBip69(); }
 };
 #if defined(__x86_64__)
 static_assert(sizeof(CMutableTransaction) == 56,
@@ -337,15 +392,6 @@ template <typename Tx>
 static inline CTransactionRef MakeTransactionRef(Tx &&txIn) {
     return std::make_shared<const CTransaction>(std::forward<Tx>(txIn));
 }
-
-/** Precompute sighash midstate to avoid quadratic hashing */
-struct PrecomputedTransactionData {
-    uint256 hashPrevouts, hashSequence, hashOutputs;
-
-    PrecomputedTransactionData() = default;
-
-    template <class T> explicit PrecomputedTransactionData(const T &tx);
-};
 
 /// A class that wraps a pointer to either a CTransaction or a
 /// CMutableTransaction and presents a uniform view of the minimal

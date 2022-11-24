@@ -4,12 +4,12 @@
 
 #include <wallet/psbtwallet.h>
 
+#include <policy/policy.h>
 #include <rpc/protocol.h>
 
-bool FillPSBT(const CWallet *pwallet, PartiallySignedTransaction &psbtx,
+bool FillPSBT(const CWallet *pwallet, PartiallySignedTransaction &psbtx, uint32_t scriptFlags,
               SigHashType sighash_type, bool sign, bool bip32derivs) {
     LOCK(pwallet->cs_wallet);
-    const auto context = std::nullopt; // no native introspection for wallet scripts (no smart contracts in wallet)
     // Get all of the previous transactions
     bool complete = true;
     for (size_t i = 0; i < psbtx.tx->vin.size(); ++i) {
@@ -48,7 +48,7 @@ bool FillPSBT(const CWallet *pwallet, PartiallySignedTransaction &psbtx,
 
         complete &=
             SignPSBTInput(HidingSigningProvider(pwallet, !sign, !bip32derivs),
-                          psbtx, i, sighash_type, context);
+                          psbtx, i, scriptFlags, sighash_type);
     }
 
     // Fill in the bip32 keypaths and redeemscripts for the outputs so that
@@ -61,9 +61,12 @@ bool FillPSBT(const CWallet *pwallet, PartiallySignedTransaction &psbtx,
         SignatureData sigdata;
         psbt_out.FillSignatureData(sigdata);
 
-        MutableTransactionSignatureCreator creator(&*psbtx.tx, 0, out.nValue, SigHashType().withFork());
+        const ScriptExecutionContext limitedContext(0u, out, *psbtx.tx);
 
-        ProduceSignature(HidingSigningProvider(pwallet, true, !bip32derivs), creator, out.scriptPubKey, sigdata, context);
+        TransactionSignatureCreator creator(limitedContext, SigHashType().withFork());
+
+        ProduceSignature(HidingSigningProvider(pwallet, true, !bip32derivs), creator, out.scriptPubKey, sigdata,
+                         scriptFlags);
         psbt_out.FromSignatureData(sigdata);
     }
     return complete;

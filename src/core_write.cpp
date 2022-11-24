@@ -17,6 +17,8 @@
 #include <util/strencodings.h>
 #include <util/system.h>
 
+#include <utility>
+
 UniValue ValueFromAmount(const Amount &amount) {
     bool sign = amount < Amount::zero();
     Amount n_abs(sign ? -amount : amount);
@@ -71,19 +73,27 @@ std::string FormatScript(const CScript &script) {
 const std::map<uint8_t, std::string> mapSigHashTypes = {
     {SIGHASH_ALL, "ALL"},
     {SIGHASH_ALL | SIGHASH_ANYONECANPAY, "ALL|ANYONECANPAY"},
+    {SIGHASH_ALL | SIGHASH_UTXOS, "ALL|UTXOS"},
+
     {SIGHASH_ALL | SIGHASH_FORKID, "ALL|FORKID"},
-    {SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_ANYONECANPAY,
-     "ALL|FORKID|ANYONECANPAY"},
+    {SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_ANYONECANPAY, "ALL|FORKID|ANYONECANPAY"},
+    {SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_UTXOS, "ALL|FORKID|UTXOS"},
+
     {SIGHASH_NONE, "NONE"},
     {SIGHASH_NONE | SIGHASH_ANYONECANPAY, "NONE|ANYONECANPAY"},
+    {SIGHASH_NONE | SIGHASH_UTXOS, "NONE|UTXOS"},
+
     {SIGHASH_NONE | SIGHASH_FORKID, "NONE|FORKID"},
-    {SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY,
-     "NONE|FORKID|ANYONECANPAY"},
+    {SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY,  "NONE|FORKID|ANYONECANPAY"},
+    {SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_UTXOS,  "NONE|FORKID|UTXOS"},
+
     {SIGHASH_SINGLE, "SINGLE"},
     {SIGHASH_SINGLE | SIGHASH_ANYONECANPAY, "SINGLE|ANYONECANPAY"},
+    {SIGHASH_SINGLE | SIGHASH_UTXOS, "SINGLE|UTXOS"},
+
     {SIGHASH_SINGLE | SIGHASH_FORKID, "SINGLE|FORKID"},
-    {SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY,
-     "SINGLE|FORKID|ANYONECANPAY"},
+    {SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY, "SINGLE|FORKID|ANYONECANPAY"},
+    {SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_UTXOS, "SINGLE|FORKID|UTXOS"},
 };
 
 std::string SighashToStr(uint8_t sighash_type) {
@@ -103,7 +113,7 @@ std::string SighashToStr(uint8_t sighash_type) {
  * pass true for scripts you believe could contain signatures. For example, pass
  * false, or omit the this argument (defaults to false), for scriptPubKeys.
  */
-std::string ScriptToAsmStr(const CScript &script, bool fAttemptSighashDecode, bool f64BitNums) {
+std::string ScriptToAsmStr(const CScript &script, bool fAttemptSighashDecode) {
     std::string str;
     opcodetype opcode;
     std::vector<uint8_t> vch;
@@ -118,8 +128,7 @@ std::string ScriptToAsmStr(const CScript &script, bool fAttemptSighashDecode, bo
             return str;
         }
 
-        size_t const maxScriptNumSize = f64BitNums ? CScriptNum::MAXIMUM_ELEMENT_SIZE_64_BIT
-                                                   : CScriptNum::MAXIMUM_ELEMENT_SIZE_32_BIT;
+        size_t const maxScriptNumSize = CScriptNum::MAXIMUM_ELEMENT_SIZE_64_BIT;
 
         if (0 <= opcode && opcode <= OP_PUSHDATA4) {
             if (vch.size() <= maxScriptNumSize) {
@@ -142,6 +151,10 @@ std::string ScriptToAsmStr(const CScript &script, bool fAttemptSighashDecode, bo
                         // to set the appropriate flag.
                         // TODO: Remove after the Hard Fork.
                         flags |= SCRIPT_ENABLE_SIGHASH_FORKID;
+                        if (vch.back() & SIGHASH_UTXOS) {
+                            // After activation of upgrade9, to ensure we parse SIGHASH_UTXOS correctly.
+                            flags |= SCRIPT_ENABLE_TOKENS;
+                        }
                     }
                     if (CheckTransactionSignatureEncoding(vch, flags,
                                                           nullptr)) {
@@ -176,17 +189,18 @@ std::string EncodeHexTx(const CTransaction &tx, const int serializeFlags) {
     return HexStr(ssTx);
 }
 
-UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address, bool f64BitNums) {
+UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address) {
     CTxDestination address;
-    bool extracted = include_address && ExtractDestination(script, address);
+    const uint32_t flags = STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32 | SCRIPT_ENABLE_TOKENS;
+    bool extracted = include_address && ExtractDestination(script, address, flags);
 
     UniValue::Object out;
     out.reserve(3 + extracted);
-    out.emplace_back("asm", ScriptToAsmStr(script, false, f64BitNums));
+    out.emplace_back("asm", ScriptToAsmStr(script, false));
     out.emplace_back("hex", HexStr(script));
 
     std::vector<std::vector<uint8_t>> solns;
-    out.emplace_back("type", GetTxnOutputType(Solver(script, solns)));
+    out.emplace_back("type", GetTxnOutputType(Solver(script, solns, flags)));
 
     if (extracted) {
         out.emplace_back("address", EncodeDestination(address, config));
@@ -196,9 +210,9 @@ UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool 
 }
 
 UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptPubKey, bool fIncludeHex,
-                                    bool fIncludeP2SH, bool f64BitNums) {
+                                    bool fIncludeP2SH) {
     UniValue::Object out;
-    out.emplace_back("asm", ScriptToAsmStr(scriptPubKey, false, f64BitNums));
+    out.emplace_back("asm", ScriptToAsmStr(scriptPubKey, false));
     if (fIncludeHex) {
         out.emplace_back("hex", HexStr(scriptPubKey));
     }
@@ -206,7 +220,8 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
     txnouttype type;
     std::vector<CTxDestination> addresses;
     int nRequired;
-    bool extracted = ExtractDestinations(scriptPubKey, type, addresses, nRequired);
+    const uint32_t flags = STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32 | SCRIPT_ENABLE_TOKENS;
+    bool extracted = ExtractDestinations(scriptPubKey, type, addresses, nRequired, flags);
 
     if (extracted) {
         out.emplace_back("reqSigs", nRequired);
@@ -226,14 +241,15 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
     if (fIncludeP2SH && type != TX_SCRIPTHASH) {
         // P2SH cannot be wrapped in a P2SH. If this script is already a P2SH,
         // don't return the address for a P2SH of the P2SH.
-        out.emplace_back("p2sh", EncodeDestination(CScriptID(scriptPubKey), config));
+        out.emplace_back("p2sh", EncodeDestination(ScriptID(scriptPubKey, false), config));
+        out.emplace_back("p2sh_32", EncodeDestination(ScriptID(scriptPubKey, true), config));
     }
 
     return out;
 }
 
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex,
-                          int serialize_flags, bool f64BitNums) {
+                          int serialize_flags) {
     bool include_blockhash = !hashBlock.IsNull();
 
     UniValue::Object entry;
@@ -257,7 +273,7 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
             in.emplace_back("vout", txin.prevout.GetN());
             UniValue::Object o;
             o.reserve(2);
-            o.emplace_back("asm", ScriptToAsmStr(txin.scriptSig, true, f64BitNums));
+            o.emplace_back("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.emplace_back("hex", HexStr(txin.scriptSig));
             in.emplace_back("scriptSig", std::move(o));
         }
@@ -270,10 +286,13 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
     vout.reserve(tx.vout.size());
     for (const CTxOut &txout : tx.vout) {
         UniValue::Object out;
-        out.reserve(3);
+        out.reserve(3u + unsigned(txout.tokenDataPtr));
         out.emplace_back("value", ValueFromAmount(txout.nValue));
         out.emplace_back("n", vout.size());
-        out.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, true, false, f64BitNums));
+        out.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, true));
+        if (txout.tokenDataPtr) {
+            out.emplace_back("tokenData", TokenDataToUniv(*txout.tokenDataPtr));
+        }
         vout.emplace_back(std::move(out));
     }
     entry.emplace_back("vout", std::move(vout));
@@ -289,4 +308,34 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
     }
 
     return entry;
+}
+
+UniValue::Object TokenDataToUniv(const token::OutputData &tok) {
+    UniValue::Object obj;
+    obj.reserve(tok.HasNFT() ? 3u : 2u);
+    obj.emplace_back("category", tok.GetId().ToString());
+    obj.emplace_back("amount", SafeAmountToUniv(tok.GetAmount()));
+    if (tok.HasNFT()) {
+        UniValue::Object nft_obj;
+        nft_obj.reserve(2u);
+
+        nft_obj.emplace_back("capability", [&tok] {
+            if (tok.IsMutableNFT()) return "mutable";
+            else if (tok.IsMintingNFT()) return "minting";
+            else return "none";
+        }());
+        nft_obj.emplace_back("commitment", HexStr(tok.GetCommitment()));
+
+        obj.emplace_back("nft", std::move(nft_obj));
+    }
+    return obj;
+}
+
+UniValue SafeAmountToUniv(const token::SafeAmount val) {
+    UniValue uv = val.getint64();
+    // This value may exceed the maximal safe JSON integer (~53 bits). Insist it be a string always instead.
+    // We will use UniValue's string serializer for ints since it is fast and locale-independent.
+    std::string numStr = uv.getValStr(); // note: to avoid UB, we must copy to temp obj first to assign it back to `uv`
+    uv = std::move(numStr);
+    return uv;
 }

@@ -44,13 +44,13 @@ ScriptExecutionContext::ScriptExecutionContext(unsigned input, const ScriptExecu
 }
 
 
-ScriptExecutionContext::ScriptExecutionContext(unsigned input, const CScript &scriptPubKey, Amount amount,
-                                               CTransactionView tx, uint32_t nHeight, bool isCoinbase)
+ScriptExecutionContext::ScriptExecutionContext(unsigned input, const CTxOut &utxo, CTransactionView tx,
+                                               uint32_t nHeight, bool isCoinbase)
     : nIn(input), limited(true)
 {
     assert(input < tx.vin().size());
     std::vector<Coin> coins(tx.vin().size());
-    coins[input] = Coin(CTxOut(amount, scriptPubKey), nHeight, isCoinbase);
+    coins[input] = Coin(utxo, nHeight, isCoinbase);
     shared = std::make_shared<Shared>(std::move(coins), tx);
 }
 

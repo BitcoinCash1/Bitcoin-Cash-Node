@@ -64,6 +64,7 @@ enum class ScriptError {
     CLEANSTACK,
     MINIMALIF,
     SIG_NULLFAIL,
+    MINIMALNUM,
 
     /* Schnorr */
     SIG_BADLENGTH,
