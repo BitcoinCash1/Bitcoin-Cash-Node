@@ -958,14 +958,16 @@ void SetupServerArgs() {
     gArgs.AddArg(
         "-upgrade9activationtime=<n>",
         strprintf("Activation time of the May 2023 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
-                  "default: %d)",
-                  defaultChainParams->GetConsensus().upgrade9ActivationTime),
+                  "default: %d, chipnet: %d)",
+                  defaultChainParams->GetConsensus().upgrade9ActivationTime,
+                  chipnetChainParams->GetConsensus().upgrade9ActivationTime),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-upgrade10activationtime=<n>",
         strprintf("Activation time of the tentative May 2024 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
-                  "default: %d)",
-                  defaultChainParams->GetConsensus().upgrade10ActivationTime),
+                  "default: %d, chipnet: %d)",
+                  defaultChainParams->GetConsensus().upgrade10ActivationTime,
+                  chipnetChainParams->GetConsensus().upgrade10ActivationTime),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-printtoconsole",

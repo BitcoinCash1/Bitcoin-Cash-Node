@@ -852,6 +852,9 @@ public:
         // November 15, 2022 12:00:00 UTC; protocol upgrade activates 6 months early
         consensus.upgrade9ActivationTime = 1668513600;
 
+        // November 15, 2023 12:00:00 UTC; tentative protocol upgrade activates 6 months early
+        consensus.upgrade10ActivationTime = 1700049600;
+
         // Default limit for block size (in bytes) (chipnet is like testnet4 in that it is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
 
