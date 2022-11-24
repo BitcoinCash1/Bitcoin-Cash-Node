@@ -225,6 +225,77 @@ BOOST_AUTO_TEST_CASE(rpc_createraw_op_return) {
                                  "{\"data\":\"68656c6c6f776f726c64\",\"data\":"
                                  "\"68656c6c6f776f726c64\"}"));
 
+    // Allow more than one data transaction output, array syntax
+    BOOST_CHECK_NO_THROW(CallRPC("createrawtransaction "
+                                 "[{\"txid\":"
+                                 "\"a3b807410df0b60fcb9736768df5823938b2f838694"
+                                 "939ba45f3c0a1bff150ed\",\"vout\":0}] "
+                                 "[{\"data\":\"68656c6c6f776f726c64\"},{\"data\":"
+                                 "\"68656c6c6f776f726c64\"}]"));
+
+    // Do not allow wrong data type
+    BOOST_CHECK_THROW(
+        CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":42})"),
+        std::runtime_error);
+
+    // Do not allow empty data array
+    BOOST_CHECK_THROW(
+        CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":[]})"),
+        std::runtime_error);
+
+    // Do not allow non string elements in data array
+    BOOST_CHECK_THROW(
+        CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":[42]})"),
+        std::runtime_error);
+
+    // Do not allow non string elements in data array at non-zero index too
+    BOOST_CHECK_THROW(
+        CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":["00",42]})"),
+        std::runtime_error);
+
+    // Check exact produced tx hex
+    BOOST_CHECK_EQUAL(CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":["68656c6c6f776f726c64","68656c6c6f776f726c64"]})").get_str(),
+
+                "0200000001ed50f1bfa1c0f345ba39496938f8b2383982f58d763697cb0fb6f00d4107b8a3000000000"
+                "0ffffffff010000000000000000176a0a68656c6c6f776f726c640a68656c6c6f776f726c6400000000");
+
+    // Check exact produced tx hex with 2 op_return outputs using data arrays
+    BOOST_CHECK_EQUAL(CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] {"data":"68656c6c6f776f726c64",)"
+                R"("data":["68656c6c6f776f726c64","68656c6c6f776f726c64"]})").get_str(),
+
+                "0200000001ed50f1bfa1c0f345ba39496938f8b2383982f58d763697cb0fb6f00d4107b8a3000000000"
+                "0ffffffff0200000000000000000c6a0a68656c6c6f776f726c640000000000000000176a0a68656c6c"
+                "6f776f726c640a68656c6c6f776f726c6400000000");
+
+    // Check exact produced tx hex with 2 op_return outputs using data arrays, array syntax
+    BOOST_CHECK_EQUAL(CallRPC("createrawtransaction "
+                R"([{"txid":)"
+                R"("a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed",)"
+                R"("vout":0}] [{"data":"68656c6c6f776f726c64"},)"
+                R"({"data":["68656c6c6f776f726c64","68656c6c6f776f726c64"]}])").get_str(),
+
+                "0200000001ed50f1bfa1c0f345ba39496938f8b2383982f58d763697cb0fb6f00d4107b8a3000000000"
+                "0ffffffff0200000000000000000c6a0a68656c6c6f776f726c640000000000000000176a0a68656c6c"
+                "6f776f726c640a68656c6c6f776f726c6400000000");
+
     // Key not "data" (bad address)
     BOOST_CHECK_THROW(
         CallRPC("createrawtransaction "

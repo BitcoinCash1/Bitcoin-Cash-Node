@@ -494,10 +494,26 @@ CMutableTransaction ConstructTransaction(const CChainParams &params,
     }
     for (auto &entry : *outputs) {
         if (entry.first == "data") {
-            std::vector<uint8_t> data = ParseHexV(entry.second, "Data");
+            CScript &script = rawTx.vout.emplace_back(Amount::zero(), CScript{}).scriptPubKey;
+            script << OP_RETURN;
 
-            CTxOut out(Amount::zero(), CScript() << OP_RETURN << data);
-            rawTx.vout.push_back(out);
+            if (entry.second.isArray()) {
+                const UniValue::Array& dataChunks = entry.second.get_array();
+                if (dataChunks.size() == 0) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "data array must contain at least one element");
+                }
+
+                for (const auto& chunk : dataChunks) {
+                    if (!chunk.isStr()) {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "data array element must be hexadecimal string");
+                    }
+                    script << ParseHexV(chunk, "data array element");
+                }
+            } else if (entry.second.isStr()) {
+                script << ParseHexV(entry.second, "data");
+            } else {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "data must be either a hexadecimal string or an array of hexadecimal strings");
+            }
         } else {
             CTxDestination destination = DecodeDestination(entry.first, params);
             if (!IsValidDestination(destination)) {
@@ -602,7 +618,7 @@ static UniValue createrawtransaction(const Config &config,
                             GetAlternateAddressObjectOutputArgSpec(),
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
-                                    {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},
+                                    {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is a hex-encoded data string or an array of hex-encoded data strings (each item yields a separate data push)"},
                                 },
                                 },
                         },
@@ -1768,7 +1784,7 @@ static UniValue createpsbt(const Config &config,
                             GetAlternateAddressObjectOutputArgSpec(),
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
-                                    {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},
+                                    {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is a hex-encoded data string or an array of hex-encoded data strings (each item yields a separate data push)"},
                                 },
                                 },
                         },
