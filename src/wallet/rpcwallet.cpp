@@ -4359,7 +4359,7 @@ static UniValue walletcreatefundedpsbt(const Config &config,
                                 },
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
-                                    {"data", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},
+                                    {"data", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is a hex-encoded data string or an array of hex-encoded data strings (each item yields a separate data push)"},
                                 },
                             },
                         },

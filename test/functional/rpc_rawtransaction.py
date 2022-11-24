@@ -132,16 +132,22 @@ class RawTransactionsTest(BitcoinTestFramework):
         # Should not throw for backwards compatibility
         self.nodes[0].createrawtransaction(inputs=[], outputs={})
         self.nodes[0].createrawtransaction(inputs=[], outputs=[])
-        assert_raises_rpc_error(-8, "Data must be hexadecimal string",
+        assert_raises_rpc_error(-8, "data must be hexadecimal string",
                                 self.nodes[0].createrawtransaction, [], {'data': 'foo'})
-        assert_raises_rpc_error(-8, "Data must be hexadecimal string",
+        assert_raises_rpc_error(-8, "data must be either a hexadecimal string or an array of hexadecimal strings",
                                 self.nodes[0].createrawtransaction, [], {'data': None})
-        assert_raises_rpc_error(-8, "Data must be hexadecimal string",
+        assert_raises_rpc_error(-8, "data must be either a hexadecimal string or an array of hexadecimal strings",
                                 self.nodes[0].createrawtransaction, [], {'data': 1234})
-        assert_raises_rpc_error(-8, "Data must be hexadecimal string",
+        assert_raises_rpc_error(-8, "data must be hexadecimal string",
                                 self.nodes[0].createrawtransaction, [], {'data': '9'})
-        assert_raises_rpc_error(-8, "Data must be hexadecimal string",
+        assert_raises_rpc_error(-8, "data must be hexadecimal string",
                                 self.nodes[0].createrawtransaction, [], {'data': ''})
+        assert_raises_rpc_error(-8, "data array element must be hexadecimal string",
+                                self.nodes[0].createrawtransaction, [], {'data': [1234]})
+        assert_raises_rpc_error(-8, "data array element must be hexadecimal string",
+                                self.nodes[0].createrawtransaction, [], {'data': ['9']})
+        assert_raises_rpc_error(-8, "data array must contain at least one element",
+                                self.nodes[0].createrawtransaction, [], {'data': []})
         assert_raises_rpc_error(-5, "Invalid Bitcoin Cash address",
                                 self.nodes[0].createrawtransaction, [], {'foo': 0})
         assert_raises_rpc_error(-3, "Invalid amount",
