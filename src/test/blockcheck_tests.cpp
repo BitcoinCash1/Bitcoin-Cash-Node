@@ -3,9 +3,12 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chainparams.h>
+#include <clientversion.h>
 #include <config.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
+#include <span.h>
+#include <streams.h>
 #include <validation.h>
 
 #include <test/setup_common.h>
@@ -99,6 +102,69 @@ BOOST_AUTO_TEST_CASE(blockfail) {
     tx.vin[0].prevout = InsecureRandOutPoint();
     block.vtx.push_back(MakeTransactionRef(tx));
     RunCheckOnBlock(config, block, "bad-blk-length");
+}
+
+BOOST_AUTO_TEST_CASE(blockserialization) {
+    // While we have different serialization schemes for disk and network serialization,
+    // for blocks in particular we want all schemes to produce the exact same data.
+    // This test case serves the purpose of checking this. If ever this test fails, then
+    // the fast ReadRawBlockFromDisk() function may not be used as an optimization for
+    // serving blocks on the p2p network. (See: validation.cpp and net_processing.cpp).
+
+    GlobalConfig config;
+
+    CBlock block;
+    CMutableTransaction tx;
+
+
+    // Lets produce a block with a coinbase and two transactions.
+    // Coinbase.
+    tx.vin.resize(1);
+    tx.vin[0].scriptSig.resize(10);
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 42 * SATOSHI;
+    const CTransaction coinbaseTx(tx);
+
+    block.vtx.resize(1);
+    tx = CMutableTransaction(coinbaseTx);
+    block.vtx[0] = MakeTransactionRef(tx);
+    size_t maxTxCount = 2;
+
+    for (size_t i = 1; i < maxTxCount; i++) {
+        tx.vin[0].prevout = InsecureRandOutPoint();
+        block.vtx.push_back(MakeTransactionRef(tx));
+    }
+
+    // Check block validity.
+    RunCheckOnBlock(config, block);
+
+    // Check that block is serialized to the same binary data when using SER_NETWORK and SER_DISK
+    CDataStream networkBlockData(SER_NETWORK, PROTOCOL_VERSION);
+    networkBlockData << block;
+
+    CDataStream diskBlockData(SER_DISK, PROTOCOL_VERSION);
+    diskBlockData << block;
+
+    BOOST_REQUIRE(Span{networkBlockData} == Span{diskBlockData});
+
+    // Check that blocks deserialized from binary data when using SER_NETWORK and SER_DISK are same objects
+    CBlock networkBlock;
+    CBlock diskBlock;
+
+    std::vector<uint8_t> data(diskBlockData.begin(), diskBlockData.end());
+    CDataStream networkBlockDS(data, SER_NETWORK, PROTOCOL_VERSION);
+    networkBlockDS >> networkBlock;
+
+    CDataStream diskBlockDS(data, SER_DISK, PROTOCOL_VERSION);
+    diskBlockDS >> diskBlock;
+
+    // Deeply check that both blocks are equal
+    BOOST_REQUIRE(networkBlock.GetHash() == diskBlock.GetHash());
+    BOOST_REQUIRE(networkBlock.vtx.size() == diskBlock.vtx.size());
+    for (size_t i = 0; i < networkBlock.vtx.size(); ++i) {
+        BOOST_REQUIRE(*networkBlock.vtx[i] == *diskBlock.vtx[i]);
+    }
+    BOOST_REQUIRE_EQUAL(block.ToString(), diskBlock.ToString());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

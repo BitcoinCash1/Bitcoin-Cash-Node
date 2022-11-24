@@ -866,6 +866,12 @@ void SetupServerArgs() {
                   defaultChainParams->DefaultConsistencyChecks(),
                   regtestChainParams->DefaultConsistencyChecks()),
         ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    gArgs.AddArg("-checkblockreads",
+                 strprintf("Do extra sanity checking for blocks read from disk that are to be served up for the p2p"
+                           " network. This option is intented for testing and may negatively impact performance."
+                           " (default: %u, regtest: %u)", defaultChainParams->DefaultConsistencyChecks(),
+                           regtestChainParams->DefaultConsistencyChecks()),
+                 ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-checkmempool=<n>",
         strprintf(
@@ -1789,6 +1795,7 @@ bool AppInitParameterInteraction(Config &config) {
     }
     fCheckBlockIndex = gArgs.GetBoolArg("-checkblockindex",
                                         chainparams.DefaultConsistencyChecks());
+    fCheckBlockReads = gArgs.GetBoolArg("-checkblockreads", chainparams.DefaultConsistencyChecks());
     fCheckpointsEnabled =
         gArgs.GetBoolArg("-checkpoints", DEFAULT_CHECKPOINTS_ENABLED);
     if (fCheckpointsEnabled) {

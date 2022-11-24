@@ -86,7 +86,7 @@ public:
     int GetDefaultPort() const { return nDefaultPort; }
 
     const CBlock &GenesisBlock() const { return genesis; }
-    /** Default value for -checkmempool and -checkblockindex argument */
+    /** Default value for -checkmempool, -checkblockindex, and -checkblockreads arguments */
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
     /** Policy: Filter transactions that do not match well-defined patterns */
     bool RequireStandard() const { return fRequireStandard; }
