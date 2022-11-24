@@ -7,7 +7,11 @@
 #include <test/scriptflags.h>
 #include <util/string.h>
 
+#ifndef NO_BOOST
 #include <boost/test/unit_test.hpp>
+#else
+#include <cassert>
+#endif
 
 #include <map>
 #include <vector>
@@ -46,10 +50,15 @@ uint32_t ParseScriptFlags(const std::string &strFlags) {
     Split(words, strFlags, ",");
 
     for (const std::string &word : words) {
-        if (!mapFlagNames.count(word)) {
+        const auto it = mapFlagNames.find(word);
+        if (it == mapFlagNames.end()) {
+#ifndef NO_BOOST
             BOOST_ERROR("Bad test: unknown verification flag '" << word << "'");
+#else
+            assert(!"Bad test: unknown verification flag");
+#endif
         }
-        flags |= mapFlagNames[word];
+        flags |= it->second;
     }
 
     return flags;
