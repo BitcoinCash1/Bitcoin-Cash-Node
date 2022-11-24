@@ -9,11 +9,12 @@ There are currently three test networks that you can access with BCHN:
 - testnet3 (historical testnet)
 - testnet4
 - scalenet
+- chipnet
 
 These test network are maintained and supported by the wider community
 of protocol developers. They can be accessed by running the software
-(daemon, GUI and CLI) with `-testnet`, `-testnet4` and `-scalenet`
-arguments, respectively.
+(daemon, GUI and CLI) with `-testnet`, `-testnet4`, `-scalenet` and
+`-chipnet` arguments, respectively.
 
 Other software clients may have additional test network definitions compiled
 into them but these are not currently supported by BCHN and could not be
@@ -31,12 +32,20 @@ BTC's testnet3 since 2017. It has grown substantially in size
 of 32MB blocks, and due to the resulting time to sync a test node from
 scratch, has become inconvenient for quick tests.
 
+The historical role is as a test network where application builders can
+test their apps against the currently deployed consensus rules (as much
+as possible) and at minimal expense without disrupting the main network.
+
 Testnet4
 --------
 
 Testnet4 is a testnet3 replacement (starting from a fresh genesis block)
 intended to be kept light-weight and quick to sync, in other words free of
 big block 'spam'.
+
+It continues the role of a test network where application builders can
+test their apps against most of the currently deployed mainnet consensus
+at minimal expense without disrupting the main network.
 
 Testnet4 has a reduced default blocksize to discourage high throughput and
 difficulty algorithm settings adjusted to make sure it recovers to be
@@ -65,38 +74,50 @@ or a $500 desktop computer for the near future. Any tests that target higher
 performance levels are encouraged to do so by forking off of scalenet or
 creating their own private testnets or regtest networks.
 
+Chipnet
+-------
+
+Chipnet is intended as a place to test against upcoming Cash Improvement
+Proposals (CHIPs) which are intended to be activated in the next main network
+consensus upgrade.
+
+It therefore deploys these CHIPs (and updates to them) as much in advance as
+possible (optimally 6 months ahead of the main network upgrades).
+
 Overview Table for BCHN-supported Test Networks
 -----------------------------------------------
 
-| Attribute/Network            |  testnet3   |   testnet4   |  scalenet   |
-|------------------------------|-------------|--------------|-------------|
-| Default p2p port             |  18333      |  28333       |  38333      |
-| Network magic bytes          |  0xf4e5f3f4 |  0xe2b7daaf  |  0xc3afe1a2 |
-| CashAddr prefix              |  bchtest    |  bchtest     |  bchtest    |
-| Default excessive block size |  32MB       |  2MB         |  256MB      |
-| Block Target spacing         |  10 min     |  10 min      |  10 min     |
-| POW limit                    |  2^224      |  2^224       |  2^224      |
-| ASERT half-life              |  1 hour     |  1 hour      |  2 days     |
-| Allow min diff blocks        |  yes        |  yes         |  yes        |
-| Require standard txs         |  no         |  yes         |  no         |
-| Default consist. chks.       |  no         |  no          |  no         |
-| Halving interval (blks)      |  210000     |  210000      |  210000     |
-| BIP16 height                 |  514        |  1           |  1          |
-| BIP34 height                 |  21111      |  2           |  2          |
-| BIP65 height                 |  581885     |  3           |  3          |
-| BIP66 height                 |  330776     |  4           |  4          |
-| CSV height                   |  770112     |  5           |  5          |
-| UAHF (BCH fork) height       |  1155875    |  6           |  6          |
-| Nov 13 2017 HF height        |  1188697    |  3000        |  3000       |
-| Nov 15 2018 HF height        |  1267996    |  4000        |  4000       |
-| Nov 15 2019 HF height        |  1341711    |  5000        |  5000       |
-| May 15 2020 HF height        |  1378460    |  0 (Note 1)  |  0 (Note 1) |
-| Nov 15 2020 HF height        |  1421482    |  16845       |  variable (Note 2) |
-| Base58 prefix: pubkey        |  1, 111     |  1, 111      |  1, 111     |
-| Base58 prefix: script        |  1, 196     |  1, 196      |  1, 196     |
-| Base58 prefix: seckey        |  1, 239     |  1, 239      |  1, 239     |
-| Base58 p: ext. pubkey        |  0x043587cf |  0x043587cf  |  0x043587cf |
-| Base58 p: ext. seckey        |  0x04358394 |  0x04358394  |  0x04358394 |
+| Attribute/Network            |  testnet3   |   testnet4   |  scalenet   |   chipnet   |
+|------------------------------|-------------|--------------|-------------|-------------|
+| Default p2p port             |  18333      |  28333       |  38333      |  48333      |
+| Network magic bytes          |  0xf4e5f3f4 |  0xe2b7daaf  |  0xc3afe1a2 |  0xe2b7daaf |
+| CashAddr prefix              |  bchtest    |  bchtest     |  bchtest    |  bchtest    |
+| Default excessive block size |  32MB       |  2MB         |  256MB      |  2MB        |
+| Block Target spacing         |  10 min     |  10 min      |  10 min     |  10 min     |
+| POW limit                    |  2^224      |  2^224       |  2^224      |  2^224      |
+| ASERT half-life              |  1 hour     |  1 hour      |  2 days     |  1 hour     |
+| Allow min diff blocks        |  yes        |  yes         |  yes        |  yes        |
+| Require standard txs         |  no         |  yes         |  no         |  yes        |
+| Default consist. chks.       |  no         |  no          |  no         |  no         |
+| Halving interval (blks)      |  210000     |  210000      |  210000     |  210000     |
+| BIP16 height                 |  514        |  1           |  1          |  1          |
+| BIP34 height                 |  21111      |  2           |  2          |  2          |
+| BIP65 height                 |  581885     |  3           |  3          |  3          |
+| BIP66 height                 |  330776     |  4           |  4          |  4          |
+| CSV height                   |  770112     |  5           |  5          |  5          |
+| UAHF (BCH fork) height       |  1155875    |  6           |  6          |  6          |
+| Nov 13 2017 HF height        |  1188697    |  3000        |  3000       |  3000       |
+| Nov 15 2018 HF height        |  1267996    |  4000        |  4000       |  4000       |
+| Nov 15 2019 HF height        |  1341711    |  5000        |  5000       |  5000       |
+| May 15 2020 HF height        |  1378460    |  0 (Note 1)  |  0 (Note 1) |  0 (Note 1) |
+| Nov 15 2020 HF height        |  1421482    |  16845       |  variable (Note 2) |  16845      |
+| May 15 2021 HF height        |  1447364    |  42946       |  34071      |  42946      |
+| May 15 2022 HF height        |  1500206    |  95465       |  36060      |  95465      |
+| Base58 prefix: pubkey        |  1, 111     |  1, 111      |  1, 111     |  1, 111     |
+| Base58 prefix: script        |  1, 196     |  1, 196      |  1, 196     |  1, 196     |
+| Base58 prefix: seckey        |  1, 239     |  1, 239      |  1, 239     |  1, 239     |
+| Base58 p: ext. pubkey        |  0x043587cf |  0x043587cf  |  0x043587cf |  0x043587cf |
+| Base58 p: ext. seckey        |  0x04358394 |  0x04358394  |  0x04358394 |  0x04358394 |
 
 Note 1: set to 0 because historical sigop code has been removed from BCHN
         See chainparams.cpp for more detailed comments.
@@ -111,3 +132,4 @@ Further references
 ------------------
 
 1. <https://bitcoincashresearch.org/t/testnet4-and-scalenet/148>
+2. <https://bitcoincashresearch.org/t/staging-chips-on-testnet/573>
