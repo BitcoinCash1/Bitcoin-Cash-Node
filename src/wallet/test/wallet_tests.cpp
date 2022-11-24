@@ -657,8 +657,8 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
                            token::SafeAmount::fromIntUnchecked(1234),
                            token::NFTCommitment{5u, uint8_t{3}}, true, true, true),
                       tok2(token::Id{uint256S("00112233445577001122334455770011223344557700112233445578")},
-                                   token::SafeAmount::fromIntUnchecked(1235),
-                                   token::NFTCommitment{5u, uint8_t{3}}, true, false, false);
+                           token::SafeAmount::fromIntUnchecked(1235),
+                           token::NFTCommitment{5u, uint8_t{3}}, true, false, false);
 
 
     std::vector<CRecipient> recipients{{

@@ -2835,7 +2835,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     BOOST_CHECK(!SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(),
                                STANDARD_SCRIPT_VERIFY_FLAGS & ~SCRIPT_ENABLE_P2SH_32, context));
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(),
-                               STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32, context));
+                              STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32, context));
     scriptSig = DataFromTransaction(ScriptExecutionContext{0, txFrom.vout[0], txTo},
                                     STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);

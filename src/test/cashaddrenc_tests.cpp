@@ -121,13 +121,13 @@ BOOST_AUTO_TEST_CASE(encode_decode) {
     for (auto dst : toTest) {
         for (auto net : GetNetworks()) {
             const auto netParams = CreateChainParams(net);
-            for (int tokenAware = 0; tokenAware < 2; ++tokenAware) {
+            for (const bool tokenAware : {false, true}) {
                 std::string encoded = EncodeCashAddr(dst, *netParams, tokenAware);
                 bool decodedTokenAware{};
                 CTxDestination decoded = DecodeCashAddr(encoded, *netParams, &decodedTokenAware);
                 BOOST_CHECK(dst == decoded);
                 if (IsValidDestination(decoded)) {
-                    BOOST_CHECK_EQUAL(bool(tokenAware), decodedTokenAware);
+                    BOOST_CHECK_EQUAL(tokenAware, decodedTokenAware);
                 }
             }
         }
@@ -149,7 +149,7 @@ BOOST_AUTO_TEST_CASE(invalid_on_wrong_network) {
                 continue;
             }
 
-            for (int tokenAware = 0; tokenAware < 2; ++tokenAware) {
+            for (const bool tokenAware : {false, true}) {
                 std::string encoded = EncodeCashAddr(dst, *netParams, tokenAware);
                 CTxDestination decoded = DecodeCashAddr(encoded, *otherNetParams);
 
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(invalid_on_wrong_network) {
                 BOOST_CHECK_MESSAGE(decoded == invalidDst,
                                     strprintf("Checking that addresses for net \"%s\" are invalid for net \"%s\", "
                                               "token-aware: %i",
-                                              net, otherNet, tokenAware));
+                                              net, otherNet, int(tokenAware)));
             }
         }
     }
@@ -174,15 +174,15 @@ BOOST_AUTO_TEST_CASE(random_dst) {
         const CTxDestination dst_key = CKeyID(hash);
         const CTxDestination dst_scr = ScriptID(hash);
 
-        for (int tokenAware = 0; tokenAware < 2; ++tokenAware) {
+        for (const bool tokenAware : {false, true}) {
             const std::string encoded_key = EncodeCashAddr(dst_key, *params, tokenAware);
             bool decodedTokenAware{};
             const CTxDestination decoded_key = DecodeCashAddr(encoded_key, *params, &decodedTokenAware);
-            BOOST_CHECK_EQUAL(bool(tokenAware), decodedTokenAware);
+            BOOST_CHECK_EQUAL(tokenAware, decodedTokenAware);
 
             const std::string encoded_scr = EncodeCashAddr(dst_scr, *params, tokenAware);
             const CTxDestination decoded_scr = DecodeCashAddr(encoded_scr, *params, &decodedTokenAware);
-            BOOST_CHECK_EQUAL(bool(tokenAware), decodedTokenAware);
+            BOOST_CHECK_EQUAL(tokenAware, decodedTokenAware);
 
             std::string err("cashaddr failed for hash: ");
             err += hash.ToString();
