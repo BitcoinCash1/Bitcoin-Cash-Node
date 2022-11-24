@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2014-2019 The Bitcoin Core developers
 # Copyright (c) 2017-2020 The Bitcoin developers
+# Copyright (c) 2022 The Bitcoin Cash Node developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Run regression test suite.
@@ -268,7 +269,8 @@ def main():
     else:
         # No individual tests have been specified.
         # Run all tests that do not exceed
-        test_list = all_scripts
+        # Skip ui tests (those with names starting with "ui")
+        test_list = [script for script in all_scripts if script[:2] != "ui"]
 
         if args.extended:
             cutoff = sys.maxsize
@@ -645,7 +647,7 @@ def check_script_prefixes(all_scripts):
     LEEWAY = 10
 
     good_prefixes_re = re.compile(
-        "(bchn[_-])?(example|feature|interface|mempool|mining|p2p|rpc|wallet|tool)[_-]")
+        "(bchn[_-])?(example|feature|interface|mempool|mining|p2p|rpc|wallet|tool|ui)[_-]")
     bad_script_names = [
         script for script in all_scripts if good_prefixes_re.match(script) is None]
 

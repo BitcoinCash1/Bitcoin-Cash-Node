@@ -718,7 +718,8 @@ test-aarch64-functional:
         - export NON_TESTS="example_test|test_runner|combine_logs|create_cache"
         - export LONG_TESTS="abc-p2p-compactblocks|abc-p2p-fullblocktest|feature_block|feature_dbcrash|feature_pruning|mining_getblocktemplate_longpoll|p2p_timeouts|wallet_backup"
         - export EXCLUDED_TESTS="getblocktemplate_errors|getblocktemplate-timing"
-        - (cd build; test/functional/test_runner.py `ls -1 ../test/functional/*.py | xargs -n 1 basename | egrep -v "($NON_TESTS|$LONG_TESTS|$EXCLUDED_TESTS)"`)
+        - export UI_TESTS=`ls -1 test/functional/*.py | xargs -n 1 basename | grep ^ui | tr '\n' '|' | sed 's/|$//'`
+        - (cd build; test/functional/test_runner.py `ls -1 ../test/functional/*.py | xargs -n 1 basename | egrep -v "($NON_TESTS|$LONG_TESTS|$EXCLUDED_TESTS|$UI_TESTS)"`)
     dependencies:
         - build-aarch64
     artifacts:

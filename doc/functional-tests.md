@@ -4,11 +4,14 @@ The [/test/](/test/) directory contains integration tests that test bitcoind
 and its utilities in their entirety. It does not contain unit tests, which
 can be found in [/src/test](/src/test), [/src/wallet/test](/src/wallet/test), etc.
 
-There are currently two sets of tests in the [/test/](/test/) directory:
+There are currently three sets of tests in the [/test/](/test/) directory:
 
 - [functional](/test/functional) which test the functionality of
   bitcoind and bitcoin-qt by interacting with them through the RPC and P2P
   interfaces.
+- [ui](/test/functional/ui*) which test the UI functionality of
+  bitcoin-qt by instructing the user to follow a test plan to
+  reproduce the state of bitcoin-qt graphical user interface.
 - [util](/test/util) which tests the bitcoin utilities, currently only
   bitcoin-tx.
 
@@ -191,6 +194,79 @@ variable `PYTHONWARNINGS` as follow:
 `PYTHONWARNINGS=default::DeprecationWarning`
 
 The warning message will now be printed to the `sys.stderr` output.
+
+### UI tests
+
+UI tests are a subset of functional tests and can be scripted in a similar way.
+
+They are meant to be a helper during development and a tool to achieve and
+verify a certain state of bitcon-qt GUI.
+
+These tests are not included into CI (continuous integration) suite or tests
+ran when invoking `ninja check-all`.
+
+All UI test file names shall have `ui_` or `ui-` prefixed. For example:
+`ui-example-test.py`
+
+UI framework's `RunTestPlan` function takes test steps and an instance of a test class implementing `BitcoinTestFramework`
+
+It expands the instance and embeds a `testPlan` attribute into it to connect the test plan and the test.
+
+Upon initializaion the `main` method of the test class will be called for the test execution.
+
+Test class shall use `self.testPlan.waitUntilMaxReachedStep` to declare test breakpoints
+and wait for user input to advance the test.
+
+Test plan window will become irresponsive upon test logic execution and user must allow the test steps
+to be finished before advancing to the next step
+
+To implement an example UI test one can start with te following bolerplate code:
+
+```python
+from test_framework.test_framework import BitcoinTestFramework
+from test_framework.ui import RunTestPlan
+
+class UITestFramework(BitcoinTestFramework):
+    def set_test_params(self):
+        self.num_nodes = 1
+        self.extra_args = [["-splash=0", "-ui"]]
+
+    def run_test(self):
+        # self.meaninfulWork()
+        self.testPlan.waitUntilMaxReachedStep(1)
+
+        # self.moreMeaningfulWork()
+        self.testPlan.waitUntilMaxReachedStep(2)
+
+if __name__ == '__main__':
+    steps = [{
+                'description': "Be a good guy"
+            }, {
+                'description': "Have a nice day"
+            }]
+
+    framework = UITestFramework()
+    RunTestPlan(steps, framework)
+```
+
+#### Dependencies
+
+Running UI tests requires pyqt5 package:
+
+- On Unix, run `sudo apt-get install python3-pyqt5`
+- On mac OS, run `brew install pyqt5`
+
+#### Running the tests
+
+UI tests are meant to be executed individually:
+
+```
+test/functional/test_runner.py ui-example-test
+```
+
+#### Troubleshooting and debugging test failures
+
+Same as for function tests.
 
 ### Util tests
 
