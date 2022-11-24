@@ -49,7 +49,7 @@ CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
         }
     }
 
-    return CBlockLocator(vHave);
+    return CBlockLocator(std::move(vHave));
 }
 
 const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
