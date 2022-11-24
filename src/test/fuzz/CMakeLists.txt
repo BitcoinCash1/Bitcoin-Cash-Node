@@ -8,6 +8,7 @@ macro(add_fuzz_target TARGET EXE_NAME)
 	)
 	set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME ${EXE_NAME})
 
+	target_compile_definitions(${TARGET} PRIVATE NO_BOOST)
 	target_link_libraries(${TARGET} server common)
 
 	add_dependencies(bitcoin-fuzzers ${TARGET})
@@ -62,4 +63,5 @@ add_fuzz_target(
 	# Sources
 	fuzz.cpp
 	script_flags.cpp
+	../scriptflags.cpp
 )

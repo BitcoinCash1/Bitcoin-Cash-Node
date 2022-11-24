@@ -1,13 +1,19 @@
 // Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <streams.h>
+#include <test/scriptflags.h>
+#include <tinyformat.h>
+#include <util/strencodings.h>
 #include <version.h>
 
 #include <test/fuzz/fuzz.h>
+
+#include <cstdio>
 
 /** Flags that are not forbidden by an assert */
 static bool IsValidFlagCombination(uint32_t flags);
@@ -70,7 +76,21 @@ void test_one_input(std::vector<uint8_t> buffer) {
                 VerifyScript(tx.vin.at(i).scriptSig, prevout.scriptPubKey, verify_flags, checker, &serror_fuzzed);
             assert(ret_fuzzed == (serror_fuzzed == ScriptError::OK));
 
-            assert(IsExpected(ret, ret_fuzzed, pre_fuzz_verify_flags, serror, verify_flags, serror_fuzzed));
+            if ( ! IsExpected(ret, ret_fuzzed, pre_fuzz_verify_flags, serror, verify_flags, serror_fuzzed)) {
+                std::fprintf(stderr, "---> Unexpected result for script re-evaluation: %s\n",
+                             strprintf("ret: %i, ret_fuzzed: %i, serror: %s, serror_fuzzed: %s\n"
+                                       "flags       : %x -> %s\n"
+                                       "flags_fuzzed: %x -> %s\n"
+                                       "scriptSig (hex): %s\n"
+                                       "scriptPubKey (hex): %s\n",
+                                       int(ret), int(ret_fuzzed),
+                                       ScriptErrorString(serror), ScriptErrorString(serror_fuzzed),
+                                       pre_fuzz_verify_flags, FormatScriptFlags(pre_fuzz_verify_flags),
+                                       verify_flags, FormatScriptFlags(verify_flags),
+                                       HexStr(tx.vin.at(i).scriptSig),
+                                       HexStr(prevout.scriptPubKey)).c_str());
+                assert(!"Unexpected result during re-evaluation of script with different flags. Please check the log.");
+            }
         }
     } catch (const std::ios_base::failure &) {
         return;
