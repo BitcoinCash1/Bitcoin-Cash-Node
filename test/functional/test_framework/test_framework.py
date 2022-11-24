@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2014-2019 The Bitcoin Core developers
+# Copyright (c) 2022 The Bitcoin Cash Node developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
@@ -155,6 +156,13 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         self.config = config
         self.options.bitcoind = os.getenv(
             "BITCOIND", default=config["environment"]["BUILDDIR"] + '/src/bitcoind' + config["environment"]["EXEEXT"])
+        if sys.platform == "darwin":
+            self.options.bitcoinqt = os.getenv(
+                "BITCOINQT", default=config["environment"]["BUILDDIR"] + '/src/qt/BitcoinCashNode-Qt.app/Contents/MacOS/BitcoinCashNode-Qt' + config["environment"]["EXEEXT"])
+        else:
+            self.options.bitcoinqt = os.getenv(
+                "BITCOINQT", default=config["environment"]["BUILDDIR"] + '/src/qt/bitcoin-qt' + config["environment"]["EXEEXT"])
+
         self.options.bitcoincli = os.getenv(
             "BITCOINCLI", default=config["environment"]["BUILDDIR"] + '/src/bitcoin-cli' + config["environment"]["EXEEXT"])
         self.options.emulator = config["environment"]["EMULATOR"] or None
@@ -317,7 +325,12 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         if extra_args is None:
             extra_args = [[]] * num_nodes
         if binary is None:
-            binary = [self.options.bitcoind] * num_nodes
+            binary = []
+            # treat -ui as a special flag to choose binary
+            for args in extra_args:
+                binary.append(self.options.bitcoinqt if "-ui" in args else self.options.bitcoind)
+        # drop -ui from args
+        extra_args = [[arg for arg in args if arg != "-ui"] for args in extra_args]
         assert_equal(len(extra_confs), num_nodes)
         assert_equal(len(extra_args), num_nodes)
         assert_equal(len(binary), num_nodes)
