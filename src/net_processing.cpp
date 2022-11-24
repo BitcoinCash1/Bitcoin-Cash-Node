@@ -1589,65 +1589,85 @@ static void ProcessGetBlockData(const Config &config, CNode *pfrom,
         if (a_recent_block &&
             a_recent_block->GetHash() == pindex->GetBlockHash()) {
             pblock = a_recent_block;
-        } else {
-            // Send block from disk
-            std::shared_ptr<CBlock> pblockRead = std::make_shared<CBlock>();
-            if (!ReadBlockFromDisk(*pblockRead, pindex, consensusParams)) {
-                assert(!"cannot load block from disk");
-            }
-            pblock = pblockRead;
         }
-        if (inv.type == MSG_BLOCK) {
-            connman->PushMessage(pfrom,
-                                 msgMaker.Make(NetMsgType::BLOCK, *pblock));
-        } else if (inv.type == MSG_FILTERED_BLOCK) {
-            bool sendMerkleBlock = false;
-            CMerkleBlock merkleBlock;
-            {
-                LOCK(pfrom->cs_filter);
-                if (pfrom->pfilter) {
-                    sendMerkleBlock = true;
-                    merkleBlock = CMerkleBlock(*pblock, *pfrom->pfilter);
-                }
-            }
-            if (sendMerkleBlock) {
-                connman->PushMessage(
-                    pfrom, msgMaker.Make(NetMsgType::MERKLEBLOCK, merkleBlock));
-                // CMerkleBlock just contains hashes, so also push any
-                // transactions in the block the client did not see. This avoids
-                // hurting performance by pointlessly requiring a round-trip.
-                // Note that there is currently no way for a node to request any
-                // single transactions we didn't send here - they must either
-                // disconnect and retry or request the full block. Thus, the
-                // protocol spec specified allows for us to provide duplicate
-                // txn here, however we MUST always provide at least what the
-                // remote peer needs.
-                typedef std::pair<size_t, uint256> PairType;
-                for (PairType &pair : merkleBlock.vMatchedTxn) {
-                    connman->PushMessage(
-                        pfrom, msgMaker.Make(NetMsgType::TX,
-                                             *pblock->vtx[pair.first]));
-                }
-            }
-            // else
-            // no response
-        } else if (inv.type == MSG_CMPCT_BLOCK) {
-            // If a peer is asking for old blocks, we're almost guaranteed they
-            // won't have a useful mempool to match against a compact block, and
-            // we don't feel like constructing the object for them, so instead
-            // we respond with the full, non-compact block.
-            int nSendFlags = 0;
-            if (CanDirectFetch(consensusParams) &&
-                pindex->nHeight >=
-                    ::ChainActive().Height() - MAX_CMPCTBLOCK_DEPTH) {
-                CBlockHeaderAndShortTxIDs cmpctblock(*pblock);
-                connman->PushMessage(
-                    pfrom, msgMaker.Make(nSendFlags, NetMsgType::CMPCTBLOCK,
-                                         cmpctblock));
+
+        auto make_raw_block_message = [&pblock, &pindex, &config, &msgMaker] {
+            CSerializedNetMsg msg;
+            if (pblock) {
+                // pblock points to the recent block already in memory, so just use it rather than reading from disk
+                msg = msgMaker.Make(NetMsgType::BLOCK, *pblock);
             } else {
-                connman->PushMessage(
-                    pfrom,
-                    msgMaker.Make(nSendFlags, NetMsgType::BLOCK, *pblock));
+                // read the raw block data from disk and send it directly to network
+                msg.m_type = NetMsgType::BLOCK;
+                if (!ReadRawBlockFromDisk(msg.data, pindex, config.GetChainParams(), SER_NETWORK, msgMaker.nVersion)) {
+                    assert(!"cannot load raw block data from disk");
+                }
+            }
+            return msg;
+        };
+
+        if (inv.type == MSG_BLOCK) {
+            connman->PushMessage(pfrom, make_raw_block_message());
+        } else {
+            auto ensure_pblock = [&pblock, &pindex, &consensusParams]() -> const CBlock & {
+                // Read block from disk if not already in memory and deserialize to transform it to
+                // MerkleBlock or CompactBlock
+                if (!pblock) {
+                    std::shared_ptr<CBlock> pblockRead = std::make_shared<CBlock>();
+                    if (!ReadBlockFromDisk(*pblockRead, pindex, consensusParams)) {
+                        assert(!"cannot load block from disk");
+                    }
+                    pblock = pblockRead;
+                }
+                return *pblock;
+            };
+            if (inv.type == MSG_FILTERED_BLOCK) {
+                ensure_pblock();  // read into pblock now with pfrom->cs_filter not held
+                bool sendMerkleBlock = false;
+                CMerkleBlock merkleBlock;
+                {
+                    LOCK(pfrom->cs_filter);
+                    if (pfrom->pfilter) {
+                        sendMerkleBlock = true;
+                        merkleBlock = CMerkleBlock(*pblock, *pfrom->pfilter);
+                    }
+                }
+                if (sendMerkleBlock) {
+                    connman->PushMessage(
+                        pfrom, msgMaker.Make(NetMsgType::MERKLEBLOCK, merkleBlock));
+                    // CMerkleBlock just contains hashes, so also push any
+                    // transactions in the block the client did not see. This avoids
+                    // hurting performance by pointlessly requiring a round-trip.
+                    // Note that there is currently no way for a node to request any
+                    // single transactions we didn't send here - they must either
+                    // disconnect and retry or request the full block. Thus, the
+                    // protocol spec specified allows for us to provide duplicate
+                    // txn here, however we MUST always provide at least what the
+                    // remote peer needs.
+                    for (const auto &pair : merkleBlock.vMatchedTxn) {
+                        connman->PushMessage(
+                            pfrom, msgMaker.Make(NetMsgType::TX,
+                                                *pblock->vtx[pair.first]));
+                    }
+                }
+                // else
+                // no response
+            } else if (inv.type == MSG_CMPCT_BLOCK) {
+                // If a peer is asking for old blocks, we're almost guaranteed they
+                // won't have a useful mempool to match against a compact block, and
+                // we don't feel like constructing the object for them, so instead
+                // we respond with the full, non-compact block.
+                int nSendFlags = 0;
+                if (CanDirectFetch(consensusParams) &&
+                    pindex->nHeight >=
+                        ::ChainActive().Height() - MAX_CMPCTBLOCK_DEPTH) {
+                    CBlockHeaderAndShortTxIDs cmpctblock(ensure_pblock());
+                    connman->PushMessage(
+                        pfrom, msgMaker.Make(nSendFlags, NetMsgType::CMPCTBLOCK,
+                                            cmpctblock));
+                } else {
+                    connman->PushMessage(pfrom, make_raw_block_message());
+                }
             }
         }
 

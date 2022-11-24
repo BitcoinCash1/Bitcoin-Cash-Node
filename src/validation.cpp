@@ -38,6 +38,7 @@
 #include <script/sigcache.h>
 #include <script/standard.h>
 #include <shutdown.h>
+#include <span.h>
 #include <timedata.h>
 #include <tinyformat.h>
 #include <txdb.h>
@@ -266,6 +267,7 @@ bool fPruneMode = false;
 bool fIsBareMultisigStd = DEFAULT_PERMIT_BAREMULTISIG;
 bool fRequireStandard = true;
 bool fCheckBlockIndex = false;
+bool fCheckBlockReads = false;
 bool fCheckpointsEnabled = DEFAULT_CHECKPOINTS_ENABLED;
 size_t nCoinCacheUsage = 5000 * 300;
 uint64_t nPruneTarget = 0;
@@ -1017,6 +1019,83 @@ bool ReadBlockFromDisk(CBlock &block, const CBlockIndex *pindex,
         return error("ReadBlockFromDisk(CBlock&, CBlockIndex*): GetHash() "
                      "doesn't match index for %s at %s",
                      pindex->ToString(), pindex->GetBlockPos().ToString());
+    }
+
+    return true;
+}
+
+bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pindex,
+                          const CChainParams &chainParams, int nType, int nVersion) {
+    FlatFilePos blockPos;
+    {
+        LOCK(cs_main);
+        blockPos = pindex->GetBlockPos();
+    }
+
+    CAutoFile filein(OpenBlockFile(blockPos, true), SER_DISK, CLIENT_VERSION);
+    if (filein.IsNull()) {
+        return error("%s: OpenBlockFile failed for %s", __func__, blockPos.ToString());
+    }
+
+    unsigned int blockSize = 0;
+    const size_t headerSize = CMessageHeader::MESSAGE_START_SIZE + sizeof(blockSize);
+    if (std::fseek(filein.Get(), -static_cast<long>(headerSize), SEEK_CUR)) {
+        return error("%s: failed to seek to the block data for %s", __func__, blockPos.ToString());
+    }
+
+    try {
+        // read the disk magic and block size
+        CMessageHeader::MessageMagic magic;
+        filein >> magic >> blockSize;
+
+        // verify disk magic to validate block position inside the file
+        if (magic != chainParams.DiskMagic()) {
+            return error("%s: block DiskMagic verification failed for %s", __func__, blockPos.ToString());
+        }
+
+        // check the block size and populate data
+        if (blockSize < 80u) {
+            return error("%s: block size verification failed for %s", __func__, blockPos.ToString());
+        }
+        rawBlock.resize(blockSize);
+        filein >> Span{rawBlock};
+    } catch (const std::exception &e) {
+        return error("%s: failed to read block data from disk for %s. Original exception: %s",
+                     __func__, blockPos.ToString(), e.what());
+    }
+
+    if (fCheckBlockReads) {
+        // This is normally only enabled for regtest and is provided in order to guarantee additional sanity checks
+        // when returning raw blocks in this manner. For real networks, we prefer the performance benefit of not
+        // deserializing and not doing these slower checks here.
+        CBlock block;
+        std::vector<uint8_t> rawBlock2;
+        rawBlock2.reserve(rawBlock.size());
+
+        try {
+            VectorReader(nType, nVersion, rawBlock, 0) >> block;
+            CVectorWriter(nType, nVersion, rawBlock2, 0) << block;
+        } catch (const std::exception &e) {
+            return error("%s: Consistency check failed; ser/deser error for block data for %s, exception was: %s",
+                         __func__, blockPos.ToString(), e.what());
+        }
+
+        // Ensure the block, when re-serialized with nType and nVersion matches what we had on disk. This defends
+        // against block serialization being sensitive to the caller's nType/nVersion flags. Block serialization
+        // should always be the same irrespective of flags provided, otherwise this ReadRawBlockFromDisk() function
+        // cannot be used and caller should be using ReadBlockFromDisk() instead (see net_processing.cpp where this
+        // function is called).
+        if (rawBlock != rawBlock2) {
+            return error("%s: Consistency check failed; block raw data mismatches re-serialized version for block %s at"
+                         " %s, nType: %i, nVersion: %i", __func__, pindex->ToString(), blockPos.ToString(), nType,
+                         nVersion);
+        }
+        // Check the header (detects possible corruption; unlikely)
+        if (block.GetHash() != pindex->GetBlockHash()) {
+            return error("%s: Consistency check failed; GetHash() doesn't match index for %s at %s",
+                         __func__, pindex->ToString(), blockPos.ToString());
+        }
+        LogPrintf("%s: checks passed for block %s (%i bytes)\n", __func__, block.GetHash().ToString(), rawBlock2.size());
     }
 
     return true;

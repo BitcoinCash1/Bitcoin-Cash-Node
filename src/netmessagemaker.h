@@ -27,6 +27,5 @@ public:
         return Make(0, std::move(msg_type), std::forward<Args>(args)...);
     }
 
-private:
     const int nVersion;
 };

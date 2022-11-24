@@ -205,6 +205,7 @@ extern std::atomic_bool fReindex;
 extern bool fIsBareMultisigStd;
 extern bool fRequireStandard;
 extern bool fCheckBlockIndex;
+extern bool fCheckBlockReads;
 extern bool fCheckpointsEnabled;
 extern size_t nCoinCacheUsage;
 
@@ -655,6 +656,12 @@ bool ReadBlockFromDisk(CBlock &block, const FlatFilePos &pos,
                        const Consensus::Params &params);
 bool ReadBlockFromDisk(CBlock &block, const CBlockIndex *pindex,
                        const Consensus::Params &params);
+/**
+ * Read raw block bytes from disk. Faster than the above, because this function just returns the raw block data without
+ * any unserialization. Intended to be used by the net code for low-overhead serving of block data.
+ * `nType` and `nVersion` parameters are used for `-checkblockreads` sanity checking of the serialized data. */
+bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pindex, const CChainParams &chainParams,
+                          int nType, int nVersion);
 
 bool UndoReadFromDisk(CBlockUndo &blockundo, const CBlockIndex *pindex);
 
