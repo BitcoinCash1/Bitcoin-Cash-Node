@@ -1,9 +1,13 @@
 // Copyright (c) 2018 The Bitcoin Core developers
 // Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
+
+#include <dsproof/dspid.h>
+#include <primitives/txid.h>
 
 #include <addrdb.h>     // For BanTables
 #include <amount.h>     // For Amount
@@ -264,6 +268,12 @@ public:
                            int64_t block_time, BlockHash block_hash, double verification_progress)>;
     virtual std::unique_ptr<Handler>
     handleNotifyHeaderTip(NotifyHeaderTipFn fn) = 0;
+
+    //! Register handler for double spend proof messages.
+    using NotifyTransactionDoubleSpentFn =
+        std::function<void(const TxId txId, const DspId dspId)>;
+    virtual std::unique_ptr<Handler>
+    handleNotifyTransactionDoubleSpent(NotifyTransactionDoubleSpentFn fn) = 0;
 };
 
 //! Return implementation of Node interface.

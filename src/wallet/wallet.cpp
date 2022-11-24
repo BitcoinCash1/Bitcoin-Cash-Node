@@ -1,6 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1326,6 +1327,20 @@ void CWallet::BlockDisconnected(const std::shared_ptr<const CBlock> &pblock) {
     }
 }
 
+// signal callback triggered upon double spend proof detection event
+void CWallet::TransactionDoubleSpent(const CTransactionRef &ptx, const DspId &dsProofId) {
+    const TxId &txId = ptx->GetId();
+
+    // mark transaction dirty
+    LOCK(cs_wallet);
+    if (const auto &iter = mapWallet.find(txId); iter != mapWallet.end()) {
+        iter->second.MarkDirty();
+    }
+
+    // notify ui
+    uiInterface.NotifyTransactionDoubleSpent(txId, dsProofId);
+}
+
 void CWallet::BlockUntilSyncedToCurrentChain() {
     AssertLockNotHeld(cs_main);
     AssertLockNotHeld(cs_wallet);
@@ -2245,6 +2260,21 @@ bool CWalletTx::IsEquivalentTo(const CWalletTx &_tx) const {
     }
 
     return CTransaction(tx1) == CTransaction(tx2);
+}
+
+DoubleSpendProof CWalletTx::GetDsProof() const {
+    if (fDsProofCached) {
+        return dsProofCached;
+    }
+
+    // get dsproof from mempool
+    const auto dsOpt = g_mempool.getDoubleSpendProof(this->tx->GetId());
+    if (dsOpt.has_value()) {
+        dsProofCached = *dsOpt;
+        fDsProofCached = true;
+    }
+
+    return dsProofCached;
 }
 
 std::vector<uint256>

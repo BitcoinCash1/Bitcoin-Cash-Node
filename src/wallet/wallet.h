@@ -1,12 +1,14 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (c) 2018-2020 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <amount.h>
+#include <dsproof/dsproof.h>
 #include <interfaces/chain.h>
 #include <outputtype.h>
 #include <primitives/blockhash.h>
@@ -417,6 +419,7 @@ public:
     mutable bool fAvailableWatchCreditCached;
     mutable bool fChangeCached;
     mutable bool fInMempool;
+    mutable bool fDsProofCached;
     mutable Amount nDebitCached;
     mutable Amount nCreditCached;
     mutable Amount nImmatureCreditCached;
@@ -426,6 +429,7 @@ public:
     mutable Amount nImmatureWatchCreditCached;
     mutable Amount nAvailableWatchCreditCached;
     mutable Amount nChangeCached;
+    mutable DoubleSpendProof dsProofCached;
 
     CWalletTx(const CWallet *pwalletIn, CTransactionRef arg)
         : CMerkleTx(std::move(arg)) {
@@ -450,6 +454,7 @@ public:
         fAvailableWatchCreditCached = false;
         fChangeCached = false;
         fInMempool = false;
+        fDsProofCached = false;
         nDebitCached = Amount::zero();
         nCreditCached = Amount::zero();
         nImmatureCreditCached = Amount::zero();
@@ -460,6 +465,7 @@ public:
         nImmatureWatchCreditCached = Amount::zero();
         nChangeCached = Amount::zero();
         nOrderPos = -1;
+        dsProofCached = DoubleSpendProof();
     }
 
     template <typename Stream> void Serialize(Stream &s) const {
@@ -511,6 +517,7 @@ public:
         fImmatureWatchCreditCached = false;
         fDebitCached = false;
         fChangeCached = false;
+        fDsProofCached = false;
     }
 
     void BindWallet(CWallet *pwalletIn) {
@@ -536,6 +543,7 @@ public:
     Amount GetImmatureWatchOnlyCredit(interfaces::Chain::Lock &locked_chain,
                                       const bool fUseCache = true) const;
     Amount GetChange() const;
+    DoubleSpendProof GetDsProof() const;
 
     // Get the marginal bytes if spending the specified output from this
     // transaction
@@ -557,6 +565,7 @@ public:
 
     bool InMempool() const;
     bool IsTrusted(interfaces::Chain::Lock &locked_chain) const;
+    bool IsDoubleSpent() const { return !GetDsProof().isEmpty(); }
 
     int64_t GetTxTime() const;
 
@@ -1070,6 +1079,8 @@ public:
                    const std::vector<CTransactionRef> &vtxConflicted) override;
     void
     BlockDisconnected(const std::shared_ptr<const CBlock> &pblock) override;
+    void TransactionDoubleSpent(const CTransactionRef &ptxn,
+                                const DspId &dspId) override;
     int64_t RescanFromTime(int64_t startTime,
                            const WalletRescanReserver &reserver, bool update);
 

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -151,6 +152,7 @@ TransactionRecord::decomposeTransaction(const interfaces::WalletTx &wtx) {
             parts.last().involvesWatchAddress = involvesWatchAddress;
         }
     }
+    parts.last().dsProof = wtx.dsProof;
 
     return parts;
 }
@@ -169,7 +171,9 @@ void TransactionRecord::updateStatus(const interfaces::WalletTxStatus &wtx,
     const bool up_to_date =
         (int64_t(QDateTime::currentMSecsSinceEpoch()) / 1000 - block_time <
          MAX_BLOCK_TIME_GAP);
-    if (up_to_date && !wtx.is_final) {
+    if (wtx.is_double_spent) {
+        status.status = TransactionStatus::DoubleSpent;
+    } else if (up_to_date && !wtx.is_final) {
         if (wtx.lock_time < LOCKTIME_THRESHOLD) {
             status.status = TransactionStatus::OpenUntilBlock;
             status.open_for = wtx.lock_time - numBlocks;

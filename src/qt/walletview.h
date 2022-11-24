@@ -1,10 +1,13 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <amount.h>
+#include <dsproof/dspid.h>
+#include <primitives/txid.h>
 
 #include <QStackedWidget>
 
@@ -57,6 +60,8 @@ public:
     bool handlePaymentRequest(const SendCoinsRecipient &recipient);
 
     void showOutOfSyncWarning(bool fShow);
+
+    void transactionDoubleSpent(const TxId txId, const DspId dsp);
 
 private:
     ClientModel *clientModel;

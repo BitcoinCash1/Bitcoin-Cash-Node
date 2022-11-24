@@ -1,5 +1,6 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
 // Copyright (c) 2020-2021 The Bitcoin developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -234,6 +235,11 @@ static void BlockTipChanged(ClientModel *clientmodel, bool initialSync,
     }
 }
 
+static void NotifyDspDetected(ClientModel *clientmodel, const TxId txId, const DspId dspId) {
+    QMetaObject::invokeMethod(clientmodel, "transactionDoubleSpent",
+                            Qt::QueuedConnection, Q_ARG(const TxId, txId), Q_ARG(const DspId, dspId));
+}
+
 void ClientModel::subscribeToCoreSignals() {
     // Connect signals to client
     m_handler_show_progress = m_node.handleShowProgress(std::bind(
@@ -254,6 +260,8 @@ void ClientModel::subscribeToCoreSignals() {
     m_handler_notify_header_tip = m_node.handleNotifyHeaderTip(std::bind(
         BlockTipChanged, this, std::placeholders::_1, std::placeholders::_2,
         std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, true));
+    m_handler_notify_transaction_double_spent = m_node.handleNotifyTransactionDoubleSpent(std::bind(
+        NotifyDspDetected, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void ClientModel::unsubscribeFromCoreSignals() {
@@ -265,6 +273,7 @@ void ClientModel::unsubscribeFromCoreSignals() {
     m_handler_banned_list_changed->disconnect();
     m_handler_notify_block_tip->disconnect();
     m_handler_notify_header_tip->disconnect();
+    m_handler_notify_transaction_double_spent->disconnect();
 }
 
 bool ClientModel::getProxyInfo(std::string &ip_port) const {

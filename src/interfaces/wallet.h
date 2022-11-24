@@ -1,10 +1,12 @@
 // Copyright (c) 2018 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <amount.h>                 // For Amount
+#include <dsproof/dsproof.h>        // For DoubleSpendProof
 #include <primitives/transaction.h> // For CTxOut
 #include <pubkey.h> // For CKeyID and ScriptID (definitions needed in CTxDestination instantiation)
 #include <script/ismine.h>             // For isminefilter, isminetype
@@ -332,6 +334,7 @@ struct WalletTx {
     int64_t time;
     std::map<std::string, std::string> value_map;
     bool is_coinbase;
+    DoubleSpendProof dsProof;
 };
 
 //! Updated transaction status.
@@ -346,6 +349,7 @@ struct WalletTxStatus {
     bool is_abandoned;
     bool is_coinbase;
     bool is_in_main_chain;
+    bool is_double_spent;
 };
 
 //! Wallet transaction output.

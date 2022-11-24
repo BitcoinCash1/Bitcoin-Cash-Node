@@ -1,9 +1,13 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2012-2016 The Bitcoin Core developers
+// Copyright (c) 2022 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
+
+#include <dsproof/dspid.h>
+#include <primitives/txid.h>
 
 #include <cstdint>
 #include <functional>
@@ -132,6 +136,9 @@ public:
 
     /** Banlist did change. */
     ADD_SIGNALS_DECL_WRAPPER(BannedListChanged, void, void);
+
+    /** Double Spend Proof detected. */
+    ADD_SIGNALS_DECL_WRAPPER(NotifyTransactionDoubleSpent, void, const TxId txId, const DspId dspId);
 };
 
 /** Show warning message **/
