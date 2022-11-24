@@ -73,7 +73,7 @@ static void AddrManAdd(benchmark::State &state) {
 
     CAddrMan addrman;
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         AddAddressesToAddrMan(addrman);
         addrman.Clear();
     }
@@ -84,7 +84,7 @@ static void AddrManSelect(benchmark::State &state) {
 
     FillAddrMan(addrman);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         const auto &address = addrman.Select();
         assert(address.GetPort() > 0);
     }
@@ -95,7 +95,7 @@ static void AddrManGetAddr(benchmark::State &state) {
 
     FillAddrMan(addrman);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         const auto& addresses = addrman.GetAddr(2500, 23);
         assert(addresses.size() > 0);
     }
@@ -109,9 +109,7 @@ static void AddrManGood(benchmark::State &state) {
      * we want to do the same amount of work in every loop iteration.
      */
 
-    const uint64_t numLoops = state.m_num_iters * state.m_num_evals;
-
-    std::vector<CAddrMan> addrmans(numLoops);
+    std::vector<CAddrMan> addrmans(state.m_num_iters);
     for (auto &addrman : addrmans) {
         FillAddrMan(addrman);
     }
@@ -128,7 +126,7 @@ static void AddrManGood(benchmark::State &state) {
     };
 
     uint64_t i = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         markSomeAsGood(addrmans.at(i));
         ++i;
     }

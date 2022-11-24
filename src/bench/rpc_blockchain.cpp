@@ -31,7 +31,7 @@ static void RPCBlockVerbose(const std::vector<uint8_t> &data, benchmark::State &
     blockindex.phashBlock = &blockHash;
     blockindex.nBits = block.nBits;
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)blockToJSON(GetConfig(), block, &blockindex, &blockindex, /*verbose*/ true);
     }
 }

@@ -39,7 +39,7 @@ static void RPCMempoolVerbose(benchmark::State &state) {
         AddTx(tx_r, value, pool);
     }
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)MempoolToJSON(pool, /*verbose*/ true);
     }
 }
@@ -68,7 +68,7 @@ static void RPCMempoolVerbose_10k(benchmark::State &state) {
         AddTx(tx_r, /* fee */ int64_t(i) * COIN, pool);
     }
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         (void)MempoolToJSON(pool, /*verbose*/ true);
     }
 }

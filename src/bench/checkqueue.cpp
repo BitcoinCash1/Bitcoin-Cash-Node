@@ -42,7 +42,7 @@ static void CCheckQueueSpeedPrevectorJob(benchmark::State &state) {
     };
     CCheckQueue<PrevectorJob> queue{QUEUE_BATCH_SIZE};
     queue.StartWorkerThreads(std::max(MIN_CORES, GetNumCores()) - 1);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         // Make insecure_rand here so that each iteration is identical.
         FastRandomContext insecure_rand(true);
         CCheckQueueControl<PrevectorJob> control(&queue);
@@ -109,11 +109,10 @@ static void CCheckQueue_RealData32MB(bool cacheSigs, benchmark::State &state) {
     // Step 2: In order to focus the benchmark on the actual CCheckQueue implementation speed,
     //         we pre-copy all the sigchecks we will do for this entire run into the below
     //         "PerIterContext", one of these per iter
-    const auto nBenchIters = state.m_num_iters * state.m_num_evals + 1;
     struct PerIterContext {
         std::vector<std::vector<CScriptCheck>> vChecksPerTxCopy;
     };
-    std::vector<PerIterContext> iterContext(nBenchIters, PerIterContext{vChecksPerTx});
+    std::vector<PerIterContext> iterContext(state.m_num_iters + 1, PerIterContext{vChecksPerTx});
 
     // Step 3: Setup threads for our CCheckQueue
     CCheckQueue<CScriptCheck> queue{QUEUE_BATCH_SIZE};
@@ -131,7 +130,7 @@ static void CCheckQueue_RealData32MB(bool cacheSigs, benchmark::State &state) {
     // And finally: Run the benchmark
     size_t iterNum = 0;
     int64_t lastSigChecks = 0;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         assert(iterNum < iterContext.size());
         auto & vChecksPerTxCopy = iterContext[iterNum++].vChecksPerTxCopy;
         CCheckQueueControl<CScriptCheck> control(&queue);

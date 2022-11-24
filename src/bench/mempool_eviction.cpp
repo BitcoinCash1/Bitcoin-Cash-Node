@@ -105,7 +105,7 @@ static void MempoolEviction(benchmark::State &state) {
     const CTransactionRef tx6_r{MakeTransactionRef(tx6)};
     const CTransactionRef tx7_r{MakeTransactionRef(tx7)};
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         AddTx(tx1_r, 10000 * SATOSHI, pool);
         AddTx(tx2_r,  5000 * SATOSHI, pool);
         AddTx(tx3_r, 20000 * SATOSHI, pool);

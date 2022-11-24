@@ -35,7 +35,7 @@ static void VerifyNestedIfScript(benchmark::State &state) {
     for (int i = 0; i < 100; ++i) {
         script << OP_ENDIF;
     }
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         auto stack_copy = stack;
         ScriptExecutionMetrics metrics = {};
         ScriptError error;
@@ -107,7 +107,7 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
         using ContextOptSignatureChecker::ContextOptSignatureChecker;
     };
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         size_t okct = 0;
         size_t txdataVecIdx = 0, coinsVecIdx = 0;
         for (const auto &tx : block.vtx) {

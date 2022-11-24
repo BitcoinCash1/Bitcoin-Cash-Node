@@ -80,7 +80,7 @@ static void CCoinsCaching(benchmark::State &state) {
     t1.vout[0].scriptPubKey << OP_1;
 
     // Benchmark.
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         CTransaction t(t1);
         bool success =
             AreInputsStandard(t, coins, STANDARD_SCRIPT_VERIFY_FLAGS);
@@ -118,7 +118,7 @@ static void CheckTxInputs(benchmark::State &state) {
 
 
     // Benchmark.
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         for (const CTransactionRef &tx : transactions) {
             CValidationState valstate;
             Amount txfee;

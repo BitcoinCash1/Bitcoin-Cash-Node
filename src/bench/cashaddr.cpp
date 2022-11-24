@@ -13,7 +13,7 @@ static void CashAddrEncode(benchmark::State &state) {
                                    22,  23, 203, 163, 36,  58,  147, 227,
                                    139, 2,  215, 100, 91,  38,  11,  141,
                                    253, 40, 117, 21,  16,  90,  200, 24};
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         cashaddr::Encode("bitcoincash", buffer);
     }
 }
@@ -22,7 +22,7 @@ static void CashAddrDecode(benchmark::State &state) {
     const char *addrWithPrefix =
         "bitcoincash:qprnwmr02d7ky9m693qufj5mgkpf4wvssv0w86tkjd";
     const char *addrNoPrefix = "qprnwmr02d7ky9m693qufj5mgkpf4wvssv0w86tkjd";
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         cashaddr::Decode(addrWithPrefix, "bitcoincash");
         cashaddr::Decode(addrNoPrefix, "bitcoincash");
     }

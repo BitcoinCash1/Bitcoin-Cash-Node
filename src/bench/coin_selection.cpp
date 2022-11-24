@@ -57,7 +57,7 @@ static void CoinSelection(benchmark::State &state) {
     const CoinEligibilityFilter filter_standard(1, 6);
     const CoinSelectionParams coin_selection_params(
         true, 34, 148, CFeeRate(Amount::zero()), 0);
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         std::set<CInputCoin> setCoinsRet;
         Amount nValueRet;
         bool bnb_used;
@@ -115,7 +115,7 @@ static void BnBExhaustion(benchmark::State &state) {
     Amount value_ret = Amount::zero();
     Amount not_input_fees = Amount::zero();
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         // Benchmark
         Amount target = make_hard_case(wallet, 17, utxo_pool);
         // Should exhaust

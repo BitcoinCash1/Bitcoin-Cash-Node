@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <chrono>
 #include <functional>
 #include <limits>
@@ -26,7 +27,7 @@
 static void CODE_TO_TIME(benchmark::State& state)
 {
     ... do any setup needed...
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
        ... do stuff you want to time...
     }
     ... do any cleanup needed...
@@ -53,31 +54,39 @@ using duration = clock::duration;
 class Printer;
 
 class State {
-public:
     std::string m_name;
-    uint64_t m_num_iters_left;
-    const uint64_t m_num_iters;
-    const uint64_t m_num_evals;
+    uint64_t m_num_iters_left = 0;
     std::vector<double> m_elapsed_results;
     time_point m_start_time;
 
-    bool UpdateTimer(time_point finish_time);
+public:
+    const uint64_t m_num_iters;
 
-    State(const std::string &name, uint64_t num_evals, double num_iters,
-          Printer &printer)
-        : m_name(name), m_num_iters_left(0), m_num_iters(num_iters),
-          m_num_evals(num_evals) {}
+    void UpdateTimer(const time_point &finish_time);
 
-    inline bool KeepRunning() {
+    State(const std::string &name, double num_iters, Printer &printer)
+        : m_name(name),
+          m_num_iters(num_iters) {}
+
+    void StartBenchmark() {
+        /// Mark the benchmark as starting - do this after setup, immediately on entering the loop
+        m_start_time = clock::now();
+    }
+
+    bool KeepRunning() {
+        assert(m_start_time != time_point()); // the benchmark must call StartBenchmark() at entry to its loop
         if (m_num_iters_left--) {
             return true;
         }
+        UpdateTimer(clock::now());
 
-        bool result = UpdateTimer(clock::now());
-        // measure again so runtime of UpdateTimer is not included
         m_start_time = clock::now();
-        return result;
+        return false;
     }
+
+    friend class BenchRunner;
+    friend class ConsolePrinter;
+    friend class PlotlyPrinter;
 };
 
 typedef std::function<void(State &)> BenchFunction;
@@ -103,7 +112,7 @@ class Printer {
 public:
     virtual ~Printer() {}
     virtual void header() = 0;
-    virtual void result(const State &state) = 0;
+    virtual void result(const State &state, uint64_t num_evals) = 0;
     virtual void footer() = 0;
 };
 
@@ -111,7 +120,7 @@ public:
 class ConsolePrinter : public Printer {
 public:
     void header() override;
-    void result(const State &state) override;
+    void result(const State &state, uint64_t num_evals) override;
     void footer() override;
 };
 
@@ -120,7 +129,7 @@ class PlotlyPrinter : public Printer {
 public:
     PlotlyPrinter(const std::string &plotly_url, int64_t width, int64_t height);
     void header() override;
-    void result(const State &state) override;
+    void result(const State &state, uint64_t num_evals) override;
     void footer() override;
 
 private:
@@ -172,3 +181,7 @@ constexpr void NoOptimize(Args && ...args) noexcept {
 #define BENCHMARK(n, num_iters_for_one_second)                                 \
     benchmark::BenchRunner CAT(bench_, CAT(__LINE__, n))(                      \
         STRINGIZE_TEXT(n), n, (num_iters_for_one_second));
+
+#define BENCHMARK_LOOP                                                         \
+    state.StartBenchmark();                                                    \
+    while (state.KeepRunning())

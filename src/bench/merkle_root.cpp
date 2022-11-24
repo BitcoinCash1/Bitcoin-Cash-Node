@@ -15,7 +15,7 @@ static void MerkleRoot(benchmark::State &state) {
     for (auto &item : leaves) {
         rng.rand256(item);
     }
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         bool mutation = false;
         uint256 hash =
             ComputeMerkleRoot(std::vector<uint256>(leaves), &mutation);

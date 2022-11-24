@@ -19,7 +19,7 @@ static void TopUpKeyPoolShared(benchmark::State &state, std::function<void(CWall
 
     LOCK(wallet.cs_wallet);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         wallet.TopUpKeyPool(wallet.GetKeyPoolSize() + 10);
     }
 }

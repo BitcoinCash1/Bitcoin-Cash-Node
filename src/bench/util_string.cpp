@@ -40,7 +40,7 @@ std::string MakeStringSprinkledWithDelims(const size_t length, const size_t num_
 void DoBench(benchmark::State &state, size_t str_len, size_t n_delims) {
     const std::string s = MakeStringSprinkledWithDelims(str_len, n_delims);
 
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         std::vector<std::string> toks;
         benchmark::NoOptimize(Split(toks, s, " \f\n\r\t\v"));
     }

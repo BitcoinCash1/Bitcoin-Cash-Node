@@ -16,7 +16,7 @@ static void Base58Encode(benchmark::State &state) {
         17,  79,  8,   99,  150, 189, 208, 162, 22,  23, 203,
         163, 36,  58,  147, 227, 139, 2,   215, 100, 91, 38,
         11,  141, 253, 40,  117, 21,  16,  90,  200, 24};
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         EncodeBase58(buffer);
     }
 }
@@ -26,7 +26,7 @@ static void Base58CheckEncode(benchmark::State &state) {
         17,  79,  8,   99,  150, 189, 208, 162, 22,  23, 203,
         163, 36,  58,  147, 227, 139, 2,   215, 100, 91, 38,
         11,  141, 253, 40,  117, 21,  16,  90,  200, 24};
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         EncodeBase58Check(buffer);
     }
 }
@@ -34,7 +34,7 @@ static void Base58CheckEncode(benchmark::State &state) {
 static void Base58Decode(benchmark::State &state) {
     const char *addr = "17VZNX1SN5NtKa8UQFxwQbFeFc3iqRYhem";
     std::vector<uint8_t> vch;
-    while (state.KeepRunning()) {
+    BENCHMARK_LOOP {
         static_cast<void>(DecodeBase58(addr, vch, 64));
     }
 }
