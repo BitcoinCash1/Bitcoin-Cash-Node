@@ -63,6 +63,9 @@ BOOST_AUTO_TEST_CASE(chain_params) {
 
     SelectParams(CBaseChainParams::SCALENET);
     BOOST_CHECK_EQUAL(&Params(), &config.GetChainParams());
+
+    SelectParams(CBaseChainParams::CHIPNET);
+    BOOST_CHECK_EQUAL(&Params(), &config.GetChainParams());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

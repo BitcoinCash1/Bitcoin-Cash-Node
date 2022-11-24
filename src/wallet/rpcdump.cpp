@@ -255,15 +255,15 @@ static void ImportScript(CWallet *const pwallet, const CScript &script,
     }
 
     if (isRedeemScript) {
-        const CScriptID id(script);
-        if (!pwallet->HaveCScript(id) && !pwallet->AddCScript(script)) {
+        const ScriptID id(script, false /* no p2sh_32 in wallet */);
+        if (!pwallet->HaveCScript(id) && !pwallet->AddCScript(script, false /* no p2sh_32 in wallet */)) {
             throw JSONRPCError(RPC_WALLET_ERROR,
                                "Error adding p2sh redeemScript to wallet");
         }
         ImportAddress(pwallet, id, strLabel);
     } else {
         CTxDestination destination;
-        if (ExtractDestination(script, destination)) {
+        if (ExtractDestination(script, destination, 0 /* no p2sh_32 in wallet */)) {
             pwallet->SetAddressBook(destination, strLabel, "receive");
         }
     }
@@ -750,14 +750,14 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
                 false);
             const CScript &script = script_pair.first;
             int64_t time = script_pair.second;
-            CScriptID id(script);
+            const ScriptID id(script, false /* no p2sh_32 in wallet */);
             if (pwallet->HaveCScript(id)) {
                 pwallet->WalletLogPrintf(
                     "Skipping import of %s (script already present)\n",
                     HexStr(script));
                 continue;
             }
-            if (!pwallet->AddCScript(script)) {
+            if (!pwallet->AddCScript(script, false /* no p2sh_32 in wallet */)) {
                 pwallet->WalletLogPrintf("Error importing script %s\n",
                                          HexStr(script));
                 fGood = false;
@@ -894,7 +894,7 @@ UniValue dumpwallet(const Config &config, const JSONRPCRequest &request) {
     const std::map<CKeyID, int64_t> &mapKeyPool = pwallet->GetAllReserveKeys();
     pwallet->GetKeyBirthTimes(*locked_chain, mapKeyBirth);
 
-    std::set<CScriptID> scripts = pwallet->GetCScripts();
+    const std::set<ScriptID> scripts = pwallet->GetCScripts();
     // TODO: include scripts in GetKeyBirthTimes() output instead of separate
 
     // sort time/key pairs
@@ -965,7 +965,7 @@ UniValue dumpwallet(const Config &config, const JSONRPCRequest &request) {
         }
     }
     file << "\n";
-    for (const CScriptID &scriptid : scripts) {
+    for (const ScriptID &scriptid : scripts) {
         CScript script;
         std::string create_time = "0";
         std::string address = EncodeDestination(scriptid, config);
@@ -1053,7 +1053,7 @@ static UniValue ProcessImport(CWallet *const pwallet, const UniValue &data,
 
             std::vector<uint8_t> vData(ParseHex(output));
             script = CScript(vData.begin(), vData.end());
-            if (!ExtractDestination(script, dest) && !internal) {
+            if (!ExtractDestination(script, dest, 0 /* no p2sh_32 in wallet */) && !internal) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER,
                                    "Internal must be set to true for "
                                    "nonstandard scriptPubKey imports.");
@@ -1096,7 +1096,7 @@ static UniValue ProcessImport(CWallet *const pwallet, const UniValue &data,
             CScript redeemScript = CScript(vData.begin(), vData.end());
 
             // Invalid P2SH address
-            if (!script.IsPayToScriptHash()) {
+            if (!script.IsPayToScriptHash(0 /* no p2sh_32 in wallet */)) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
                                    "Invalid P2SH address / script");
             }
@@ -1108,9 +1108,9 @@ static UniValue ProcessImport(CWallet *const pwallet, const UniValue &data,
                                    "Error adding address to wallet");
             }
 
-            CScriptID redeem_id(redeemScript);
+            const ScriptID redeem_id(redeemScript, false /* no p2sh_32 in wallet */);
             if (!pwallet->HaveCScript(redeem_id) &&
-                !pwallet->AddCScript(redeemScript)) {
+                !pwallet->AddCScript(redeemScript, false /* no p2sh_32 in wallet */)) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    "Error adding p2sh redeemScript to wallet");
             }

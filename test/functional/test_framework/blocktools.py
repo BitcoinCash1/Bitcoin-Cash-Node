@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Utilities for manipulating blocks and transactions."""
 
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 from .script import (
     CScript,
     OP_CHECKSIG,
@@ -24,6 +24,7 @@ from .messages import (
     CTxOut,
     FromHex,
     ToHex,
+    TokenOutputData,
     ser_string,
 )
 from .txtools import pad_tx
@@ -83,7 +84,7 @@ def serialize_script_num(value):
 # otherwise an anyone-can-spend output.
 
 
-def create_coinbase(height, pubkey=None):
+def create_coinbase(height, pubkey=None, *, scriptPubKey=None, tokenData=None, pad_to_size=None):
     coinbase = CTransaction()
     coinbase.vin.append(CTxIn(COutPoint(0, 0xffffffff),
                               ser_string(serialize_script_num(height)), 0xffffffff))
@@ -91,20 +92,27 @@ def create_coinbase(height, pubkey=None):
     coinbaseoutput.nValue = 50 * COIN
     halvings = int(height / 150)  # regtest
     coinbaseoutput.nValue >>= halvings
-    if (pubkey is not None):
+    if scriptPubKey is not None:
+        coinbaseoutput.scriptPubKey = scriptPubKey
+    elif pubkey is not None:
         coinbaseoutput.scriptPubKey = CScript([pubkey, OP_CHECKSIG])
     else:
         coinbaseoutput.scriptPubKey = CScript([OP_TRUE])
+    coinbaseoutput.tokenData = tokenData
     coinbase.vout = [coinbaseoutput]
 
-    # Make sure the coinbase is at least 100 bytes
-    pad_tx(coinbase)
+    if pad_to_size is not None:
+        # Caller specified a padding size so pass that down
+        pad_tx(coinbase, pad_to_size=pad_to_size)
+    else:
+        # Caller did not specify a padding size, just use the default for pad_tx() (100 bytes)
+        pad_tx(coinbase)
 
     coinbase.calc_sha256()
     return coinbase
 
 
-def bu_create_coinbase(height, pubkey=None, scriptPubKey=None):
+def bu_create_coinbase(height, pubkey=None, scriptPubKey=None, *, pad_to_size=100):
     """BU Version:
        Create a coinbase transaction, assuming no miner fees.
        If pubkey is passed in, the coinbase output will be a P2PK output;
@@ -125,17 +133,18 @@ def bu_create_coinbase(height, pubkey=None, scriptPubKey=None):
         coinbaseoutput.scriptPubKey = CScript(scriptPubKey)
     coinbase.vout = [coinbaseoutput]
 
-    # Make sure the coinbase is at least 100 bytes
+    # Make sure the coinbase is at least pad_to_size bytes
     coinbase_size = len(coinbase.serialize())
-    if coinbase_size < 100:
-        coinbase.vin[0].scriptSig += b'x' * (100 - coinbase_size)
+    if coinbase_size < pad_to_size:
+        coinbase.vin[0].scriptSig += b'x' * (pad_to_size - coinbase_size)
 
     coinbase.calc_sha256()
     return coinbase
 
 
 def create_tx_with_script(prevtx, n, script_sig=b"",
-                          amount=1, script_pub_key=CScript()):
+                          amount=1, script_pub_key=CScript(),
+                          *, token_data=None, pad_to_size=None):
     """Return one-input, one-output transaction object
        spending the prevtx's n-th output with the given amount.
 
@@ -144,24 +153,47 @@ def create_tx_with_script(prevtx, n, script_sig=b"",
     tx = CTransaction()
     assert(n < len(prevtx.vout))
     tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), script_sig, 0xffffffff))
-    tx.vout.append(CTxOut(amount, script_pub_key))
-    pad_tx(tx)
+    tx.vout.append(CTxOut(amount, script_pub_key, tokenData=token_data))
+    if pad_to_size is not None:
+        # Caller specified a padding size so pass that down
+        pad_tx(tx, pad_to_size=pad_to_size)
+    else:
+        # Caller did not specify a padding size, just use the default for pad_tx() (100 bytes)
+        pad_tx(tx)
     tx.calc_sha256()
     return tx
 
 
-def create_transaction(node, txid, to_address, amount):
+def create_transaction(node, txid, to_address, amount, *, token_data=None):
     """ Return signed transaction spending the first output of the
         input txid. Note that the node must be able to sign for the
         output that is being spent, and the node must not be running
         multiple wallets.
     """
-    raw_tx = create_raw_transaction(node, txid, to_address, amount)
+    raw_tx = create_raw_transaction(node, txid, to_address, amount, token_data=token_data)
     tx = FromHex(CTransaction(), raw_tx)
     return tx
 
 
-def create_raw_transaction(node, txid, to_address, amount, vout=0):
+def add_token_data_to_transaction(tx: Union[str, CTransaction], output_num: int,
+                                  token_data: TokenOutputData) -> Tuple[str, CTransaction]:
+    if not isinstance(tx, CTransaction):
+        rawtx = tx
+        tx = CTransaction()
+        FromHex(tx, rawtx)
+    assert isinstance(token_data, TokenOutputData)
+    assert output_num < len(tx.vout)
+    tx.vout[output_num].tokenData = token_data
+    rawtx = ToHex(tx)
+    tx = CTransaction()
+    FromHex(tx, rawtx)
+    assert tx.vout[output_num].tokenData == token_data, "Verification of token_data re-serialization failed"
+    tx.rehash()
+    return rawtx, tx
+
+
+def create_raw_transaction(node, txid, to_address, amount, vout=0, *, sighashtype="ALL|FORKID",
+                           token_data=None):
     """ Return raw signed transaction spending an output (the first
         by default) output of the input txid.
         Note that the node must be able to sign for the
@@ -171,7 +203,11 @@ def create_raw_transaction(node, txid, to_address, amount, vout=0):
     inputs = [{"txid": txid, "vout": vout}]
     outputs = {to_address: amount}
     rawtx = node.createrawtransaction(inputs, outputs)
-    signresult = node.signrawtransactionwithwallet(rawtx)
+    if token_data is not None:
+        # Since createrawtransaction API doesn't (yet) support specifying token data, we do it "manually"
+        rawtx, tx = add_token_data_to_transaction(rawtx, 0, token_data)
+        assert tx.vout[0].nValue == amount, "Unexpected amount for output 0, unable to add token_data"
+    signresult = node.signrawtransactionwithwallet(rawtx, None, sighashtype)
     assert_equal(signresult["complete"], True)
     return signresult['hex']
 

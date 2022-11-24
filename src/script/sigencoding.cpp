@@ -211,21 +211,31 @@ bool CheckDataSignatureEncoding(const valtype &vchSig, uint32_t flags,
         vchSig | boost::adaptors::sliced(0, vchSig.size()), flags, serror);
 }
 
-static bool CheckSighashEncoding(const valtype &vchSig, uint32_t flags,
-                                 ScriptError *serror) {
+static bool CheckSighashEncoding(const valtype &vchSig, uint32_t flags, ScriptError *serror) {
     if (flags & SCRIPT_VERIFY_STRICTENC) {
-        if (!GetHashType(vchSig).isDefined()) {
+        const auto hashType = GetHashType(vchSig);
+        if (!hashType.isDefined()) {
             return set_error(serror, ScriptError::SIG_HASHTYPE);
         }
 
-        bool usesFork = GetHashType(vchSig).hasFork();
-        bool forkEnabled = flags & SCRIPT_ENABLE_SIGHASH_FORKID;
+        const bool usesFork = hashType.hasFork();
+        const bool forkEnabled = flags & SCRIPT_ENABLE_SIGHASH_FORKID;
         if (!forkEnabled && usesFork) {
             return set_error(serror, ScriptError::ILLEGAL_FORKID);
         }
 
         if (forkEnabled && !usesFork) {
             return set_error(serror, ScriptError::MUST_USE_FORKID);
+        }
+
+        if (hashType.hasUtxos()) {
+            const bool upgrade9Enabled = flags & SCRIPT_ENABLE_TOKENS;
+            // 1. Pre-Upgrade9 we do NOT accept SIGHASH_UTXOS
+            // 2. We also cannot accept SIGHASH_UTXOS if not using SIGHASH_FORKID (belt-and-suspenders check)
+            // 3. Also, as per CashTokens spec, we disallow the combination of SIGHASH_UTXOS and SIGHASH_ANYONECANPAY
+            if (!upgrade9Enabled || !usesFork || !forkEnabled || hashType.hasAnyoneCanPay()) {
+                return set_error(serror, ScriptError::SIG_HASHTYPE);
+            }
         }
     }
 

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <compressor.h>
+#include <core_memusage.h>
 #include <memusage.h>
 #include <primitives/blockhash.h>
 #include <serialize.h>
@@ -63,7 +64,7 @@ public:
     }
 
     size_t DynamicMemoryUsage() const {
-        return memusage::DynamicUsage(out.scriptPubKey);
+        return memusage::DynamicUsage(out.scriptPubKey) + RecursiveDynamicUsage(out.tokenDataPtr);
     }
 };
 

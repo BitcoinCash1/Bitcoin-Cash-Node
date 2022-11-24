@@ -6,9 +6,11 @@
 #include <chain.h>
 #include <chainparams.h>
 #include <config.h>
+#include <consensus/activation.h>
 #include <consensus/validation.h>
 #include <interfaces/chain.h>
 #include <key.h>
+#include <key_io.h>
 #include <keystore.h>
 #include <policy/policy.h>
 #include <pubkey.h>
@@ -27,8 +29,10 @@
 
 #include <univalue.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <set>
 #include <utility>
@@ -400,24 +404,23 @@ public:
     ~ListCoinsTestingSetup() { wallet.reset(); }
 
     CWalletTx &AddTx(CRecipient recipient, CoinSelectionHint coinsel = CoinSelectionHint::Default,
-                     int *changePosInOut = nullptr) {
-        return AddTx(std::vector<CRecipient>{{recipient}}, coinsel, changePosInOut);
+                     int *changePosInOut = nullptr, const CCoinControl & coinControl = {}) {
+        return AddTx(std::vector<CRecipient>{{recipient}}, coinsel, changePosInOut, coinControl);
     }
 
     CWalletTx &AddTx(const std::vector<CRecipient> &recipients,
                      CoinSelectionHint coinsel = CoinSelectionHint::Default,
-                     int *changePosInOut = nullptr) {
+                     int *changePosInOut = nullptr, const CCoinControl &coinControl = {}) {
         CTransactionRef tx;
         CReserveKey reservekey(wallet.get());
         Amount fee;
         int tmp_changePos = -1;
         int &changePos = changePosInOut ? *changePosInOut : tmp_changePos;
         std::string error;
-        CCoinControl dummy;
         BOOST_CHECK_EQUAL(CreateTransactionResult::CT_OK,
                           wallet->CreateTransaction(
                               *m_locked_chain, recipients, tx, reservekey, fee,
-                              changePos, error, dummy, true, coinsel));
+                              changePos, error, coinControl, true, coinsel));
 
         // The anti-fee-sniping feature should set the lock time equal to the block height.
         BOOST_CHECK_EQUAL(::ChainActive().Height(), tx->nLockTime);
@@ -431,8 +434,12 @@ public:
             blocktx =
                 CMutableTransaction(*wallet->mapWallet.at(tx->GetId()).tx);
         }
-        CreateAndProcessBlock({CMutableTransaction(blocktx)},
-                              GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
+        const auto block = CreateAndProcessBlock({CMutableTransaction(blocktx)},
+                                                 GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
+        {
+            LOCK(cs_main);
+            BOOST_CHECK(::ChainActive().Tip()->GetBlockHash() == block.GetHash());
+        }
         LOCK(wallet->cs_wallet);
         auto it = wallet->mapWallet.find(tx->GetId());
         BOOST_CHECK(it != wallet->mapWallet.end());
@@ -473,7 +480,7 @@ BOOST_FIXTURE_TEST_CASE(ListCoins, ListCoinsTestingSetup) {
     // returns the coin associated with the change address underneath the
     // coinbaseKey pubkey, even though the change address has a different
     // pubkey.
-    AddTx(CRecipient{GetScriptForRawPubKey({}), 1 * COIN,
+    AddTx(CRecipient{GetScriptForRawPubKey({}), 1 * COIN, {},
                      false /* subtract fee */});
     {
         LOCK2(cs_main, wallet->cs_wallet);
@@ -524,13 +531,13 @@ BOOST_FIXTURE_TEST_CASE(FastTransaction, ListCoinsTestingSetup) {
         BOOST_CHECK(wallet->GetBalance() == 50 * COIN);
 
         // Each AddTx call will spend some coins then mine a block, adding another 50 coins
-        AddTx(CRecipient{GetScriptForRawPubKey({}),   1 * COIN, true /* subtract fee */}, coinsel);
+        AddTx(CRecipient{GetScriptForRawPubKey({}),   1 * COIN, {}, true /* subtract fee */}, coinsel);
         BOOST_CHECK(wallet->GetBalance() == 99 * COIN);
-        AddTx(CRecipient{GetScriptForRawPubKey({}),   1 * COIN, true /* subtract fee */}, coinsel);
+        AddTx(CRecipient{GetScriptForRawPubKey({}),   1 * COIN, {}, true /* subtract fee */}, coinsel);
         BOOST_CHECK(wallet->GetBalance() == 148 * COIN);
-        AddTx(CRecipient{GetScriptForRawPubKey({}),  51 * COIN, true /* subtract fee */}, coinsel);
+        AddTx(CRecipient{GetScriptForRawPubKey({}),  51 * COIN, {}, true /* subtract fee */}, coinsel);
         BOOST_CHECK(wallet->GetBalance() == 147 * COIN);
-        AddTx(CRecipient{GetScriptForRawPubKey({}), 147 * COIN, true /* subtract fee */}, coinsel);
+        AddTx(CRecipient{GetScriptForRawPubKey({}), 147 * COIN, {}, true /* subtract fee */}, coinsel);
 
         BOOST_CHECK(wallet->GetBalance() == 50 * COIN);
     }
@@ -543,7 +550,7 @@ BOOST_FIXTURE_TEST_CASE(wallet_error_on_invalid_coinselection_hint, ListCoinsTes
     int changePos = -1;
     std::string error;
     CCoinControl dummy;
-    CRecipient recipient{GetScriptForRawPubKey({}), 1 * COIN, true};
+    CRecipient recipient{GetScriptForRawPubKey({}), 1 * COIN, {}, true};
 
     BOOST_CHECK_EQUAL(CreateTransactionResult::CT_INVALID_PARAMETER,
             wallet->CreateTransaction(
@@ -585,7 +592,7 @@ static size_t CalculateP2PKHInputSize(bool use_max_sig) {
     if (!ProduceSignature(keystore,
                           use_max_sig ? DUMMY_MAXIMUM_SIGNATURE_CREATOR
                                       : DUMMY_SIGNATURE_CREATOR,
-                          script, sig_data, std::nullopt)) {
+                          script, sig_data, 0 /* scriptFlags: unused by dummy class, 0 ok here */)) {
         // We're hand-feeding it correct arguments; shouldn't happen
         assert(false);
     }
@@ -620,14 +627,14 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
         spk = GetScriptForDestination(pub.GetID()); // P2PKH
         BOOST_CHECK(pub.IsFullyValid());
         CTxDestination dest;
-        BOOST_CHECK(ExtractDestination(spk, dest));
+        BOOST_CHECK(ExtractDestination(spk, dest, 0 /* no p2sh_32 */));
         BOOST_CHECK(dest == CTxDestination(pub.GetID()));
     }
 
     // Ensure we have a bunch of small coins
     {
         const auto myScriptPubKey = GetScriptForRawPubKey(coinbaseKey.GetPubKey());
-        std::vector<CRecipient> toMe(100, CRecipient{myScriptPubKey, 1000 * CASH, false});
+        std::vector<CRecipient> toMe(100, CRecipient{myScriptPubKey, 1000 * CASH, {}, false});
         for (int i = 0; i < 3; ++i) {
             for (auto &r: toMe) r.nAmount += 10 * SATOSHI; // make subsequent iterations have slightly larger coins
             AddTx(toMe);
@@ -646,23 +653,49 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
         BOOST_CHECK(nCoins >= 100);
     }
 
+    token::OutputData tok1(token::Id{uint256S("00112233445577001122334455770011223344557700112233445577")},
+                           token::SafeAmount::fromIntUnchecked(1234),
+                           token::NFTCommitment{5u, uint8_t{3}}, true, true, true),
+                      tok2(token::Id{uint256S("00112233445577001122334455770011223344557700112233445578")},
+                                   token::SafeAmount::fromIntUnchecked(1235),
+                                   token::NFTCommitment{5u, uint8_t{3}}, true, false, false);
+
+
     std::vector<CRecipient> recipients{{
-        {scriptPubKeys[1], 3040 * CASH, false /* subtract fee */},
-        {scriptPubKeys[3], 8001 * CASH, false /* subtract fee */},
-        {scriptPubKeys[2], 1234 * CASH, false /* subtract fee */},
-        {scriptPubKeys[0], 234 * CASH, false /* subtract fee */},
+        {scriptPubKeys[1], 3040 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[2], 3040 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[3], 8001 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[2], 1234 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[1], 1234 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[3], 1234 * CASH, {}, false /* subtract fee */},
+        {scriptPubKeys[3], 1234 * CASH, token::OutputDataPtr{tok1}, false /* subtract fee */},
+        {scriptPubKeys[3], 1234 * CASH, token::OutputDataPtr{tok2}, false /* subtract fee */},
+        {scriptPubKeys[0], 234 * CASH, {}, false /* subtract fee */},
+        // These funny scriptPubKeys here are to ensure we catch bad sorts that use the incorrect prevector::operator<
+        // instead of the correct lexicographical ordering.
+        {CScript() << opcodetype(FIRST_UNDEFINED_OP_VALUE-1),
+                        234 * CASH, {}, false /* subtract fee */},
+        {CScript() << opcodetype(FIRST_UNDEFINED_OP_VALUE-2) << opcodetype(FIRST_UNDEFINED_OP_VALUE-2),
+                        234 * CASH, {}, false /* subtract fee */},
     }};
 
     const auto IsTxSorted = [](const CTransactionRef &tx) {
-        // check outputs are sorted ascending according to: nValue, scriptPubKey
+        // check outputs are sorted ascending according to: nValue, scriptPubKey, tokenDataPtr
         for (size_t i = 1; i < tx->vout.size(); ++i) {
             auto &a = tx->vout[i-1], &b = tx->vout[i];
             if (a.nValue > b.nValue) {
                 return false;
-            } else if (a.nValue == b.nValue && !((a.scriptPubKey < b.scriptPubKey)
-                                                 || (a.scriptPubKey == b.scriptPubKey))) {
-                return false;
+            } else if (a.nValue == b.nValue) {
+                if (a.scriptPubKey == b.scriptPubKey) {
+                    if (!((a.tokenDataPtr < b.tokenDataPtr) || a.tokenDataPtr == b.tokenDataPtr)) {
+                        return false;
+                    }
+                } else if (!std::lexicographical_compare(a.scriptPubKey.begin(), a.scriptPubKey.end(),
+                                                         b.scriptPubKey.begin(), b.scriptPubKey.end())) {
+                    return false;
+                }
             }
+            BOOST_TEST_MESSAGE(strprintf("%s < %s", a.ToString(), b.ToString()));
         }
         // check inputs are sorted ascending accorting to COutpoint::operator<
         for (size_t i = 1; i < tx->vin.size(); ++i) {
@@ -678,8 +711,13 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
     const auto AllRecipientsPresent = [](const std::vector<CRecipient> &rs, const CTransactionRef &tx) {
         struct RecipientSort {
             bool operator()(const CRecipient &a, const CRecipient &b) const noexcept {
-                return a.nAmount < b.nAmount
-                       || (a.nAmount == b.nAmount && a.scriptPubKey < b.scriptPubKey);
+                if (a.nAmount == b.nAmount) {
+                    if (a.scriptPubKey == b.scriptPubKey) {
+                        return a.tokenDataPtr < b.tokenDataPtr;
+                    }
+                    return a.scriptPubKey < b.scriptPubKey;
+                }
+                return a.nAmount < b.nAmount;
             }
         };
         std::set<CRecipient, RecipientSort> needed{rs.begin(), rs.end()}, seen;
@@ -687,7 +725,7 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
         BOOST_CHECK_EQUAL(nNeeded, rs.size());
 
         for (const auto &out : tx->vout) {
-            const CRecipient r{out.scriptPubKey, out.nValue, false};
+            const CRecipient r{out.scriptPubKey, out.nValue, out.tokenDataPtr, false};
             if (needed.count(r) && !seen.count(r)) {
                 needed.erase(r);
                 seen.insert(r);
@@ -785,6 +823,157 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
         BOOST_CHECK(AllRecipientsPresent(recipients, tx)); // all recipients should have gotten the exact amounts
         BOOST_CHECK(HasChangeAndOnlyChangeIsMine(changePos, tx));
     }
+}
+
+struct Upgrade9ActivatedTestingSetup : ListCoinsTestingSetup {
+    Upgrade9ActivatedTestingSetup() : ListCoinsTestingSetup() {
+        gArgs.ForceSetArg("-upgrade9activationtime", "0"); // force activation always for this test fixture
+        LOCK(cs_main);
+        // Ensure upgrade 9 (tokens) is active for next block and mempool
+        BOOST_CHECK(IsUpgrade9Enabled(::GetConfig().GetChainParams().GetConsensus(), ::ChainActive().Tip()));
+    }
+    ~Upgrade9ActivatedTestingSetup() {
+        gArgs.ClearArg("-upgrade9activationtime");
+    }
+};
+
+/// Test basic support in wallet for processing tokens (requires upgrade9 to work correctly)
+BOOST_FIXTURE_TEST_CASE(wallet_tokens, Upgrade9ActivatedTestingSetup) {
+    CCoinControl allIncludingTokens;
+    allIncludingTokens.m_allow_tokens = true;
+
+    auto GetTokenGenesisCoins = [&]{
+        std::vector<COutput> tokenGenesisCandidateCoins;
+        LOCK2(cs_main, wallet->cs_wallet);
+        const uint32_t scriptFlags = ::GetMemPoolScriptFlags(::GetConfig().GetChainParams().GetConsensus(),
+                                                             ::ChainActive().Tip());
+        std::vector<COutput> vCoins;
+        wallet->AvailableCoins(*m_locked_chain, vCoins, true, &allIncludingTokens);
+        for (const auto &out : vCoins) {
+            if (out.i == 0) {
+                const auto txout = out.GetInputCoin().txout;
+                CTxDestination dest;
+                ExtractDestination(txout.scriptPubKey, dest, scriptFlags);
+                BOOST_TEST_MESSAGE(strprintf("Found potential genesis coin in wallet: %s paying to: %s, CTxOut: %s",
+                                             out.GetInputCoin().outpoint.ToString(),
+                                             EncodeDestination(dest, ::GetConfig()),
+                                             txout.ToString()));
+                tokenGenesisCandidateCoins.push_back(out);
+            }
+        }
+        return tokenGenesisCandidateCoins;
+    };
+
+    auto GetTokenCoins = [&]{
+        std::vector<COutput> ret;
+        CCoinControl tokensOnly;
+        tokensOnly.m_allow_tokens = true;
+        tokensOnly.m_tokens_only = true;
+        LOCK2(cs_main, wallet->cs_wallet);
+        const uint32_t scriptFlags = ::GetMemPoolScriptFlags(::GetConfig().GetChainParams().GetConsensus(),
+                                                             ::ChainActive().Tip());
+        std::vector<COutput> vCoins;
+        wallet->AvailableCoins(*m_locked_chain, vCoins, true, &tokensOnly);
+        for (const auto &out : vCoins) {
+            const auto txout = out.GetInputCoin().txout;
+            if (txout.tokenDataPtr) {
+                CTxDestination dest;
+                ExtractDestination(txout.scriptPubKey, dest, scriptFlags);
+                BOOST_TEST_MESSAGE(strprintf("Found token-containing coin in wallet: %s paying to: %s, CTxOut: %s",
+                                             out.GetInputCoin().outpoint.ToString(),
+                                             EncodeDestination(dest, ::GetConfig()),
+                                             txout.ToString()));
+                ret.push_back(out);
+            }
+        }
+        return ret;
+    };
+
+    auto GenesisTokenToWallet = [&]{
+        auto tokenGenesisCandidateCoins = GetTokenGenesisCoins();
+        BOOST_CHECK( ! tokenGenesisCandidateCoins.empty());
+
+        CCoinControl ctl;
+        ctl.fAllowOtherInputs = false;
+        const auto inputCoin = tokenGenesisCandidateCoins.front().GetInputCoin();
+        ctl.Select(inputCoin.outpoint);
+        const token::Id tokenId{inputCoin.outpoint.GetTxId()};
+        token::OutputDataPtr tokenData{tokenId, token::SafeAmount::fromIntUnchecked(12345),
+                                       token::NFTCommitment(5u, uint8_t(0x1c)), true /* hasNFT */};
+        const auto spk = GetScriptForRawPubKey(coinbaseKey.GetPubKey());
+        const CRecipient toMe{spk, 100 * CASH, tokenData, false};
+
+        AddTx(toMe, CoinSelectionHint::Default, nullptr, ctl);
+        return tokenId;
+    };
+
+    auto SendTokenToSelf = [&](const COutput &output) {
+          CCoinControl ctl;
+          ctl.fAllowOtherInputs = false;
+          ctl.m_allow_tokens = true;
+          ctl.m_tokens_only = true;
+          ctl.Select(output.GetInputCoin().outpoint);
+
+          const auto txout = output.GetInputCoin().txout;
+          const CRecipient toMe{txout.scriptPubKey, txout.nValue, txout.tokenDataPtr, true /* subtract fee */};
+
+          AddTx(toMe, CoinSelectionHint::Default, nullptr, ctl);
+    };
+
+    BOOST_CHECK_MESSAGE(GetTokenCoins().empty(), "Wallet should start out with no tokens");
+
+    // Create a new token, consuming a coin that has output index 0 to do so.
+    const auto tokenId = GenesisTokenToWallet();
+
+    // Now query that we have 1 token in the wallet after genesis above
+    auto tokenCoins = GetTokenCoins();
+    BOOST_CHECK_MESSAGE(GetTokenCoins().size() == 1, "Wallet should now have 1 token coin in it");
+    CTxOut txout = tokenCoins.front().GetInputCoin().txout;
+    const COutPoint token1OutPt = tokenCoins.front().GetInputCoin().outpoint;
+    BOOST_CHECK_MESSAGE(txout.tokenDataPtr && txout.tokenDataPtr->GetId() == tokenId,
+                        "The single token should be the one we expect");
+
+    // Now send the token to self again
+    SendTokenToSelf(tokenCoins.front());
+    tokenCoins = GetTokenCoins();
+    BOOST_CHECK_MESSAGE(GetTokenCoins().size() == 1, "Wallet should still have 1 token coin in it");
+    const COutPoint token2OutPt = tokenCoins.front().GetInputCoin().outpoint;
+    BOOST_CHECK_MESSAGE(token1OutPt != token2OutPt, "The wallet's token was moved to the new output");
+
+    // Check that the default "AvailableCoins" should always omit tokens
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        std::vector<COutput> vCoins;
+        wallet->AvailableCoins(*m_locked_chain, vCoins);
+        BOOST_CHECK_MESSAGE( ! vCoins.empty(), "Available coins should not be empty for below test to work");
+        BOOST_CHECK_MESSAGE(std::none_of(vCoins.begin(), vCoins.end(),
+                                         [](const auto &coin) { return bool(coin.GetInputCoin().txout.tokenDataPtr); }),
+                            "Default coin selection should always skip coins with tokens on them");
+    }
+
+    // Check that sending all of the balance to an external address doesn't burn tokens
+    const auto balanceBefore = wallet->GetAvailableBalance();
+    BOOST_TEST_MESSAGE(strprintf("Wallet available balance: %s", balanceBefore.ToString()));
+    CScript extScriptPubKey;
+    {
+        CKey extPrivKey;
+        CPubKey extPubKey;
+        extPrivKey.MakeNewKey(false);
+        extPubKey = extPrivKey.GetPubKey();
+        BOOST_CHECK(extPubKey.IsFullyValid());
+        extScriptPubKey = GetScriptForDestination(extPubKey.GetID()); // P2PKH
+    }
+
+    const CRecipient toExt{extScriptPubKey, balanceBefore, {}, true /* subtract fees from amount */};
+    AddTx(toExt); // send all non-token coins to external address
+
+    const auto balanceAfter = wallet->GetAvailableBalance();
+    BOOST_CHECK_MESSAGE(balanceBefore != balanceAfter && balanceAfter == 50 * COIN,
+                        "Our ending balance should be just 50 BCH (newly matured coinbase from mining).");
+    BOOST_CHECK_MESSAGE(GetTokenCoins().size() == 1, "Ensure that after sending all, we still have the token coin");
+    const auto balancePlusTokens = wallet->GetAvailableBalance(&allIncludingTokens);
+    BOOST_CHECK_MESSAGE(balancePlusTokens == balanceAfter + tokenCoins.front().GetInputCoin().txout.nValue,
+                        "Extra balance check (listing all coins + token coins) should be what we expect");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

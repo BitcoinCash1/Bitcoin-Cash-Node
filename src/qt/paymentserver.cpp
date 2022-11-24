@@ -122,8 +122,8 @@ static bool ipcCanParseLegacyURI(const QString &arg,
 //
 void PaymentServer::ipcParseCommandLine(interfaces::Node &node, int argc,
                                         char *argv[]) {
-    std::array<const std::string *, 4> networks = {
-        {&CBaseChainParams::MAIN, &CBaseChainParams::TESTNET, &CBaseChainParams::TESTNET4,
+    std::array<const std::string *, 5> networks = {
+        {&CBaseChainParams::MAIN, &CBaseChainParams::TESTNET, &CBaseChainParams::TESTNET4, &CBaseChainParams::CHIPNET,
          &CBaseChainParams::REGTEST}};
 
     const std::string *chosenNetwork = nullptr;
@@ -639,7 +639,7 @@ bool PaymentServer::processPaymentRequest(const PaymentRequestPlus &request,
     for (const std::pair<CScript, Amount> &sendingTo : sendingTos) {
         // Extract and check destination addresses
         CTxDestination dest;
-        if (ExtractDestination(sendingTo.first, dest)) {
+        if (ExtractDestination(sendingTo.first, dest, 0 /* no p2sh_32 */)) {
             // Append destination address
             addresses.append(
                 QString::fromStdString(EncodeCashAddr(dest, Params())));

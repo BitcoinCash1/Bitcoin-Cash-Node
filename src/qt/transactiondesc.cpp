@@ -206,7 +206,7 @@ QString TransactionDesc::toHTML(interfaces::Node &node,
                 if (!wtx.value_map.count("to") || wtx.value_map["to"].empty()) {
                     // Offline transaction
                     CTxDestination address;
-                    if (ExtractDestination(txout.scriptPubKey, address)) {
+                    if (ExtractDestination(txout.scriptPubKey, address, 0 /* no p2sh_32 */)) {
                         strHTML += "<b>" + tr("To") + ":</b> ";
                         std::string name;
                         if (wallet.getAddress(address, &name,
@@ -379,7 +379,7 @@ QString TransactionDesc::toHTML(interfaces::Node &node,
                 strHTML += "<li>";
                 const CTxOut &vout = prev.GetTxOut();
                 CTxDestination address;
-                if (ExtractDestination(vout.scriptPubKey, address)) {
+                if (ExtractDestination(vout.scriptPubKey, address, 0 /* no p2sh_32 */)) {
                     std::string name;
                     if (wallet.getAddress(address, &name,
                                           /* is_mine= */ nullptr,

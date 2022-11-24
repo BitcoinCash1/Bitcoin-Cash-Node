@@ -20,4 +20,7 @@ namespace ChainParamsConstants {
     // Scalenet re-organizes above height 10,000 - use block 9,999 hash here.
     const BlockHash SCALENET_DEFAULT_ASSUME_VALID = BlockHash::fromHex("000000007fb3362740efd1435aa414f54171993483799782f83c61bc7bf1b1be");
     const uint256 SCALENET_MINIMUM_CHAIN_WORK = uint256S("00000000000000000000000000000000000000000000000003a54dce8032552f");
+
+    const BlockHash CHIPNET_DEFAULT_ASSUME_VALID = BlockHash::fromHex("00000000f053c918cf174ebcdc0b886e2315f3f0337a8ce0fcc42eb4ce403fe5");
+    const uint256 CHIPNET_MINIMUM_CHAIN_WORK = uint256S("0000000000000000000000000000000000000000000000000161bec9fb1873fa");
 } // namespace ChainParamsConstants

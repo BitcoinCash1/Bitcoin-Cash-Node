@@ -39,8 +39,7 @@ static void VerifyNestedIfScript(benchmark::State &state) {
         auto stack_copy = stack;
         ScriptExecutionMetrics metrics = {};
         ScriptError error;
-        auto const null_context = std::nullopt;
-        bool ret = EvalScript(stack_copy, script, 0, BaseSignatureChecker(), metrics, null_context, &error);
+        bool ret = EvalScript(stack_copy, script, 0, BaseSignatureChecker(), metrics,  &error);
         assert(ret);
     }
 }
@@ -81,12 +80,7 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
     std::vector<PrecomputedTransactionData> txdataVec;
     if (reallyCheckSigs) {
         txdataVec.reserve(block.vtx.size());
-        for (const auto &tx : block.vtx) {
-            if (tx->IsCoinBase()) continue;
-            txdataVec.emplace_back(*tx);
-        }
     }
-
 
     const auto &coins = coinsCache; // get a const reference to be safe
     std::vector<const Coin *> coinsVec; // coins being spent laid out in block input order
@@ -100,15 +94,18 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
             assert(!coin.IsSpent());
             coinsVec.push_back(&coin);
         }
+        if (reallyCheckSigs && !contexts.back().empty()) {
+            txdataVec.emplace_back(contexts.back().at(0));
+        }
     }
 
-    struct FakeSignaureChecker final : BaseSignatureChecker {
+    struct FakeSignaureChecker final : ContextOptSignatureChecker {
         bool VerifySignature(const std::vector<uint8_t> &, const CPubKey &, const uint256 &) const override { return true; }
         bool CheckSig(const std::vector<uint8_t> &, const std::vector<uint8_t> &, const CScript &, uint32_t) const override { return true; }
         bool CheckLockTime(const CScriptNum &) const override { return true; }
         bool CheckSequence(const CScriptNum &) const override { return true; }
+        using ContextOptSignatureChecker::ContextOptSignatureChecker;
     };
-    const FakeSignaureChecker fakeChecker;
 
     while (state.KeepRunning()) {
         size_t okct = 0;
@@ -125,10 +122,11 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
                 if (reallyCheckSigs) {
                     assert(txdataVecIdx < txdataVec.size());
                     const auto &txdata = txdataVec[txdataVecIdx];
-                    const TransactionSignatureChecker checker(tx.get(), inputNum, coin.GetTxOut().nValue, txdata);
-                    ok = VerifyScript(inp.scriptSig, coin.GetTxOut().scriptPubKey, flags, checker, context, &serror);
+                    const TransactionSignatureChecker checker(context, txdata);
+                    ok = VerifyScript(inp.scriptSig, coin.GetTxOut().scriptPubKey, flags, checker, &serror);
                 } else {
-                    ok = VerifyScript(inp.scriptSig, coin.GetTxOut().scriptPubKey, flags, fakeChecker, context, &serror);
+                    ok = VerifyScript(inp.scriptSig, coin.GetTxOut().scriptPubKey, flags, FakeSignaureChecker(context),
+                                      &serror);
                 }
                 if (!ok) {
                     throw std::runtime_error(

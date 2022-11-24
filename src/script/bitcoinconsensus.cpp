@@ -100,13 +100,15 @@ static int verify_script(const uint8_t *scriptPubKey,
         set_error(err, bitcoinconsensus_ERR_OK);
 
         CScript const spk(scriptPubKey, scriptPubKey + scriptPubKeyLen);
-        PrecomputedTransactionData txdata(tx);
-        ScriptExecutionContext const context(nIn, spk, amount, tx);
+        ScriptExecutionContext const context(nIn, CTxOut(amount, spk,
+                                                         {} /* no token data (unsupported for now in this lib) */),
+                                             tx);
+        PrecomputedTransactionData txdata(context);
 
         return VerifyScript(
             tx.vin[nIn].scriptSig,
             spk, flags,
-            TransactionSignatureChecker(&tx, nIn, amount, txdata), context, nullptr);
+            TransactionSignatureChecker(context, txdata));
     } catch (const std::exception &) {
         // Error deserializing
         return set_error(err, bitcoinconsensus_ERR_TX_DESERIALIZE);

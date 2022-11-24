@@ -383,11 +383,13 @@ void SetupServerArgs() {
     const auto testnet4BaseParams = CreateBaseChainParams(CBaseChainParams::TESTNET4);
     const auto regtestBaseParams = CreateBaseChainParams(CBaseChainParams::REGTEST);
     const auto scalenetBaseParams = CreateBaseChainParams(CBaseChainParams::SCALENET);
+    const auto chipnetBaseParams = CreateBaseChainParams(CBaseChainParams::CHIPNET);
     const auto defaultChainParams = CreateChainParams(CBaseChainParams::MAIN);
     const auto testnetChainParams = CreateChainParams(CBaseChainParams::TESTNET);
     const auto testnet4ChainParams = CreateChainParams(CBaseChainParams::TESTNET4);
     const auto regtestChainParams = CreateChainParams(CBaseChainParams::REGTEST);
     const auto scalenetChainParams = CreateChainParams(CBaseChainParams::SCALENET);
+    const auto chipnetChainParams = CreateChainParams(CBaseChainParams::CHIPNET);
 
     // Hidden Options
     std::vector<std::string> hidden_args = {
@@ -469,11 +471,12 @@ void SetupServerArgs() {
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-excessiveblocksize=<n>",
                  strprintf("Do not accept blocks larger than this limit, in "
-                           "bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, regtest: %u)",
+                           "bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u, regtest: %u)",
                            defaultChainParams->GetConsensus().nDefaultExcessiveBlockSize,
                            testnetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
                            testnet4ChainParams->GetConsensus().nDefaultExcessiveBlockSize,
                            scalenetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
+                           chipnetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
                            regtestChainParams->GetConsensus().nDefaultExcessiveBlockSize),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-feefilter",
@@ -511,11 +514,12 @@ void SetupServerArgs() {
                  "Imports blocks from external blk000??.dat file on startup",
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-maxmempool=<n>", strprintf("Keep the transaction memory pool below <n> "
-                 "megabytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u)",
+                 "megabytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u)",
                  DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * defaultChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
                  DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
                  DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnet4ChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * scalenetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE),
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * scalenetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * chipnetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-maxorphantx=<n>",
                  strprintf("Keep at most <n> unconnectable transactions in "
@@ -544,8 +548,8 @@ void SetupServerArgs() {
         "-expire",
         strprintf(
             "Limit functionality of this node after the tentative upgrade "
-            "date of May 15, 2023 (date can be set with "
-            "-upgrade9activationtime=<n>). To avoid inadvertently using the "
+            "date of May 15, 2024 (date can be set with "
+            "-upgrade10activationtime=<n>). To avoid inadvertently using the "
             "wrong chain, the RPC interface will be disabled at that time. "
             "(default: %d)", software_outdated::DEFAULT_EXPIRE),
         ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -641,10 +645,11 @@ void SetupServerArgs() {
                  strprintf("Bind to given address and always listen on it (default: 0.0.0.0). Use [host]:port notation "
                            "for IPv6. Append =onion to tag any incoming connections to that address and port as "
                            "incoming Tor connections (default: 127.0.0.1:%u=onion, testnet: 127.0.0.1:%u=onion, "
-                           "testnet4: 127.0.0.1:%u=onion, scalenet: 127.0.0.1:%u=onion, regtest: 127.0.0.1:%u=onion)",
+                           "testnet4: 127.0.0.1:%u=onion, scalenet: 127.0.0.1:%u=onion, chipnet: 127.0.0.1:%u=onion, "
+                           "regtest: 127.0.0.1:%u=onion)",
                            defaultBaseParams->OnionServiceTargetPort(), testnetBaseParams->OnionServiceTargetPort(),
                            testnet4BaseParams->OnionServiceTargetPort(), scalenetBaseParams->OnionServiceTargetPort(),
-                           regtestBaseParams->OnionServiceTargetPort()),
+                           chipnetBaseParams->OnionServiceTargetPort(), regtestBaseParams->OnionServiceTargetPort()),
                  ArgsManager::ALLOW_ANY | ArgsManager::NETWORK_ONLY, OptionsCategory::CONNECTION);
     gArgs.AddArg(
         "-connect=<ip>",
@@ -720,11 +725,12 @@ void SetupServerArgs() {
                  ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     gArgs.AddArg("-port=<port>",
                  strprintf("Listen for connections on <port> (default: %u, "
-                           "testnet: %u, testnet4: %u, scalenet: %u, regtest: %u)",
+                           "testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u, regtest: %u)",
                            defaultChainParams->GetDefaultPort(),
                            testnetChainParams->GetDefaultPort(),
                            testnet4ChainParams->GetDefaultPort(),
                            scalenetChainParams->GetDefaultPort(),
+                           chipnetChainParams->GetDefaultPort(),
                            regtestChainParams->GetDefaultPort()),
                  ArgsManager::ALLOW_ANY | ArgsManager::NETWORK_ONLY, OptionsCategory::CONNECTION);
     gArgs.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY,
@@ -945,9 +951,15 @@ void SetupServerArgs() {
         ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-upgrade9activationtime=<n>",
-        strprintf("Activation time of the tentative May 2023 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
+        strprintf("Activation time of the May 2023 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
                   "default: %d)",
                   defaultChainParams->GetConsensus().upgrade9ActivationTime),
+        true, OptionsCategory::DEBUG_TEST);
+    gArgs.AddArg(
+        "-upgrade10activationtime=<n>",
+        strprintf("Activation time of the tentative May 2024 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
+                  "default: %d)",
+                  defaultChainParams->GetConsensus().upgrade10ActivationTime),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-printtoconsole",
@@ -1051,11 +1063,12 @@ void SetupServerArgs() {
 
     gArgs.AddArg("-blockmaxsize=<n>",
                  strprintf("Set maximum block size in bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, "
-                           "regtest: %u)",
+                           "chipnet: %u, regtest: %u)",
                            defaultChainParams->GetConsensus().nDefaultGeneratedBlockSize,
                            testnetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
                            testnet4ChainParams->GetConsensus().nDefaultGeneratedBlockSize,
                            scalenetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
+                           chipnetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
                            regtestChainParams->GetConsensus().nDefaultGeneratedBlockSize),
                  ArgsManager::ALLOW_ANY, OptionsCategory::BLOCK_CREATION);
 
@@ -1127,11 +1140,12 @@ void SetupServerArgs() {
         ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     gArgs.AddArg("-rpcport=<port>",
                  strprintf("Listen for JSON-RPC connections on <port> "
-                           "(default: %u, testnet: %u, testnet4: %u, scalenet: %u, regtest: %u)",
+                           "(default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u, regtest: %u)",
                            defaultBaseParams->RPCPort(),
                            testnetBaseParams->RPCPort(),
                            testnet4BaseParams->RPCPort(),
                            scalenetBaseParams->RPCPort(),
+                           chipnetBaseParams->RPCPort(),
                            regtestBaseParams->RPCPort()),
                  ArgsManager::ALLOW_ANY | ArgsManager::NETWORK_ONLY, OptionsCategory::RPC);
     gArgs.AddArg("-rpcallowip=<ip>",
@@ -2194,9 +2208,9 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
      * Set up the "software outdated" mechanism.
      */
     if (gArgs.GetBoolArg("-expire", software_outdated::DEFAULT_EXPIRE)) {
-        // The software outdated warning will start to happen 30 days before May 15th, 2023.
-        software_outdated::nTime = gArgs.GetArg("-upgrade9activationtime",
-                                                chainparams.GetConsensus().upgrade9ActivationTime);
+        // The software outdated warning will start to happen 30 days before May 15th, 2024.
+        software_outdated::nTime = gArgs.GetArg("-upgrade10activationtime",
+                                                chainparams.GetConsensus().upgrade10ActivationTime);
         if (software_outdated::nTime > 0) {
             software_outdated::fDisableRPCOnExpiry =
                     gArgs.GetBoolArg("-expirerpc", software_outdated::DEFAULT_EXPIRE_RPC);

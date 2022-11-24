@@ -24,12 +24,11 @@ std::array<uint32_t, 3> flagset{{0, STANDARD_SCRIPT_VERIFY_FLAGS}};
 static
 void CheckTestResultForAllFlags(const stacktype &original_stack, const CScript &script, const stacktype &expected) {
     BaseSignatureChecker sigchecker;
-    auto const null_context = std::nullopt;
 
     for (uint32_t flags : flagset) {
         ScriptError err = ScriptError::OK;
         stacktype stack{original_stack};
-        bool r = EvalScript(stack, script, flags, sigchecker, null_context, &err);
+        bool r = EvalScript(stack, script, flags, sigchecker, &err);
         BOOST_CHECK(r);
         BOOST_CHECK(stack == expected);
     }
@@ -40,10 +39,10 @@ void CheckError(uint32_t flags, const stacktype &original_stack, const CScript &
     BaseSignatureChecker sigchecker;
     ScriptError err = ScriptError::OK;
     stacktype stack{original_stack};
-    auto const null_context = std::nullopt;
-    bool r = EvalScript(stack, script, flags, sigchecker, null_context, &err);
+    bool r = EvalScript(stack, script, flags, sigchecker, &err);
     BOOST_CHECK(!r);
-    BOOST_CHECK(err == expected_error);
+    BOOST_CHECK_MESSAGE(err == expected_error, strprintf("err: \"%s\", expected_error: \"%s\"",
+                                                         ScriptErrorString(err), ScriptErrorString(expected_error)));
 }
 
 static void CheckErrorForAllFlags(const stacktype &original_stack,
@@ -635,15 +634,15 @@ static void CheckDivMod(const valtype &a, const valtype &b, const valtype &divEx
         CheckError(flags, {b, {}}, CScript() << OP_DIV, ScriptError::DIV_BY_ZERO);
 
         if (flags & SCRIPT_VERIFY_MINIMALDATA) {
-            CheckError(flags, {a, {0x00}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {a, {0x80}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {a, {0x00, 0x00}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {a, {0x00, 0x80}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
+            CheckError(flags, {a, {0x00}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {a, {0x80}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {a, {0x00, 0x00}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {a, {0x00, 0x80}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
 
-            CheckError(flags, {b, {0x00}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {b, {0x80}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {b, {0x00, 0x00}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
-            CheckError(flags, {b, {0x00, 0x80}}, CScript() << OP_DIV, ScriptError::UNKNOWN);
+            CheckError(flags, {b, {0x00}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {b, {0x80}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {b, {0x00, 0x00}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
+            CheckError(flags, {b, {0x00, 0x80}}, CScript() << OP_DIV, ScriptError::MINIMALNUM);
         } else {
             CheckError(flags, {a, {0x00}}, CScript() << OP_DIV, ScriptError::DIV_BY_ZERO);
             CheckError(flags, {a, {0x80}}, CScript() << OP_DIV, ScriptError::DIV_BY_ZERO);
@@ -689,9 +688,9 @@ BOOST_AUTO_TEST_CASE(div_and_mod_opcode_error_tests) {
     CheckDivModError({{}}, ScriptError::INVALID_STACK_OPERATION);
 
     // CheckOps not valid numbers
-    CheckDivModError({{0x01, 0x02, 0x03, 0x04, 0x05}, {0x01, 0x02, 0x03, 0x04, 0x05}}, ScriptError::UNKNOWN);
-    CheckDivModError({{0x01, 0x02, 0x03, 0x04, 0x05}, {0x01}}, ScriptError::UNKNOWN);
-    CheckDivModError({{0x01, 0x05}, {0x01, 0x02, 0x03, 0x04, 0x05}}, ScriptError::UNKNOWN);
+    CheckDivModError({{0x01, 0x02, 0x03, 0x04, 0x05}, {0x01, 0x02, 0x03, 0x04, 0x05}}, ScriptError::INVALID_NUMBER_RANGE);
+    CheckDivModError({{0x01, 0x02, 0x03, 0x04, 0x05}, {0x01}}, ScriptError::INVALID_NUMBER_RANGE);
+    CheckDivModError({{0x01, 0x05}, {0x01, 0x02, 0x03, 0x04, 0x05}}, ScriptError::INVALID_NUMBER_RANGE);
 }
 
 static void div_and_mod_opcode_helper(size_t maxIntegerSize) {

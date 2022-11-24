@@ -15,6 +15,7 @@ const std::string CBaseChainParams::MAIN = "main";
 const std::string CBaseChainParams::TESTNET = "test";
 const std::string CBaseChainParams::TESTNET4 = "test4";
 const std::string CBaseChainParams::SCALENET = "scale";
+const std::string CBaseChainParams::CHIPNET = "chip";
 const std::string CBaseChainParams::REGTEST = "regtest";
 
 void SetupChainParamsBaseOptions() {
@@ -28,6 +29,8 @@ void SetupChainParamsBaseOptions() {
     gArgs.AddArg("-testnet4", "Use the test4 chain", ArgsManager::ALLOW_ANY,
                  OptionsCategory::CHAINPARAMS);
     gArgs.AddArg("-scalenet", "Use the scaling test chain", ArgsManager::ALLOW_ANY,
+                 OptionsCategory::CHAINPARAMS);
+    gArgs.AddArg("-chipnet", "Use the upcoming upgrade activation chain", ArgsManager::ALLOW_ANY,
                  OptionsCategory::CHAINPARAMS);
 }
 
@@ -57,6 +60,10 @@ std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const std::string &chain
 
     if (chain == CBaseChainParams::SCALENET) {
         return std::make_unique<CBaseChainParams>("scalenet", 38332, 38334);
+    }
+
+    if (chain == CBaseChainParams::CHIPNET) {
+        return std::make_unique<CBaseChainParams>("chipnet", 48332, 48334);
     }
 
     if (chain == CBaseChainParams::REGTEST) {

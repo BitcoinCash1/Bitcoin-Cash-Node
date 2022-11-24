@@ -11,10 +11,22 @@ def main(test_name, input_file):
     print("#include <cstdint>\n")
     print("namespace json_tests {")
     print("static const uint8_t {}[] = {{".format(test_name))
-    print(", ".join(map(lambda x: "0x{:02x}".format(x), contents)))
-    print("};")
-    print("};")
 
+    ctr = 0
+
+    def formatter(bb: bytes) -> str:
+        nonlocal ctr
+        ret = f"0x{bb:02x}"
+        # Allow for up to 20 items per line
+        if ctr >= 20:
+            ctr = 0
+            ret = "\n" + ret
+        ctr += 1
+        return ret
+
+    print(", ".join(map(formatter, contents)))
+    print("};")
+    print("} // namespace json_tests")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

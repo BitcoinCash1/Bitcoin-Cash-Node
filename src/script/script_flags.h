@@ -109,4 +109,11 @@ enum {
 
     // Native Introspection opcodes.
     SCRIPT_NATIVE_INTROSPECTION = (1U << 25),
+
+    // Enable p2sh32 (uses OP_HASH256 rather than OP_HASH160)
+    SCRIPT_ENABLE_P2SH_32 = (1U << 26),
+
+    // Enable native tokens support, including all consensus rules & native
+    // introspection op-codes related to them.
+    SCRIPT_ENABLE_TOKENS = (1U << 27),
 };

@@ -21,8 +21,7 @@ void CheckErrorWithFlags(const uint32_t flags, const stacktype &original_stack, 
     BaseSignatureChecker sigchecker;
     ScriptError err = ScriptError::OK;
     stacktype stack{original_stack};
-    auto const null_context = std::nullopt;
-    bool r = EvalScript(stack, script, flags, sigchecker, null_context, &err);
+    bool r = EvalScript(stack, script, flags, sigchecker, &err);
     BOOST_CHECK(!r);
     BOOST_CHECK(err == expected);
 }
@@ -32,8 +31,7 @@ void CheckPassWithFlags(const uint32_t flags, const stacktype &original_stack, c
     BaseSignatureChecker sigchecker;
     ScriptError err = ScriptError::OK;
     stacktype stack{original_stack};
-    auto const null_context = std::nullopt;
-    bool r = EvalScript(stack, script, flags, sigchecker, null_context, &err);
+    bool r = EvalScript(stack, script, flags, sigchecker, &err);
     BOOST_CHECK(r);
     BOOST_CHECK(err == ScriptError::OK);
     BOOST_CHECK(stack == expected);

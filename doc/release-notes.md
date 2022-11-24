@@ -20,7 +20,8 @@ TODO
 
 ## Added functionality
 
-TODO
+P2SH-32 (pay-to-scripthash 32) support has been added and consensus rules for this
+feature will activate on May 15, 2023.
 
 ## Deprecated functionality
 
@@ -28,7 +29,37 @@ TODO
 
 ## Modified functionality
 
-TODO
+#### Two error messages have changed:
+
+- If the node receives a transaction that spends an UTXO with a locking script >10,000 bytes, the node now generates
+  the error message `bad-txns-input-scriptpubkey-unspendable`. Previously it would generate the message
+  `mandatory-script-verify-flag-failed (Script is too big)`
+
+- Similarly, if the node receives a transaction that spends an `OP_RETURN` output, the node now generates the error
+  message `bad-txns-input-scriptpubkey-unspendable`. Previously it would generate the message
+  `mandatory-script-verify-flag-failed (OP_RETURN was encountered)`
+
+The reason for this change is that sometimes an oversized locking script ended up "looking like" an `OP_RETURN` anyway
+when read from the UTXO database and so the previous behavior was inconsistent because it depended on whether the output
+being spent was consuming an output still in memory or coming from the UTXO db.  Thus, it was possible to receive the
+`OP_RETURN`-related error message when actually attempting to spend an output with an oversized locking script.  As
+such, the two ambiguous cases have been collapsed down into 1 consistent error message.
+
+This error message change does mean that the node will now push a different BIP61 string to its peers when it receives
+an invalid transaction that triggers these error conditions.  However, no known nodes actually pay much attention to the
+exact format of the error message that they receive when a transaction is rejected by a peer, so this change should
+be relatively benign.
+
+#### P2SH-32 addresses are now supported by RPC
+
+Certain RPC methods that take an `address` parameter (such as `sendtoaddress`) will now
+also correctly parse P2SH-32 addresses and thus will allow composing of transactions and
+sending of funds to P2SH-32 addresses, even before the May 15, 2023 upgrade date.  Note that
+on mainnet such transactions will remain non-standard and cannot be relayed until P2SH-32
+activates on May 15, 2023. For reference, P2SH-32 addresses are longer than regular P2SH
+addresses, for example: `bitcoincash:pwqwzrf7z06m7nn58tkdjyxqfewanlhyrpxysack85xvf3mt0rv02l9dxc5uf`
+is a P2SH-32 address.
+
 
 ## Removed functionality
 

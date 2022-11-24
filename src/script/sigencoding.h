@@ -12,9 +12,7 @@
 #include <cstdint>
 #include <vector>
 
-typedef std::vector<uint8_t> valtype;
-
-namespace {
+using valtype = std::vector<uint8_t>;
 
 inline SigHashType GetHashType(const valtype &vchSig) {
     if (vchSig.size() == 0) {
@@ -23,8 +21,6 @@ inline SigHashType GetHashType(const valtype &vchSig) {
 
     return SigHashType(vchSig[vchSig.size() - 1]);
 }
-
-} // namespace
 
 /**
  * Check that the signature provided on some data is properly encoded.

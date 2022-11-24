@@ -32,6 +32,8 @@ static std::map<std::string, uint32_t> mapFlagNames = {
     {"INPUT_SIGCHECKS", SCRIPT_VERIFY_INPUT_SIGCHECKS},
     {"64_BIT_INTEGERS", SCRIPT_64_BIT_INTEGERS},
     {"NATIVE_INTROSPECTION", SCRIPT_NATIVE_INTROSPECTION},
+    {"ENABLE_TOKENS", SCRIPT_ENABLE_TOKENS},
+    {"P2SH_32", SCRIPT_ENABLE_P2SH_32},
 };
 
 uint32_t ParseScriptFlags(const std::string &strFlags) {

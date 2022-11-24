@@ -365,7 +365,7 @@ static CTransactionRef SendMoney(interfaces::Chain::Lock &locked_chain,
     std::string strError;
     std::vector<CRecipient> vecSend;
     int nChangePosRet = -1;
-    CRecipient recipient = {scriptPubKey, nValue, fSubtractFeeFromAmount};
+    CRecipient recipient = {scriptPubKey, nValue, {}, fSubtractFeeFromAmount};
     vecSend.push_back(recipient);
 
     CTransactionRef tx;
@@ -805,6 +805,7 @@ static UniValue getreceivedbylabel(const Config &config,
     // in upcoming commit.
     LockAnnotation lock(::cs_main);
     auto locked_chain = pwallet->chain().lock();
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ChainActive().Tip());
     LOCK(pwallet->cs_wallet);
 
     // Minimum confirmations
@@ -830,7 +831,7 @@ static UniValue getreceivedbylabel(const Config &config,
 
         for (const CTxOut &txout : wtx.tx->vout) {
             CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) &&
+            if (ExtractDestination(txout.scriptPubKey, address, scriptFlags) &&
                 IsMine(*pwallet, address) && setAddress.count(address)) {
                 if (wtx.GetDepthInMainChain(*locked_chain) >= nMinDepth) {
                     nAmount += txout.nValue;
@@ -1076,7 +1077,7 @@ static UniValue sendmany(const Config &config, const JSONRPCRequest &request) {
             }
         }
 
-        CRecipient recipient = {scriptPubKey, nAmount, fSubtractFeeFromAmount};
+        CRecipient recipient = {scriptPubKey, nAmount, {}, fSubtractFeeFromAmount};
         vecSend.push_back(recipient);
     }
 
@@ -1209,7 +1210,7 @@ static UniValue addmultisigaddress(const Config &config,
     // Construct using pay-to-script-hash:
     CScript inner = CreateMultisigRedeemscript(required, pubkeys);
     CTxDestination dest =
-        AddAndGetDestinationForScript(*pwallet, inner, output_type);
+        AddAndGetDestinationForScript(*pwallet, inner, output_type, false /* no p2sh32 */);
     pwallet->SetAddressBook(dest, label, "send");
 
     UniValue::Object result;
@@ -1233,6 +1234,8 @@ static UniValue::Array ListReceived(const Config &config, interfaces::Chain::Loc
     // Temporary, for ContextualCheckTransactionForCurrentBlock below. Removed
     // in upcoming commit.
     LockAnnotation lock(::cs_main);
+
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ChainActive().Tip());
 
     // Minimum confirmations
     int nMinDepth = 1;
@@ -1283,7 +1286,7 @@ static UniValue::Array ListReceived(const Config &config, interfaces::Chain::Loc
 
         for (const CTxOut &txout : wtx.tx->vout) {
             CTxDestination address;
-            if (!ExtractDestination(txout.scriptPubKey, address)) {
+            if (!ExtractDestination(txout.scriptPubKey, address, scriptFlags)) {
                 continue;
             }
 
@@ -3182,6 +3185,8 @@ static UniValue listunspent(const Config &config,
                             {"maximumAmount", RPCArg::Type::AMOUNT, /* opt */ true, /* default_val */ "unlimited", "Maximum value of each UTXO in " + CURRENCY_UNIT + ""},
                             {"maximumCount", RPCArg::Type::NUM, /* opt */ true, /* default_val */ "unlimited", "Maximum number of UTXOs"},
                             {"minimumSumAmount", RPCArg::Type::AMOUNT, /* opt */ true, /* default_val */ "unlimited", "Minimum sum value of all UTXOs in " + CURRENCY_UNIT + ""},
+                            {"includeTokens", RPCArg::Type::BOOL, /* opt */ true, /* default_val */ "false", "Whether to show UTXOs with CashTokens on them"},
+                            {"tokensOnly", RPCArg::Type::BOOL, /* opt */ true, /* default_val */ "false", "Whether to only show UTXOs with CashTokens on them (implies includeTokens=true)"},
                         },
                         "query_options"},
                 }}
@@ -3199,6 +3204,7 @@ static UniValue listunspent(const Config &config,
             "amount in " +
             CURRENCY_UNIT +
             "\n"
+            "    \"tokenData\" : { ... },    (object optional) token data\n"
             "    \"confirmations\" : n,      (numeric) The number of "
             "confirmations\n"
             "    \"redeemScript\" : n        (string) The redeemScript if "
@@ -3277,6 +3283,7 @@ static UniValue listunspent(const Config &config,
     Amount nMaximumAmount = MAX_MONEY;
     Amount nMinimumSumAmount = MAX_MONEY;
     uint64_t nMaximumCount = 0;
+    std::unique_ptr<CCoinControl> coinControl;
 
     if (!request.params[4].isNull()) {
         const UniValue::Object &options = request.params[4].get_obj();
@@ -3296,11 +3303,28 @@ static UniValue listunspent(const Config &config,
         if (auto maximumCountUV = options.locate("maximumCount")) {
             nMaximumCount = maximumCountUV->get_int64();
         }
+        if (auto includeTokensUV = options.locate("includeTokens")) {
+            if (includeTokensUV->get_bool()) {
+                if (!coinControl) coinControl = std::make_unique<CCoinControl>();
+                coinControl->m_allow_tokens = true;
+            }
+        }
+        if (auto tokensOnlyUV = options.locate("tokensOnly")) {
+            if (tokensOnlyUV->get_bool()) {
+                if (!coinControl) coinControl = std::make_unique<CCoinControl>();
+                coinControl->m_tokens_only = coinControl->m_allow_tokens = true;
+            }
+        }
     }
 
     // Make sure the results are valid at least up to the most recent block
     // the user could have gotten from another RPC command prior to now
     pwallet->BlockUntilSyncedToCurrentChain();
+
+    const auto scriptFlags = []{
+        LOCK(cs_main);
+        return GetMemPoolScriptFlags(Params().GetConsensus(), ::ChainActive().Tip());
+    }();
 
     UniValue::Array results;
     std::vector<COutput> vecOutputs;
@@ -3308,7 +3332,7 @@ static UniValue listunspent(const Config &config,
         auto locked_chain = pwallet->chain().lock();
         LOCK(pwallet->cs_wallet);
         pwallet->AvailableCoins(*locked_chain, vecOutputs, !include_unsafe,
-                                nullptr, nMinimumAmount, nMaximumAmount,
+                                coinControl.get(), nMinimumAmount, nMaximumAmount,
                                 nMinimumSumAmount, nMaximumCount, nMinDepth,
                                 nMaxDepth);
     }
@@ -3318,7 +3342,8 @@ static UniValue listunspent(const Config &config,
     for (const COutput &out : vecOutputs) {
         CTxDestination address;
         const CScript &scriptPubKey = out.tx->tx->vout[out.i].scriptPubKey;
-        bool fValidAddress = ExtractDestination(scriptPubKey, address);
+        const token::OutputDataPtr &tokenDataPtr = out.tx->tx->vout[out.i].tokenDataPtr;
+        bool fValidAddress = ExtractDestination(scriptPubKey, address, scriptFlags);
 
         if (destinations.size() &&
             (!fValidAddress || !destinations.count(address))) {
@@ -3337,8 +3362,8 @@ static UniValue listunspent(const Config &config,
                 entry.emplace_back("label", i->second.name);
             }
 
-            if (scriptPubKey.IsPayToScriptHash()) {
-                const CScriptID &hash = boost::get<CScriptID>(address);
+            if (scriptPubKey.IsPayToScriptHash(scriptFlags)) {
+                const ScriptID &hash = boost::get<ScriptID>(address);
                 CScript redeemScript;
                 if (pwallet->GetCScript(hash, redeemScript)) {
                     entry.emplace_back("redeemScript", HexStr(redeemScript));
@@ -3348,6 +3373,9 @@ static UniValue listunspent(const Config &config,
 
         entry.emplace_back("scriptPubKey", HexStr(scriptPubKey));
         entry.emplace_back("amount", ValueFromAmount(out.tx->tx->vout[out.i].nValue));
+        if (tokenDataPtr) {
+            entry.emplace_back("tokenData", TokenDataToUniv(*tokenDataPtr));
+        }
         entry.emplace_back("confirmations", out.nDepth);
         entry.emplace_back("spendable", out.fSpendable);
         entry.emplace_back("solvable", out.fSolvable);
@@ -3587,6 +3615,7 @@ UniValue signrawtransactionwithwallet(const Config &config,
                                     {"scriptPubKey", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "script key"},
                                     {"redeemScript", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "", "(required for P2SH)"},
                                     {"amount", RPCArg::Type::AMOUNT, /* opt */ false, /* default_val */ "", "The amount spent"},
+                                    GetTokenDataArgSpec(),
                                 },
                             },
                         },
@@ -3597,7 +3626,10 @@ UniValue signrawtransactionwithwallet(const Config &config,
             "       \"SINGLE|FORKID\"\n"
             "       \"ALL|FORKID|ANYONECANPAY\"\n"
             "       \"NONE|FORKID|ANYONECANPAY\"\n"
-            "       \"SINGLE|FORKID|ANYONECANPAY\""},
+            "       \"SINGLE|FORKID|ANYONECANPAY\"\n"
+            "       \"ALL|FORKID|UTXOS\"    (after May 2023 upgrade)\n"
+            "       \"NONE|FORKID|UTXOS\"   (after May 2023 upgrade)\n"
+            "       \"SINGLE|FORKID|UTXOS\" (after May 2023 upgrade)\n"},
                 }}
                 .ToString() +
             "\nResult:\n"
@@ -3805,26 +3837,28 @@ UniValue rescanblockchain(const Config &config, const JSONRPCRequest &request) {
  * Includes additional information if the address is in wallet pwallet (can be nullptr).
  * obj is the UniValue object to append to.
  */
-static void DescribeWalletAddress(CWallet *pwallet, const CTxDestination &dest, UniValue::Object& obj);
+static void DescribeWalletAddress(CWallet *pwallet, const CTxDestination &dest, UniValue::Object& obj,
+                                  const uint32_t scriptFlags);
 
 class DescribeWalletAddressVisitor : public boost::static_visitor<void> {
     CWallet *const pwallet;
     UniValue::Object& obj;
+    uint32_t scriptFlags{};
 
     void ProcessSubScript(const CScript &subscript,
                           bool include_addresses = false) const {
         // Always present: script type and redeemscript
         std::vector<std::vector<uint8_t>> solutions_data;
-        txnouttype which_type = Solver(subscript, solutions_data);
+        txnouttype which_type = Solver(subscript, solutions_data, scriptFlags);
         obj.emplace_back("script", GetTxnOutputType(which_type));
         obj.emplace_back("hex", HexStr(subscript));
 
         CTxDestination embedded;
         UniValue::Array a;
-        if (ExtractDestination(subscript, embedded)) {
+        if (ExtractDestination(subscript, embedded, scriptFlags)) {
             // Only when the script corresponds to an address.
             UniValue::Object subobj;
-            DescribeWalletAddress(pwallet, embedded, subobj);
+            DescribeWalletAddress(pwallet, embedded, subobj, scriptFlags);
             subobj.emplace_back("address", EncodeDestination(embedded, GetConfig()));
             subobj.emplace_back("scriptPubKey", HexStr(subscript));
             // Always report the pubkey at the top level, so that
@@ -3864,8 +3898,8 @@ class DescribeWalletAddressVisitor : public boost::static_visitor<void> {
 
 public:
 
-    explicit DescribeWalletAddressVisitor(CWallet *_pwallet, UniValue::Object& _obj)
-        : pwallet(_pwallet), obj(_obj) {}
+    explicit DescribeWalletAddressVisitor(CWallet *_pwallet, UniValue::Object& _obj, uint32_t scriptFlags_)
+        : pwallet(_pwallet), obj(_obj), scriptFlags(scriptFlags_) {}
 
     void operator()(const CNoDestination &dest) const {
     }
@@ -3878,7 +3912,7 @@ public:
         }
     }
 
-    void operator()(const CScriptID &scriptID) const {
+    void operator()(const ScriptID &scriptID) const {
         CScript subscript;
         if (pwallet && pwallet->GetCScript(scriptID, subscript)) {
             ProcessSubScript(subscript, true);
@@ -3888,9 +3922,10 @@ public:
 
 // Upstream version of this function has only two arguments and returns an intermediate UniValue object.
 // Instead, our version directly appends the new key-value pairs to the target UniValue object.
-static void DescribeWalletAddress(CWallet *pwallet, const CTxDestination &dest, UniValue::Object& obj) {
+static void DescribeWalletAddress(CWallet *pwallet, const CTxDestination &dest, UniValue::Object& obj,
+                                  const uint32_t scriptFlags) {
     DescribeAddress(dest, obj);
-    boost::apply_visitor(DescribeWalletAddressVisitor(pwallet, obj), dest);
+    boost::apply_visitor(DescribeWalletAddressVisitor(pwallet, obj, scriptFlags), dest);
 }
 
 /** Convert CAddressBookData to JSON record.  */
@@ -3992,6 +4027,11 @@ UniValue getaddressinfo(const Config &config, const JSONRPCRequest &request) {
                            "\"1PSSGeFHDnKNxiEyFrD1wcEaHr9hrQDDWc\""));
     }
 
+    const uint32_t scriptFlags = [&config] {
+        LOCK(cs_main);
+        return GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ChainActive().Tip());
+    }();
+
     LOCK(pwallet->cs_wallet);
 
     UniValue::Object ret;
@@ -4011,7 +4051,7 @@ UniValue getaddressinfo(const Config &config, const JSONRPCRequest &request) {
     isminetype mine = IsMine(*pwallet, dest);
     ret.emplace_back("ismine", bool(mine & ISMINE_SPENDABLE));
     ret.emplace_back("iswatchonly", bool(mine & ISMINE_WATCH_ONLY));
-    DescribeWalletAddress(pwallet, dest, ret);
+    DescribeWalletAddress(pwallet, dest, ret, scriptFlags);
     if (pwallet->mapAddressBook.count(dest)) {
         ret.emplace_back("label", pwallet->mapAddressBook[dest].name);
     }
@@ -4025,7 +4065,11 @@ UniValue getaddressinfo(const Config &config, const JSONRPCRequest &request) {
         }
     }
     if (!meta) {
-        auto it = pwallet->m_script_metadata.find(CScriptID(scriptPubKey));
+        auto it = pwallet->m_script_metadata.find(ScriptID(scriptPubKey, false /* isP2SH32 */));
+        if (it == pwallet->m_script_metadata.end()) {
+            // try again with P2SH32
+            it = pwallet->m_script_metadata.find(ScriptID(scriptPubKey, true));
+        }
         if (it != pwallet->m_script_metadata.end()) {
             meta = &it->second;
         }
@@ -4265,13 +4309,16 @@ static UniValue walletprocesspsbt(const Config &config,
                 {
                     {"psbt", RPCArg::Type::STR, /* opt */ false, /* default_val */ "", "The transaction base64 string"},
                     {"sign", RPCArg::Type::BOOL, /* opt */ true, /* default_val */ "true", "Also sign the transaction when updating"},
-                    {"sighashtype", RPCArg::Type::STR, /* opt */ true, /* default_val */ "ALL", "The signature hash type to sign with if not specified by the PSBT. Must be one of\n"
+                    {"sighashtype", RPCArg::Type::STR, /* opt */ true, /* default_val */ "ALL|FORKID", "The signature hash type to sign with if not specified by the PSBT. Must be one of\n"
             "       \"ALL|FORKID\"\n"
             "       \"NONE|FORKID\"\n"
             "       \"SINGLE|FORKID\"\n"
             "       \"ALL|FORKID|ANYONECANPAY\"\n"
             "       \"NONE|FORKID|ANYONECANPAY\"\n"
-            "       \"SINGLE|FORKID|ANYONECANPAY\""},
+            "       \"SINGLE|FORKID|ANYONECANPAY\"\n"
+            "       \"ALL|FORKID|UTXOS\"    (after May 2023 upgrade)\n"
+            "       \"NONE|FORKID|UTXOS\"   (after May 2023 upgrade)\n"
+            "       \"SINGLE|FORKID|UTXOS\" (after May 2023 upgrade)\n"},
                     {"bip32derivs", RPCArg::Type::BOOL, /* opt */ true, /* default_val */ "false", "If true, includes the BIP 32 derivation paths for public keys if we know them"},
                 }}
                 .ToString() +
@@ -4305,12 +4352,17 @@ static UniValue walletprocesspsbt(const Config &config,
                            "Signature must use SIGHASH_FORKID");
     }
 
+    const uint32_t scriptFlags = [&config] {
+        LOCK(cs_main);
+        return GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ::ChainActive().Tip());
+    }();
+
     // Fill transaction with our data and also sign
     bool sign =
         request.params[1].isNull() ? true : request.params[1].get_bool();
     bool bip32derivs =
         request.params[3].isNull() ? false : request.params[3].get_bool();
-    bool complete = FillPSBT(pwallet, psbtx, nHashType, sign, bip32derivs);
+    bool complete = FillPSBT(pwallet, psbtx, scriptFlags, nHashType, sign, bip32derivs);
 
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << psbtx;
@@ -4357,6 +4409,7 @@ static UniValue walletcreatefundedpsbt(const Config &config,
                                     {"address", RPCArg::Type::AMOUNT, /* opt */ true, /* default_val */ "", "A key-value pair. The key (string) is the Bitcoin Cash address, the value (float or string) is the amount in " + CURRENCY_UNIT + ""},
                                 },
                                 },
+                            GetAlternateAddressObjectOutputArgSpec(),
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
                                     {"data", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},
@@ -4412,6 +4465,11 @@ static UniValue walletcreatefundedpsbt(const Config &config,
                   UniValue::VOBJ|UniValue::VNULL,
                   UniValue::MBOOL|UniValue::VNULL});
 
+    const uint32_t scriptFlags = [&config] {
+        LOCK(cs_main);
+        return GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ::ChainActive().Tip());
+    }();
+
     Amount fee;
     int change_position;
     CMutableTransaction rawTx =
@@ -4426,7 +4484,7 @@ static UniValue walletcreatefundedpsbt(const Config &config,
     // Fill transaction with out data but don't sign
     bool bip32derivs =
         request.params[4].isNull() ? false : request.params[4].get_bool();
-    FillPSBT(pwallet, psbtx, SigHashType().withFork(), false, bip32derivs);
+    FillPSBT(pwallet, psbtx, scriptFlags, SigHashType().withFork(), false, bip32derivs);
 
     // Serialize the PSBT
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);

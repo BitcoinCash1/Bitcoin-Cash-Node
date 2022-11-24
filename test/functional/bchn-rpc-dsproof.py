@@ -8,6 +8,7 @@ import time
 from copy import deepcopy
 from decimal import Decimal
 from io import BytesIO
+from test_framework.authproxy import JSONRPCException
 from test_framework.blocktools import create_raw_transaction
 from test_framework.messages import CDSProof, msg_dsproof
 from test_framework.p2p import P2PInterface, p2p_lock
@@ -404,7 +405,7 @@ class DoubleSpendProofRPCTest(BitcoinTestFramework):
             prev_amount = amount
             txids.append(child_txid)
         # Now, bring back the block, confirming the parents that "contaminated" the children
-        # with the 0.0 score. The scores now for all children should 1.0.
+        # with the 0.0 score. The scores now for all children should be 1.0.
         self.nodes[0].reconsiderblock(blockhash)
         wait_until(
             lambda: self.nodes[0].getblockchaininfo()["bestblockhash"] == blockhash,
@@ -414,11 +415,51 @@ class DoubleSpendProofRPCTest(BitcoinTestFramework):
         # The scores are 1.0 for all the child txns after their score=0.0 parents are confirmed
         assert all(self.nodes[0].getdsproofscore(txid) == 1.0 for txid in txids)
 
+    def p2sh_score_check_non_canonical_sigs(self):
+        """Check that the dsproof score for inputs not signed with SIGHASH_ALL or signed with SIGHASH_ANYONECANPAY
+        return scores of 0.25"""
+        for non_canonical_hashtype in ("NONE|FORKID", "SINGLE|FORKID", "ALL|FORKID|ANYONECANPAY",
+                                       "NONE|FORKID|ANYONECANPAY", "SINGLE|FORKID|ANYONECANPAY"):
+            self.generate(self.nodes[0], 1)
+            self.sync_all()
+            addr = self.nodes[0].getnewaddress()
+            txid1 = self.nodes[0].sendtoaddress(addr, 49)
+            vout = find_output(self.nodes[0], txid1, Decimal('49'))
+            self.sync_all()
+            # Now spend it with a non-canonical hash type
+            tx_nc = create_raw_transaction(self.nodes[0], txid1, self.nodes[0].getnewaddress(), 48.9, vout,
+                                           sighashtype=non_canonical_hashtype)
+            tx_nc_txid = self.nodes[0].sendrawtransaction(tx_nc)
+            # Test that getdsproofscore should be 1.0 for a regular tx
+            assert_equal(self.nodes[0].getdsproofscore(txid1), 1.0)
+            # Test that getdsproofscore should be 0.25 for a tx that signs non-canonically
+            assert_equal(self.nodes[0].getdsproofscore(tx_nc_txid), 0.25)
+
+            # Now, ensure that a child of the above txn still has a score of 0.25
+            vout2 = find_output(self.nodes[0], tx_nc_txid, Decimal('48.9'))
+            tx_regular = create_raw_transaction(self.nodes[0], tx_nc_txid, self.nodes[0].getnewaddress(), 48.8, vout2)
+            tx_regular_txid = self.nodes[0].sendrawtransaction(tx_regular)
+            assert_equal(self.nodes[0].getdsproofscore(tx_regular_txid), 0.25)
+
+            # Now attempt to double-spend the output of txid1 with a second canonical txn
+            assert_equal(len(self.nodes[0].getdsprooflist()), 0)
+            tx_dblspend = create_raw_transaction(self.nodes[0], txid1, self.nodes[0].getnewaddress(), 48.9, vout)
+            try:
+                self.nodes[0].sendrawtransaction(tx_dblspend)
+                assert False  # Should not be reached
+            except JSONRPCException as e:
+                assert "txn-mempool-conflict" in str(e)
+            # We should have a double-spend proof for the descendant
+            assert_equal(len(self.nodes[0].getdsprooflist()), 1)
+            # And the score should drop from 0.25 to 0.0
+            assert_equal(self.nodes[0].getdsproofscore(tx_regular_txid), 0.0)
+
     def run_test(self):
         self.basic_check()
         self.paths_check()
         self.orphan_list_check()
         self.p2sh_score_check()
+        self.p2sh_score_check_non_canonical_sigs()
 
 
 if __name__ == '__main__':

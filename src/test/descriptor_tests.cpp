@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <policy/policy.h>
 #include <script/descriptor.h>
 #include <script/sign.h>
 #include <script/standard.h>
@@ -110,7 +111,7 @@ void Check(const std::string &prv, const std::string &pub, int flags,
                 BOOST_CHECK_EQUAL(ref[n], HexStr(spks[n]));
 
                 BOOST_CHECK_EQUAL(
-                    IsSolvable(Merge(key_provider, script_provider), spks[n], null_context),
+                    IsSolvable(Merge(key_provider, script_provider), spks[n], STANDARD_SCRIPT_VERIFY_FLAGS),
                     (flags & UNSOLVABLE) == 0);
 
                 if (flags & SIGNABLE) {
@@ -119,8 +120,8 @@ void Check(const std::string &prv, const std::string &pub, int flags,
                     spend.vout.resize(1);
                     BOOST_CHECK_MESSAGE(
                         SignSignature(Merge(keys_priv, script_provider),
-                                      spks[n], spend, 0, 1 * COIN,
-                                      SigHashType().withFork(), null_context),
+                                      spks[n], spend, 0, CTxOut{1 * COIN, spks[n]},
+                                      SigHashType().withFork(), STANDARD_SCRIPT_VERIFY_FLAGS, null_context),
                         prv);
                 }
             }

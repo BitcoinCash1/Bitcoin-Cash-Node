@@ -288,19 +288,27 @@ SigHashType ParseSighashString(const UniValue &sighash) {
         static std::map<std::string, int> map_sighash_values = {
             {"ALL", SIGHASH_ALL},
             {"ALL|ANYONECANPAY", SIGHASH_ALL | SIGHASH_ANYONECANPAY},
+            {"ALL|UTXOS", SIGHASH_ALL | SIGHASH_UTXOS},
+
             {"ALL|FORKID", SIGHASH_ALL | SIGHASH_FORKID},
-            {"ALL|FORKID|ANYONECANPAY",
-             SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
-            {"NONE", SIGHASH_NONE},
+            {"ALL|FORKID|ANYONECANPAY", SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
+            {"ALL|FORKID|UTXOS", SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_UTXOS},
+
+            {"NONE", SIGHASH_NONE },
             {"NONE|ANYONECANPAY", SIGHASH_NONE | SIGHASH_ANYONECANPAY},
+            {"NONE|UTXOS", SIGHASH_NONE | SIGHASH_UTXOS},
+
             {"NONE|FORKID", SIGHASH_NONE | SIGHASH_FORKID},
-            {"NONE|FORKID|ANYONECANPAY",
-             SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
+            {"NONE|FORKID|ANYONECANPAY", SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
+            {"NONE|FORKID|UTXOS", SIGHASH_NONE | SIGHASH_FORKID | SIGHASH_UTXOS},
+
             {"SINGLE", SIGHASH_SINGLE},
             {"SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY},
+            {"SINGLE|UTXOS", SIGHASH_SINGLE | SIGHASH_UTXOS},
+
             {"SINGLE|FORKID", SIGHASH_SINGLE | SIGHASH_FORKID},
-            {"SINGLE|FORKID|ANYONECANPAY",
-             SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
+            {"SINGLE|FORKID|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_ANYONECANPAY},
+            {"SINGLE|FORKID|UTXOS", SIGHASH_SINGLE | SIGHASH_FORKID | SIGHASH_UTXOS},
         };
         std::string strHashType = sighash.get_str();
         const auto &it = map_sighash_values.find(strHashType);
@@ -312,4 +320,79 @@ SigHashType ParseSighashString(const UniValue &sighash) {
         }
     }
     return sigHashType;
+}
+
+token::OutputData DecodeTokenDataUV(const UniValue &obj) {
+    token::Id category;
+    token::SafeAmount amount;
+    bool hasNFT{}, isMutable{}, isMinting{};
+    token::NFTCommitment comm;
+
+    if (!obj.isObject()) throw std::runtime_error("Bad tokenData; expected JSON object");
+    const UniValue::Object &o = obj.get_obj();
+
+    if (auto *val = o.locate("category")) {
+        if (!ParseHashStr(val->get_str(), category)) {
+            throw std::runtime_error("Parse error for \"category\"");
+        }
+    } else {
+        throw std::runtime_error("Missing \"category\" in tokenData");
+    }
+    if (auto *val = o.locate("amount")) {
+        // may be a string (to encode very large amounts) or an integer
+        amount = DecodeSafeAmount(*val);
+    }
+
+    if (auto *val = o.locate("nft")) {
+        if (!val->isObject()) throw std::runtime_error("Bad tokenData; expected JSON object for the \"nft\" key");
+        const UniValue::Object &o_nft = val->get_obj();
+
+        hasNFT = true;
+
+        if ((val = o_nft.locate("capability"))) { // optional, defaults to "none"
+            if (const auto lc_cap = ToLower(val->get_str()); lc_cap == "none") { /* pass */}
+            else if (lc_cap == "mutable") isMutable = true;
+            else if (lc_cap == "minting") isMinting = true;
+            else {
+                throw std::runtime_error("Invalid \"capability\" in tokenData; must be one of: "
+                                         "\"none\", \"minting\", or \"mutable\"");
+            }
+        }
+
+        if ((val = o_nft.locate("commitment"))) { // optional, defaults to "empty"
+            std::vector<uint8_t> vec;
+            if (!IsHex(val->get_str())
+                    || (vec = ParseHex(val->get_str())).size() > token::MAX_CONSENSUS_COMMITMENT_LENGTH) {
+                throw std::runtime_error("Invalid \"commitment\" in tokenData");
+            }
+            comm.assign(vec.begin(), vec.end());
+        }
+    }
+
+    if (!hasNFT && amount.getint64() == 0) {
+        throw std::runtime_error("Fungible amount must be >0 for fungible-only tokens");
+    }
+
+    token::OutputData ret(category, amount, comm);
+    ret.SetNFT(hasNFT, isMutable, isMinting);
+
+    if (!ret.IsValidBitfield()) {
+        throw std::runtime_error(strprintf("Invalid bitfield: %x", ret.GetBitfieldByte()));
+    }
+
+    return ret;
+}
+
+token::SafeAmount DecodeSafeAmount(const UniValue &obj) {
+    // Incoming amount may be a string (to encode very large amounts > 53bit), or an integer
+    if (obj.isStr() || obj.isNum()) {
+        // use the univalue parser (better than atoi64())
+        const UniValue objAsNumeric{UniValue::VNUM, obj.getValStr()};
+        // may throw on parse error (not an integer number string)
+        const auto optAmt = token::SafeAmount::fromInt(objAsNumeric.get_int64());
+        if (!optAmt) throw std::runtime_error("Invalid \"amount\" in tokenData");
+        return *optAmt;
+    }
+    // else ...
+    throw std::runtime_error("Expected a number or a string for \"amount\" in tokenData");
 }

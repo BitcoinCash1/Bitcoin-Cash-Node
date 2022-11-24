@@ -24,9 +24,8 @@
   - All upper-case letters except for 'I' and 'O'
   - All lower-case letters except for 'l'
 */
-BitcoinAddressEntryValidator::BitcoinAddressEntryValidator(
-    const std::string &cashaddrprefixIn, QObject *parent)
-    : QValidator(parent), cashaddrprefix(cashaddrprefixIn) {}
+BitcoinAddressEntryValidator::BitcoinAddressEntryValidator(QObject *parent)
+    : QValidator(parent) {}
 
 QValidator::State BitcoinAddressEntryValidator::validate(QString &input, [[maybe_unused]] int &pos) const {
 
@@ -93,10 +92,11 @@ QValidator::State BitcoinAddressCheckValidator::validate(QString &input, [[maybe
     }
 
     // If the address is otherwise valid, do some fix-up immediately.
-    CTxDestination destination = DecodeDestination(input.toStdString(), GetConfig().GetChainParams());
+    bool tokenAwareAddress{};
+    CTxDestination destination = DecodeDestination(input.toStdString(), GetConfig().GetChainParams(), &tokenAwareAddress);
     if (IsValidDestination(destination)) {
         // Normalize address notation (e.g. convert to CashAddr/Base58, add CashAddr prefix, uppercase CashAddr to lowercase)
-        input = QString::fromStdString(EncodeDestination(destination, GetConfig()));
+        input = QString::fromStdString(EncodeDestination(destination, GetConfig(), tokenAwareAddress));
         return QValidator::Acceptable;
     }
     return QValidator::Invalid;
@@ -119,11 +119,12 @@ void BitcoinAddressCheckValidator::fixup(QString &input) const /*override*/ {
         }
     }
 
-    CTxDestination destination = DecodeDestination(input.toStdString(), GetConfig().GetChainParams());
+    bool tokenAwareAddress{};
+    CTxDestination destination = DecodeDestination(input.toStdString(), GetConfig().GetChainParams(), &tokenAwareAddress);
     if (IsValidDestination(destination)) {
         // We have a valid address
         // Normalize address notation (e.g. convert to CashAddr/Base58, add CashAddr prefix, uppercase CashAddr to lowercase)
-        QString normalizedInput = QString::fromStdString(EncodeDestination(destination, GetConfig()));
+        QString normalizedInput = QString::fromStdString(EncodeDestination(destination, GetConfig(), tokenAwareAddress));
         // If CashAddr format addresses are enabled and a legacy address is
         // given, notify the user before converting it to CashAddr
         if (!GetConfig().UseCashAddrEncoding()

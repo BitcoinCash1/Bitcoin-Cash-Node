@@ -17,4 +17,6 @@ void CCoinControl::SetNull() {
     m_feerate.reset();
     fOverrideFeeRate = false;
     m_confirm_target.reset();
+    m_allow_tokens = false;
+    m_tokens_only = false;
 }

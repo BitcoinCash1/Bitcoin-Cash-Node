@@ -417,7 +417,7 @@ static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
         }
 
         case RetFormat::JSON: {
-            UniValue::Object objTx = TxToUniv(config, *tx, hashBlock);
+            UniValue::Object objTx = TxToUniv(config, *tx, hashBlock, true, RPCSerializationFlags());
             std::string strJSON = UniValue::stringify(objTx) + "\n";
             req->WriteHeader("Content-Type", "application/json");
             req->WriteReply(HTTP_OK, strJSON);

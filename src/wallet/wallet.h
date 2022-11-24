@@ -238,6 +238,7 @@ public:
 struct CRecipient {
     CScript scriptPubKey;
     Amount nAmount;
+    token::OutputDataPtr tokenDataPtr; ///< usually null unless we are sending a token
     bool fSubtractFeeFromAmount;
 };
 
@@ -853,7 +854,7 @@ public:
     std::map<CKeyID, CKeyMetadata> mapKeyMetadata GUARDED_BY(cs_wallet);
 
     // Map from Script ID to key metadata (for watch-only keys).
-    std::map<CScriptID, CKeyMetadata> m_script_metadata GUARDED_BY(cs_wallet);
+    std::map<ScriptID, CKeyMetadata> m_script_metadata GUARDED_BY(cs_wallet);
 
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
@@ -984,7 +985,7 @@ public:
     //! Load metadata (used by LoadWallet)
     void LoadKeyMetadata(const CKeyID &keyID, const CKeyMetadata &metadata)
         EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
-    void LoadScriptMetadata(const CScriptID &script_id,
+    void LoadScriptMetadata(const ScriptID &script_id,
                             const CKeyMetadata &metadata)
         EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
@@ -1004,7 +1005,7 @@ public:
     //! LoadWallet)
     bool LoadCryptedKey(const CPubKey &vchPubKey,
                         const std::vector<uint8_t> &vchCryptedSecret);
-    bool AddCScript(const CScript &redeemScript) override;
+    bool AddCScript(const CScript &redeemScript, bool is_p2sh_32) override;
     bool LoadCScript(const CScript &redeemScript);
 
     //! Adds a destination data tuple to the store, and saves it to disk
@@ -1122,9 +1123,6 @@ public:
                          bool lockUnspents,
                          const std::set<int> &setSubtractFeeFromOutputs,
                          CCoinControl coinControl);
-    bool SignTransaction(CMutableTransaction &tx)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
-
     /**
      * Create a new transaction paying the recipients with a set of coins
      * selected by SelectCoins(); Also create the change output, when needed

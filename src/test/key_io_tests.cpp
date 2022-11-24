@@ -10,6 +10,7 @@
 #include <key.h>
 #include <key_io.h>
 #include <script/script.h>
+#include <script/standard.h>
 #include <test/setup_common.h>
 #include <test/jsonutil.h>
 #include <util/strencodings.h>
@@ -122,7 +123,7 @@ BOOST_AUTO_TEST_CASE(key_io_valid_gen) {
         } else {
             CTxDestination dest;
             CScript exp_script(exp_payload.begin(), exp_payload.end());
-            BOOST_CHECK(ExtractDestination(exp_script, dest));
+            BOOST_CHECK(ExtractDestination(exp_script, dest, SCRIPT_ENABLE_P2SH_32 /* allow p2sh32 */));
             std::string address = EncodeLegacyAddr(dest, Params());
 
             BOOST_CHECK_EQUAL(address, exp_base58string);
@@ -155,7 +156,7 @@ BOOST_AUTO_TEST_CASE(key_io_invalid) {
         // must be invalid as public and as private key
         for (const auto &chain :
              {CBaseChainParams::MAIN, CBaseChainParams::TESTNET, CBaseChainParams::TESTNET4, CBaseChainParams::SCALENET,
-              CBaseChainParams::REGTEST}) {
+              CBaseChainParams::CHIPNET, CBaseChainParams::REGTEST}) {
             SelectParams(chain);
             destination = DecodeLegacyAddr(exp_base58string, Params());
             BOOST_CHECK_MESSAGE(!IsValidDestination(destination),

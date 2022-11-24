@@ -86,6 +86,8 @@ const char *ScriptErrorString(const ScriptError serror) {
             return "Non-canonical signature: S value is unnecessarily high";
         case ScriptError::MINIMALIF:
             return "OP_IF/NOTIF argument must be minimal";
+        case ScriptError::MINIMALNUM:
+            return "Number encoding must be minimal";
         case ScriptError::SIG_NULLFAIL:
             return "Signature must be zero for failed CHECK(MULTI)SIG "
                    "operation";

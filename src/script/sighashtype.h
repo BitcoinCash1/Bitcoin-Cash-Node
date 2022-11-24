@@ -14,6 +14,7 @@ enum {
     SIGHASH_ALL = 1,
     SIGHASH_NONE = 2,
     SIGHASH_SINGLE = 3,
+    SIGHASH_UTXOS = 0x20, ///< New in Upgrade9 (May 2023), must only be accepted if flags & SCRIPT_ENABLE_TOKENS
     SIGHASH_FORKID = 0x40,
     SIGHASH_ANYONECANPAY = 0x80,
 };
@@ -62,17 +63,21 @@ public:
                            (anyoneCanPay ? SIGHASH_ANYONECANPAY : 0));
     }
 
+    SigHashType withUtxos(bool utxos = true) const {
+        return SigHashType((sigHash & ~SIGHASH_UTXOS) | (utxos ? SIGHASH_UTXOS : 0));
+    }
+
     // "base type" here refers to the lower FIVE bits of sighash
     BaseSigHashType getBaseType() const {
         return BaseSigHashType(sigHash & 0x1f);
     }
 
     bool isDefined() const {
+        const uint8_t validShFlags = SIGHASH_FORKID | SIGHASH_ANYONECANPAY | SIGHASH_UTXOS;
         // "base type" here refers to lower SIX bits of sighash
-        auto baseType =
-            BaseSigHashType(sigHash & ~(SIGHASH_FORKID | SIGHASH_ANYONECANPAY));
-        return baseType >= BaseSigHashType::ALL &&
-               baseType <= BaseSigHashType::SINGLE;
+        const auto baseType = BaseSigHashType(sigHash & ~validShFlags);
+        // If resulting value is anything other than 1, 2, or 3, it's not defined
+        return baseType >= BaseSigHashType::ALL && baseType <= BaseSigHashType::SINGLE;
     }
 
     bool hasFork() const { return (sigHash & SIGHASH_FORKID) != 0; }
@@ -80,6 +85,8 @@ public:
     bool hasAnyoneCanPay() const {
         return (sigHash & SIGHASH_ANYONECANPAY) != 0;
     }
+
+    bool hasUtxos() const { return sigHash & SIGHASH_UTXOS; }
 
     uint32_t getRawSigHashType() const { return sigHash; }
 

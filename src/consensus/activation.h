@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 The Bitcoin developers
+// Copyright (c) 2018-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,3 +43,7 @@ bool IsAxionEnabled(const Consensus::Params &params,
 
 /** Check if May 15th, 2022 protocol upgrade has activated. */
 bool IsUpgrade8Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);
+
+/** Check if May 15th, 2023 protocol upgrade has activated. */
+bool IsUpgrade9Enabled(const Consensus::Params &params, const int64_t nMedianTimePast);
+bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);

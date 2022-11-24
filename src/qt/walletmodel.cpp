@@ -156,7 +156,7 @@ WalletModel::prepareTransaction(WalletModelTransaction &transaction,
                 CScript scriptPubKey(scriptStr,
                                      scriptStr + out.script().size());
                 Amount nAmount = int64_t(out.amount()) * SATOSHI;
-                CRecipient recipient = {scriptPubKey, nAmount,
+                CRecipient recipient = {scriptPubKey, nAmount, {},
                                         rcp.fSubtractFeeFromAmount};
                 vecSend.push_back(recipient);
             }
@@ -182,7 +182,7 @@ WalletModel::prepareTransaction(WalletModelTransaction &transaction,
 
             CScript scriptPubKey = GetScriptForDestination(
                 DecodeDestination(rcp.address.toStdString(), getChainParams()));
-            CRecipient recipient = {scriptPubKey, Amount(rcp.amount),
+            CRecipient recipient = {scriptPubKey, Amount(rcp.amount), {},
                                     rcp.fSubtractFeeFromAmount};
             vecSend.push_back(recipient);
 

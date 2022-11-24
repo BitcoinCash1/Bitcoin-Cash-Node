@@ -42,4 +42,5 @@ std::vector<CTxDestination> GetAllDestinationsForKey(const CPubKey &key);
  * necessary scripts) to the keystore.
  */
 CTxDestination AddAndGetDestinationForScript(CKeyStore &keystore,
-                                             const CScript &script, OutputType);
+                                             const CScript &script, OutputType,
+                                             bool is_p2sh32);

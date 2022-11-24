@@ -48,13 +48,13 @@ std::vector<CTxDestination> GetAllDestinationsForKey(const CPubKey &key) {
 
 CTxDestination AddAndGetDestinationForScript(CKeyStore &keystore,
                                              const CScript &script,
-                                             OutputType type) {
+                                             OutputType type, bool is_p2sh32) {
     // Add script to keystore
-    keystore.AddCScript(script);
+    keystore.AddCScript(script, is_p2sh32);
     // Note that scripts over 520 bytes are not yet supported.
     switch (type) {
         case OutputType::LEGACY:
-            return CScriptID(script);
+            return ScriptID(script, is_p2sh32);
         default:
             assert(false);
     }

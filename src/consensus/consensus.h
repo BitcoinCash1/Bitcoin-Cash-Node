@@ -12,8 +12,10 @@
 inline constexpr uint64_t ONE_MEGABYTE = 1000000;
 /** The maximum allowed size for a transaction, in bytes */
 inline constexpr uint64_t MAX_TX_SIZE = ONE_MEGABYTE;
-/** The minimum allowed size for a transaction, in bytes */
-inline constexpr uint64_t MIN_TX_SIZE = 100;
+/** The minimum allowed size for a transaction, in bytes, after magnetic anomaly but before upgrade 9 */
+inline constexpr uint64_t MIN_TX_SIZE_MAGNETIC_ANOMALY = 100;
+/** The minimum allowed size for a transaction, in bytes, after upgrade 9 */
+inline constexpr uint64_t MIN_TX_SIZE_UPGRADE9 = 65;
 /** The maximum allowed size for a block, before the UAHF */
 inline constexpr uint64_t LEGACY_MAX_BLOCK_SIZE = ONE_MEGABYTE;
 /** Default setting for maximum allowed size for a block, in bytes */

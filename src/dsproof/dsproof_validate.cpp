@@ -1,9 +1,11 @@
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
 // Copyright (C) 2020 Calin Culianu <calin.culianu@gmail.com>
 // Copyright (C) 2021 Fernando Pelliccioni <fpelliccioni@gmail.com>
+// Copyright (C) 2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <chainparams.h>
 #include <coins.h>
 #include <dsproof/dsproof.h>
 #include <logging.h>
@@ -19,14 +21,15 @@
 namespace {
 class DSPSignatureChecker : public BaseSignatureChecker {
 public:
-    DSPSignatureChecker(const DoubleSpendProof *proof, const DoubleSpendProof::Spender &spender, Amount amount)
+    DSPSignatureChecker(const DoubleSpendProof *proof, const DoubleSpendProof::Spender &spender, const CTxOut &txOut)
         : m_proof(proof),
           m_spender(spender),
-          m_amount(amount)
+          m_txout(txOut)
     {
     }
 
-    bool CheckSig(const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey, const CScript &scriptCode, uint32_t /*flags*/) const override {
+    bool CheckSig(const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey, const CScript &scriptCode,
+                  uint32_t flags) const override {
         CPubKey pubkey(vchPubKey);
         if (!pubkey.IsValid())
             return false;
@@ -39,8 +42,19 @@ public:
         CHashWriter ss(SER_GETHASH, 0);
         ss << m_spender.txVersion << m_spender.hashPrevOutputs << m_spender.hashSequence;
         ss << m_proof->outPoint();
+        if (m_txout.tokenDataPtr && (flags & SCRIPT_ENABLE_TOKENS)) {
+            // New! For tokens (Upgrade9). If we had tokenData we inject it as a blob of:
+            //    token::PREFIX_BYTE + ser_token_data
+            // right *before* scriptCode's length byte.  This *intentionally* makes it so that unupgraded software
+            // cannot send tokens (and thus cannot unintentionally burn tokens).
+            //
+            // Note: The serialization operation for token::OutputData may throw if the data it is serializing is not
+            // sane.  The data will always be sane when verifying or producing sigs in production. However, the below
+            // may throw in tests that intentionally sabotage the tokenData to be inconsistent.
+            ss << token::PREFIX_BYTE << *m_txout.tokenDataPtr;
+        }
         ss << static_cast<const CScriptBase &>(scriptCode);
-        ss << m_amount << m_spender.outSequence << m_spender.hashOutputs;
+        ss << m_txout.nValue << m_spender.outSequence << m_spender.hashOutputs;
         ss << m_spender.lockTime << (int32_t) m_spender.pushData.front().back();
         const uint256 sighash = ss.GetHash();
 
@@ -57,7 +71,8 @@ public:
 
     const DoubleSpendProof *m_proof;
     const DoubleSpendProof::Spender &m_spender;
-    const Amount m_amount;
+    const CTxOut &m_txout;
+
 };
 } // namespace
 
@@ -92,7 +107,7 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
             return MissingUTXO;
         }
     }
-    const Amount &amount = coin.GetTxOut().nValue;
+    const CTxOut &txOut = coin.GetTxOut();
     const CScript &prevOutScript = coin.GetTxOut().scriptPubKey;
 
     /*
@@ -139,13 +154,13 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
         inScript << m_spender1.pushData.front();
         inScript << pubkey;
     }
-    DSPSignatureChecker checker1(this, m_spender1, amount);
+    DSPSignatureChecker checker1(this, m_spender1, txOut);
     ScriptError error;
     ScriptExecutionMetrics metrics; // dummy
 
-    auto const context = std::nullopt; // dsproofs only support P2PKH, so they don't need a real script execution context
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(::Params().GetConsensus(), ::ChainActive().Tip());
 
-    if ( ! VerifyScript(inScript, prevOutScript, 0 /*flags*/, checker1, metrics, context, &error)) {
+    if ( ! VerifyScript(inScript, prevOutScript, scriptFlags, checker1, metrics, &error)) {
         LogPrint(BCLog::DSPROOF, "DoubleSpendProof failed validating first tx due to %s\n", ScriptErrorString(error));
         return Invalid;
     }
@@ -155,19 +170,22 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
         inScript << m_spender2.pushData.front();
         inScript << pubkey;
     }
-    DSPSignatureChecker checker2(this, m_spender2, amount);
-    if ( ! VerifyScript(inScript, prevOutScript, 0 /*flags*/, checker2, metrics, context, &error)) {
+    DSPSignatureChecker checker2(this, m_spender2, txOut);
+    if ( ! VerifyScript(inScript, prevOutScript, scriptFlags, checker2, metrics, &error)) {
         LogPrint(BCLog::DSPROOF, "DoubleSpendProof failed validating second tx due to %s\n", ScriptErrorString(error));
         return Invalid;
     }
     return Valid;
 }
 
-/* static */ bool DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(const CTxMemPool &mempool, const CTransaction &tx)
+/* static */
+bool DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(const CTxMemPool &mempool, const CTransaction &tx,
+                                                            bool *pProtected)
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(mempool.cs);
 
+    if (pProtected) *pProtected = false;
     if (tx.vin.empty() || tx.IsCoinBase()) {
         return false;
     }
@@ -175,18 +193,33 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
     const CCoinsViewMemPool view(pcoinsTip.get(), mempool); // this checks both mempool coins and confirmed coins
 
     // Check all inputs
-    for (const auto & txin : tx.vin) {
+    bool foundUnprotected = false;
+    for (size_t nIn = 0; nIn < tx.vin.size(); ++nIn) {
+        const auto & txin = tx.vin[nIn];
         Coin coin;
         if (!view.GetCoin(txin.prevout, coin)) {
             // if the Coin this tx spends is missing then either this tx just got mined or our mempool + blockchain
             // view just doesn't have the coin.
             return false;
         }
-        if (!coin.GetTxOut().scriptPubKey.IsPayToPubKeyHash()) {
+        const CTxOut &txOut = coin.GetTxOut();
+        if (!txOut.scriptPubKey.IsPayToPubKeyHash()) {
             // For now, dsproof only supports P2PKH
             return false;
         }
+        SigHashType h{uint32_t(0)};
+        try {
+            h = SigHashType(uint32_t(getP2PKHSignature(tx, nIn, coin.GetTxOut()).back()));
+        } catch (const std::runtime_error &) {
+            // exceptions ignored, means we couldn't grab signature and this is non-canonical in some way
+        }
+        if (!h.hasFork()) {
+            // this should never be possible under normal consensus, but is here for belt-and-suspenders
+            return false;
+        }
+        foundUnprotected = foundUnprotected || h.hasAnyoneCanPay() || h.getBaseType() != BaseSigHashType::ALL;
     }
 
+    if (pProtected) *pProtected = !foundUnprotected;
     return true;
 }

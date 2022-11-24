@@ -34,11 +34,14 @@ bool CheckTxInputs(const CTransaction &tx, CValidationState &state,
  * validity of the transaction against the UTXO set, but simply characteristics
  * that are susceptible to change over time such as feature
  * activation/deactivation and CLTV.
+ *
+ * Note that while `nHeight` is the height of the current block for the
+ * transaction, `nMedianTimePastPrev` is the MTP of the previous block.
  */
 bool ContextualCheckTransaction(const Consensus::Params &params,
                                 const CTransaction &tx, CValidationState &state,
                                 int nHeight, int64_t nLockTimeCutoff,
-                                int64_t nMedianTimePast);
+                                int64_t nMedianTimePastPrev);
 
 /**
  * Calculates the block height and previous block's median time past at which
@@ -61,3 +64,7 @@ bool EvaluateSequenceLocks(const CBlockIndex &block,
  */
 bool SequenceLocks(const CTransaction &tx, int flags,
                    std::vector<int> *prevHeights, const CBlockIndex &block);
+
+/// Returns the minimum transaction size (100 for post-MagneticAnomaly, 65 for post-Upgrade9), or 0 if before those
+/// two upgrades have activated (no enforced minimum).
+uint64_t GetMinimumTxSize(const Consensus::Params &params, const CBlockIndex *pindexPrev);

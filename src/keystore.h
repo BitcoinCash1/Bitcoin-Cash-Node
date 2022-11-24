@@ -29,8 +29,8 @@ public:
 
     //! Support for BIP 0013 : see
     //! https://github.com/bitcoin/bips/blob/master/bip-0013.mediawiki
-    virtual bool AddCScript(const CScript &redeemScript) = 0;
-    virtual std::set<CScriptID> GetCScripts() const = 0;
+    virtual bool AddCScript(const CScript &redeemScript, bool is_p2sh32) = 0;
+    virtual std::set<ScriptID> GetCScripts() const = 0;
 
     //! Support for Watch-only addresses
     virtual bool AddWatchOnly(const CScript &dest) = 0;
@@ -46,7 +46,7 @@ protected:
 
     using KeyMap = std::map<CKeyID, CKey>;
     using WatchKeyMap = std::map<CKeyID, CPubKey>;
-    using ScriptMap = std::map<CScriptID, CScript>;
+    using ScriptMap = std::map<ScriptID, CScript>;
     using WatchOnlySet = std::set<CScript>;
 
     KeyMap mapKeys GUARDED_BY(cs_KeyStore);
@@ -64,11 +64,10 @@ public:
     bool HaveKey(const CKeyID &address) const override;
     std::set<CKeyID> GetKeys() const override;
     bool GetKey(const CKeyID &address, CKey &keyOut) const override;
-    bool AddCScript(const CScript &redeemScript) override;
-    bool HaveCScript(const CScriptID &hash) const override;
-    std::set<CScriptID> GetCScripts() const override;
-    bool GetCScript(const CScriptID &hash,
-                    CScript &redeemScriptOut) const override;
+    bool AddCScript(const CScript &redeemScript, bool is_p2sh32) override;
+    bool HaveCScript(const ScriptID &hash) const override;
+    std::set<ScriptID> GetCScripts() const override;
+    bool GetCScript(const ScriptID &hash, CScript &redeemScriptOut) const override;
 
     bool AddWatchOnly(const CScript &dest) override;
     bool RemoveWatchOnly(const CScript &dest) override;

@@ -74,7 +74,17 @@ public:
     //!
     //! If either of the above are false, this will return false.
     //!
-    static bool checkIsProofPossibleForAllInputsOfTx(const CTxMemPool &mempool, const CTransaction &tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! Additionally, if `pProtected` is supplied, then it will be
+    //! written-to with true to indicate that all of the transaction's
+    //! inputs are SIGHASH_ALL and none are using SIGHASH_ANYONECANPAY.
+    //! False will be written to `pProtected` on false return or if
+    //! any inputs don't respect the "all are SIGHASH_ALL" and "none are
+    //! SIGHASH_ANYONECANPAY" predicate. Note that this function may
+    //! return `true` while *pProtected may be false in cases where
+    //! a proof is *possible*, but it is not necessarily guaranteed to
+    //! protect this transaction.
+    static bool checkIsProofPossibleForAllInputsOfTx(const CTxMemPool &mempool, const CTransaction &tx,
+                                                     bool *pProtected = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     const TxId & prevTxId() const { return m_outPoint.GetTxId(); }
     uint32_t prevOutIndex() const { return m_outPoint.GetN(); }
@@ -155,4 +165,7 @@ private:
 
     //! Used by IsEnabled() and SetEnabled() static methods; default is: enabled (true)
     static bool s_enabled;
+
+    //! Verifying signature getter. Used for production. May throw std::runtime_error()
+    static std::vector<uint8_t> getP2PKHSignature(const CTransaction &tx, unsigned int inputIndex, const CTxOut &txOut);
 };

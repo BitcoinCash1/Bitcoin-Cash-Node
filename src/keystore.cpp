@@ -72,7 +72,7 @@ bool CBasicKeyStore::GetKey(const CKeyID &address, CKey &keyOut) const {
     return false;
 }
 
-bool CBasicKeyStore::AddCScript(const CScript &redeemScript) {
+bool CBasicKeyStore::AddCScript(const CScript &redeemScript, bool is_p2sh32) {
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
         return error("CBasicKeyStore::AddCScript(): redeemScripts > %i bytes "
                      "are invalid",
@@ -80,26 +80,29 @@ bool CBasicKeyStore::AddCScript(const CScript &redeemScript) {
     }
 
     LOCK(cs_KeyStore);
-    mapScripts[CScriptID(redeemScript)] = redeemScript;
+    // Maybe add BOTH the ps2h_20 and p2sh_32 versions to the map and remove the bool is_p2sh32 arg?
+    // For now we don't do this since the wallet and other subsystems should not implicitly use p2sh32 (for now).
+    // RPC tx signing does indeed use p2sh32 optionally and in that case the boolean flag that is passed-in is an
+    // acceptable API choice.
+    mapScripts[ScriptID(redeemScript, is_p2sh32)] = redeemScript;
     return true;
 }
 
-bool CBasicKeyStore::HaveCScript(const CScriptID &hash) const {
+bool CBasicKeyStore::HaveCScript(const ScriptID &hash) const {
     LOCK(cs_KeyStore);
     return mapScripts.count(hash) > 0;
 }
 
-std::set<CScriptID> CBasicKeyStore::GetCScripts() const {
+std::set<ScriptID> CBasicKeyStore::GetCScripts() const {
     LOCK(cs_KeyStore);
-    std::set<CScriptID> set_script;
+    std::set<ScriptID> set_script;
     for (const auto &mi : mapScripts) {
         set_script.insert(mi.first);
     }
     return set_script;
 }
 
-bool CBasicKeyStore::GetCScript(const CScriptID &hash,
-                                CScript &redeemScriptOut) const {
+bool CBasicKeyStore::GetCScript(const ScriptID &hash, CScript &redeemScriptOut) const {
     LOCK(cs_KeyStore);
     ScriptMap::const_iterator mi = mapScripts.find(hash);
     if (mi != mapScripts.end()) {
@@ -161,8 +164,7 @@ bool CBasicKeyStore::HaveWatchOnly() const {
     return (!setWatchOnly.empty());
 }
 
-CKeyID GetKeyForDestination(const CKeyStore &store,
-                            const CTxDestination &dest) {
+CKeyID GetKeyForDestination(const CKeyStore &store [[maybe_unused]], const CTxDestination &dest) {
     // Only supports destinations which map to single public keys, i.e. P2PKH.
     if (auto id = boost::get<CKeyID>(&dest)) {
         return *id;

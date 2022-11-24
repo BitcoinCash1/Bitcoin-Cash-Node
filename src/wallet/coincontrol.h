@@ -30,6 +30,10 @@ public:
     std::optional<unsigned int> m_confirm_target;
     //! Avoid partial use of funds sent to a given address
     bool m_avoid_partial_spends;
+    //! Allow spending of coins that have tokens on them
+    bool m_allow_tokens;
+    //! Only select coins that have tokens on them (requires m_allow_tokens == true)
+    bool m_tokens_only;
 
     CCoinControl() { SetNull(); }
 

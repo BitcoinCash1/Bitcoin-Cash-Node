@@ -91,10 +91,10 @@ static void CCheckQueue_RealData32MB(bool cacheSigs, benchmark::State &state) {
     UnlimitedSigChecks highLimitPerTx, highLimitPerBlock;
     for (const auto & tx : block.vtx) {
         if (tx->IsCoinBase()) continue;
-        const PrecomputedTransactionData txdata(*tx);
         std::vector<CScriptCheck> vChecksThisTx;
         const auto contexts = ScriptExecutionContext::createForAllInputs(*tx, coinsCache);
         assert(contexts.size() == tx->vin.size());
+        const PrecomputedTransactionData txdata(contexts.at(0));
         for (size_t i = 0; i < tx->vin.size(); ++i) {
             vChecksThisTx.emplace_back(contexts[i], MANDATORY_SCRIPT_VERIFY_FLAGS,
                                        cacheSigs /* whether to store results in cache */,

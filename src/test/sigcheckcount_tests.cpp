@@ -6,6 +6,7 @@
 #include <pubkey.h>
 #include <script/interpreter.h>
 #include <script/script_error.h>
+#include <script/standard.h>
 
 #include <test/setup_common.h>
 
@@ -116,8 +117,7 @@ static void CheckEvalScript(const stacktype &original_stack,
         stacktype stack{original_stack};
         ScriptExecutionMetrics metrics;
 
-        auto const null_context = std::nullopt;
-        bool r = EvalScript(stack, script, flags, dummysigchecker, metrics, null_context, &err);
+        bool r = EvalScript(stack, script, flags, dummysigchecker, metrics, &err);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(err, ScriptError::OK);
         BOOST_CHECK(stack == expected_stack);
@@ -224,23 +224,21 @@ BOOST_AUTO_TEST_CASE(test_evalscript) {
     // (hence, the sigchecks count is unimportant)
     {
         stacktype stack{{1}, txsigschnorr};
-        auto const null_context = std::nullopt;
         BOOST_CHECK(!EvalScript(stack,
             CScript() << ScriptInt::fromIntUnchecked(1)
                       << badpub
                       << ScriptInt::fromIntUnchecked(1)
                       << OP_CHECKMULTISIG,
-            SCRIPT_VERIFY_NONE, dummysigchecker, null_context));
+            SCRIPT_VERIFY_NONE, dummysigchecker));
     }
     {
         stacktype stack{{1}, txsigschnorr};
-        auto const null_context = std::nullopt;
         BOOST_CHECK(!EvalScript(stack,
             CScript() << ScriptInt::fromIntUnchecked(1)
                       << badpub
                       << ScriptInt::fromIntUnchecked(1)
                       << OP_CHECKMULTISIG,
-            SCRIPT_ENABLE_SCHNORR_MULTISIG, dummysigchecker, null_context));
+            SCRIPT_ENABLE_SCHNORR_MULTISIG, dummysigchecker));
     }
 
     // EvalScript cumulatively increases the sigchecks count.
@@ -248,8 +246,7 @@ BOOST_AUTO_TEST_CASE(test_evalscript) {
         stacktype stack{txsigschnorr};
         ScriptExecutionMetrics metrics;
         metrics.nSigChecks = 12345;
-        auto const null_context = std::nullopt;
-        bool r = EvalScript(stack, CScript() << pub << OP_CHECKSIG, SCRIPT_VERIFY_NONE, dummysigchecker, metrics, null_context);
+        bool r = EvalScript(stack, CScript() << pub << OP_CHECKSIG, SCRIPT_VERIFY_NONE, dummysigchecker, metrics);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(metrics.nSigChecks, 12346);
     }
@@ -329,8 +326,7 @@ BOOST_AUTO_TEST_CASE(test_evalscript) {
 void CheckVerifyScript(CScript scriptSig, CScript scriptPubKey, uint32_t flags, int expected_sigchecks) {
     ScriptExecutionMetrics metricsRet;
     metricsRet.nSigChecks = 12345 ^ expected_sigchecks;
-    auto const null_context = std::nullopt;
-    BOOST_CHECK(VerifyScript(scriptSig, scriptPubKey, flags, dummysigchecker, metricsRet, null_context));
+    BOOST_CHECK(VerifyScript(scriptSig, scriptPubKey, flags, dummysigchecker, metricsRet));
     BOOST_CHECK_EQUAL(metricsRet.nSigChecks, expected_sigchecks);
 }
 
@@ -356,7 +352,7 @@ BOOST_AUTO_TEST_CASE(test_verifyscript) {
     swscript << OP_0 << std::vector<uint8_t>(20);
     CHECK_VERIFYSCRIPT(CScript() << ToByteVector(swscript),
                        CScript()
-                           << OP_HASH160 << ToByteVector(CScriptID(swscript))
+                           << OP_HASH160 << ToByteVector(ScriptID(swscript, false /*=p2sh_20*/))
                            << OP_EQUAL,
                        SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CLEANSTACK, 0);
 

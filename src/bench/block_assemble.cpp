@@ -16,9 +16,7 @@ static void AssembleBlock(benchmark::State &state) {
     const Config &config = GetConfig();
 
     const CScript redeemScript = CScript() << OP_DROP << OP_TRUE;
-    const CScript SCRIPT_PUB =
-        CScript() << OP_HASH160 << ToByteVector(CScriptID(redeemScript))
-                  << OP_EQUAL;
+    const CScript SCRIPT_PUB = GetScriptForDestination(ScriptID(redeemScript, false /* p2sh_32 = false */));
 
     const CScript scriptSig = CScript() << std::vector<uint8_t>(100, 0xff)
                                         << ToByteVector(redeemScript);

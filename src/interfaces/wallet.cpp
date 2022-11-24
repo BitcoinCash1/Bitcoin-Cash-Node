@@ -82,7 +82,7 @@ namespace {
             result.txout_address.emplace_back();
             result.txout_address_is_mine.emplace_back(
                 ExtractDestination(txout.scriptPubKey,
-                                   result.txout_address.back())
+                                   result.txout_address.back(), 0 /* no p2sh_32 */)
                     ? IsMine(wallet, result.txout_address.back())
                     : ISMINE_NO);
         }

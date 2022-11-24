@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2021 The Bitcoin developers
+// Copyright (c) 2020-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,9 +39,9 @@ bool IsDust(const CTxOut &txout, const CFeeRate &dustRelayFeeIn) {
     return (txout.nValue < GetDustThreshold(txout, dustRelayFeeIn));
 }
 
-bool IsStandard(const CScript &scriptPubKey, txnouttype &whichType) {
+bool IsStandard(const CScript &scriptPubKey, txnouttype &whichType, uint32_t flags) {
     std::vector<std::vector<uint8_t>> vSolutions;
-    whichType = Solver(scriptPubKey, vSolutions);
+    whichType = Solver(scriptPubKey, vSolutions, flags);
 
     if (whichType == TX_NONSTANDARD) {
         return false;
@@ -60,8 +60,10 @@ bool IsStandard(const CScript &scriptPubKey, txnouttype &whichType) {
     return true;
 }
 
-bool IsStandardTx(const CTransaction &tx, std::string &reason) {
-    if (tx.nVersion > CTransaction::MAX_STANDARD_VERSION || tx.nVersion < 1) {
+bool IsStandardTx(const CTransaction &tx, std::string &reason, uint32_t flags) {
+    // Note that this standardness check may be safely removed after Upgrade9 activates since at that point nVersion
+    // as 1 or 2 will be enforced via consensus, rather than relay policy.
+    if (tx.nVersion > CTransaction::MAX_STANDARD_VERSION || tx.nVersion < CTransaction::MIN_STANDARD_VERSION) {
         reason = "version";
         return false;
     }
@@ -91,7 +93,16 @@ bool IsStandardTx(const CTransaction &tx, std::string &reason) {
     CScript::size_type nDataSize = 0;
     txnouttype whichType;
     for (const CTxOut &txout : tx.vout) {
-        if (!::IsStandard(txout.scriptPubKey, whichType)) {
+        if (!(flags & SCRIPT_ENABLE_TOKENS) && txout.tokenDataPtr) {
+            // Pre-token activation:
+            // Txn has token data that actually deserialized as token data, but tokens are not activated yet.
+            // Treat the txn as non-standard to keep old pre-activation mempool behavior (which would have disallowed
+            // these as non-standard).
+            reason = "txn-tokens-before-activation";
+            return false;
+        }
+
+        if (!::IsStandard(txout.scriptPubKey, whichType, flags)) {
             reason = "scriptpubkey";
             return false;
         }
@@ -142,8 +153,15 @@ bool AreInputsStandard(const CTransaction &tx, const CCoinsViewCache &mapInputs,
     for (const CTxIn &in : tx.vin) {
         const CTxOut &prev = mapInputs.GetOutputFor(in);
 
+        if (!(flags & SCRIPT_ENABLE_TOKENS) && prev.tokenDataPtr) {
+            // Input happened to have serialized token data but tokens are not activated yet. Reject this txn as
+            // non-standard -- note this input would fail to be spent anyway later on in the pipeline, but we prefer
+            // to tell the caller that the txn is non-standard so as to to emulate the behavior of unupgraded nodes.
+            return false;
+        }
+
         std::vector<std::vector<uint8_t>> vSolutions;
-        txnouttype whichType = Solver(prev.scriptPubKey, vSolutions);
+        txnouttype whichType = Solver(prev.scriptPubKey, vSolutions, flags);
         if (whichType == TX_NONSTANDARD) {
             return false;
         }

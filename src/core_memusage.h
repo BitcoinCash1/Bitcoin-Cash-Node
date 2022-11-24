@@ -21,8 +21,12 @@ inline size_t RecursiveDynamicUsage(const CTxIn &in) {
            RecursiveDynamicUsage(in.prevout);
 }
 
+inline size_t RecursiveDynamicUsage(const token::OutputDataPtr &p) {
+    return memusage::DynamicUsage(p) + (p ? memusage::DynamicUsage(p->GetCommitment()) : 0);
+}
+
 inline size_t RecursiveDynamicUsage(const CTxOut &out) {
-    return RecursiveDynamicUsage(out.scriptPubKey);
+    return RecursiveDynamicUsage(out.scriptPubKey) + RecursiveDynamicUsage(out.tokenDataPtr);
 }
 
 inline size_t RecursiveDynamicUsage(const CTransaction &tx) {

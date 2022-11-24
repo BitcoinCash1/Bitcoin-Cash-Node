@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2021 The Bitcoin developers
+# Copyright (c) 2021-2022 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """
@@ -375,15 +375,6 @@ class NativeIntrospectionTest(BitcoinTestFramework):
         spendable_txns.insert(0, tx)  # recycle the txn's output
         assert_equal(node.getrawmempool(), mempool)
 
-        # OP_TXVERSION (version == 0)
-        ssextra = [OP_0]
-        rsextra = [OP_TXVERSION, OP_EQUALVERIFY]
-        tx0, tx = create_fund_and_spend_tx(ssextra, rsextra, nVersion=0)
-        node.p2p.send_txs_and_test([tx0, tx], node)
-        mempool += [tx0.hash, tx.hash]
-        spendable_txns.insert(0, tx)  # recycle the txn's output
-        assert_equal(node.getrawmempool(), mempool)
-
         # OP_TXVERSION (version == 1)
         ssextra = [OP_1]
         rsextra = [OP_TXVERSION, OP_EQUALVERIFY]
@@ -397,15 +388,6 @@ class NativeIntrospectionTest(BitcoinTestFramework):
         ssextra = [OP_2]
         rsextra = [OP_TXVERSION, OP_EQUALVERIFY]
         tx0, tx = create_fund_and_spend_tx(ssextra, rsextra, nVersion=2)
-        node.p2p.send_txs_and_test([tx0, tx], node)
-        mempool += [tx0.hash, tx.hash]
-        spendable_txns.insert(0, tx)  # recycle the txn's output
-        assert_equal(node.getrawmempool(), mempool)
-
-        # OP_TXVERSION (version == 123456)
-        ssextra = [CScriptNum(123456)]
-        rsextra = [OP_TXVERSION, OP_EQUALVERIFY]
-        tx0, tx = create_fund_and_spend_tx(ssextra, rsextra, nVersion=123456)
         node.p2p.send_txs_and_test([tx0, tx], node)
         mempool += [tx0.hash, tx.hash]
         spendable_txns.insert(0, tx)  # recycle the txn's output

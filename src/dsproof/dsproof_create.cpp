@@ -5,6 +5,7 @@
 
 #include <dsproof/dsproof.h>
 #include <hash.h>
+#include <policy/policy.h>
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <script/sign.h>
@@ -26,33 +27,8 @@ std::vector<uint8_t> getP2PKHSignature(const CScript &script)
     const auto hashType = vchRet.back();
     if (!(hashType & SIGHASH_FORKID))
         throw std::runtime_error("Tx is not a Bitcoin Cash P2PKH transaction");
-    return vchRet;
-}
-
-// Verifying signature getter. Used for production.
-std::vector<uint8_t> getP2PKHSignature(const CTransaction &tx, unsigned int inputIndex, const CTxOut &txOut)
-{
-    std::vector<uint8_t> vchRet;
-
-    txnouttype outtype;
-    std::vector<CTxDestination> dests;
-    int nReq;
-    if (!ExtractDestinations(txOut.scriptPubKey, outtype, dests, nReq)
-            || nReq != 1 || dests.size() != 1 || outtype != TX_PUBKEYHASH)
-        throw std::runtime_error("TxOut destination is not P2PKH");
-
-    const SignatureData sigData = DataFromTransaction(CMutableTransaction{tx}, inputIndex, txOut);
-    if (!sigData.complete)
-        throw std::runtime_error("Specified tx input is not properly signed");
-    if (sigData.signatures.size() != 1)
-        throw std::runtime_error("Not a P2PKH signature");
-    vchRet = sigData.signatures.begin()->second.second;
-    if (vchRet.empty())
-        throw std::runtime_error("scriptSig has no signature");
-    const auto hashType = vchRet.back();
-    if (!(hashType & SIGHASH_FORKID))
-        throw std::runtime_error("Tx is not a Bitcoin Cash P2PKH transaction");
-
+    if (hashType & SIGHASH_UTXOS)
+        throw std::runtime_error("SIGHASH_UTXOS is not currently supported by dsproof");
     return vchRet;
 }
 
@@ -89,6 +65,40 @@ void hashTx(DoubleSpendProof::Spender &spender, const CTransaction &tx, size_t i
     }
 }
 } // namespace
+
+// static
+std::vector<uint8_t> DoubleSpendProof::getP2PKHSignature(const CTransaction &tx, unsigned int inputIndex,
+                                                         const CTxOut &txOut)
+{
+    std::vector<uint8_t> vchRet;
+
+    txnouttype outtype;
+    std::vector<CTxDestination> dests;
+    int nReq;
+    if (!ExtractDestinations(txOut.scriptPubKey, outtype, dests, nReq, 0 /* no p2sh_32 */)
+            || nReq != 1 || dests.size() != 1 || outtype != TX_PUBKEYHASH)
+        throw std::runtime_error("TxOut destination is not P2PKH");
+
+    const SignatureData sigData = DataFromTransaction(ScriptExecutionContext{inputIndex, txOut, tx},
+                                                      // allow for DSProofs to work with the special way we sign token
+                                                      // inputs.
+                                                      STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_TOKENS);
+
+    if (!sigData.complete)
+        throw std::runtime_error("Specified tx input is not properly signed");
+    if (sigData.signatures.size() != 1)
+        throw std::runtime_error("Not a P2PKH signature");
+    vchRet = sigData.signatures.begin()->second.second;
+    if (vchRet.empty())
+        throw std::runtime_error("scriptSig has no signature");
+    const auto hashType = vchRet.back();
+    if (!(hashType & SIGHASH_FORKID))
+        throw std::runtime_error("Tx is not a Bitcoin Cash P2PKH transaction");
+    if (hashType & SIGHASH_UTXOS)
+        throw std::runtime_error("SIGHASH_UTXOS is not currently supported by dsproof");
+
+    return vchRet;
+}
 
 // static
 DoubleSpendProof DoubleSpendProof::create(const CTransaction &tx1, const CTransaction &tx2,
@@ -132,12 +142,12 @@ DoubleSpendProof DoubleSpendProof::create(const CTransaction &tx1, const CTransa
     // may throw
     s1.pushData.emplace_back( txOut
                               ? getP2PKHSignature(tx1, inputIndex1, *txOut) // verify sig
-                              : getP2PKHSignature(in1.scriptSig) );         // non-verifying (for test code)
+                              : ::getP2PKHSignature(in1.scriptSig) );       // non-verifying (for test code)
     s2.pushData.clear();
     // may throw
     s2.pushData.emplace_back( txOut
                               ? getP2PKHSignature(tx2, inputIndex2, *txOut) // verify sig
-                              : getP2PKHSignature(in2.scriptSig) );         // non-verifying (for test code)
+                              : ::getP2PKHSignature(in2.scriptSig) );       // non-verifying (for test code)
 
     assert(!s1.pushData.front().empty() && !s2.pushData.front().empty());
 

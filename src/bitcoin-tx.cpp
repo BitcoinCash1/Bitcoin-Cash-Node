@@ -84,6 +84,9 @@ static void SetupBitcoinTxArgs() {
         "Optionally add the \"S\" flag to wrap the output in a "
         "pay-to-script-hash.",
         ArgsManager::ALLOW_ANY, OptionsCategory::COMMANDS);
+    gArgs.AddArg("sort",
+                 "Sort the transaction's inputs and outputs according to BIP69",
+                 ArgsManager::ALLOW_ANY, OptionsCategory::COMMANDS);
     gArgs.AddArg("sign=SIGHASH-FLAGS",
                  "Add zero or more signatures to transaction. "
                  "This command requires JSON registers:"
@@ -349,7 +352,7 @@ static void MutateTxAddOutPubKey(CMutableTransaction &tx,
     if (bScriptHash) {
         // Get the ID for the script, and then construct a P2SH destination for
         // it.
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(ScriptID(scriptPubKey, false /* no p2sh_32 */));
     }
 
     // construct TxOut, append to transaction output list
@@ -420,7 +423,7 @@ static void MutateTxAddOutMultiSig(CMutableTransaction &tx,
         }
         // Get the ID for the script, and then construct a P2SH destination for
         // it.
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(ScriptID(scriptPubKey, false /* no p2sh_32 */));
     }
 
     // construct TxOut, append to transaction output list
@@ -491,7 +494,7 @@ static void MutateTxAddOutScript(CMutableTransaction &tx, const std::string &str
                 strprintf("redeemScript exceeds size limit: %d > %d",
                           scriptPubKey.size(), MAX_SCRIPT_ELEMENT_SIZE));
         }
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(ScriptID(scriptPubKey, false /* no p2sh_32 */));
     }
 
     // construct TxOut, append to transaction output list
@@ -673,11 +676,11 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
 
         // If redeemScript given and private keys given, add redeemScript to the
         // tempKeystore so it can be signed:
-        if (scriptPubKey.IsPayToScriptHash()) {
+        if (bool is_p2sh32{}; scriptPubKey.IsPayToScriptHash(SCRIPT_ENABLE_P2SH_32, nullptr, &is_p2sh32)) {
             if (auto redeemScriptUV = prevOut.locate("redeemScript")) {
                 std::vector<uint8_t> rsData(ParseHexUV(*redeemScriptUV, "redeemScript"));
                 CScript redeemScript(rsData.begin(), rsData.end());
-                tempKeystore.AddCScript(redeemScript);
+                tempKeystore.AddCScript(redeemScript, is_p2sh32);
             }
         }
     }
@@ -685,6 +688,7 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
     const CKeyStore &keystore = tempKeystore;
 
     const auto contexts = ScriptExecutionContext::createForAllInputs(mergedTx, view);
+    const uint32_t scriptFlags = STANDARD_SCRIPT_VERIFY_FLAGS; /* sign only with this flag for now (no tokens) */
 
     // Sign what we can:
     for (size_t i = 0; i < mergedTx.vin.size(); i++) {
@@ -695,22 +699,29 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
         }
 
         const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
-        const Amount amount = coin.GetTxOut().nValue;
 
-        SignatureData sigdata = DataFromTransaction(mergedTx, i, coin.GetTxOut(), contexts[i]);
+        SignatureData sigdata = DataFromTransaction(contexts[i], scriptFlags);
 
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
             (i < mergedTx.vout.size())) {
             ProduceSignature(keystore,
-                             MutableTransactionSignatureCreator(&mergedTx, i, amount, sigHashType),
-                             prevPubKey, sigdata, contexts[i]);
+                             TransactionSignatureCreator(contexts[i], sigHashType),
+                             prevPubKey, sigdata,
+                             scriptFlags);
         }
 
         UpdateInput(txin, sigdata);
     }
 
     tx = mergedTx;
+}
+
+static void MutateTxSort(CMutableTransaction &tx, const std::string &commandVal) {
+    if ( ! commandVal.empty()) {
+        throw std::runtime_error("The \"sort\" command does not take any arguments");
+    }
+    tx.SortBip69();
 }
 
 class Secp256k1Init {
@@ -755,6 +766,8 @@ static void MutateTx(CMutableTransaction &tx, const std::string &command,
         RegisterLoad(commandVal);
     } else if (command == "set") {
         RegisterSet(commandVal);
+    } else if (command == "sort") {
+        MutateTxSort(tx, commandVal);
     } else {
         throw std::runtime_error("unknown command");
     }

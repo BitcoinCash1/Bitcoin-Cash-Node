@@ -478,4 +478,6 @@ bool PSBTInputSigned(PSBTInput &input);
  */
 bool SignPSBTInput(const SigningProvider &provider,
                    PartiallySignedTransaction &psbt, int index,
-                   SigHashType sighash = SigHashType(), const ScriptExecutionContextOpt &context = {});
+                   uint32_t scriptFlags,
+                   SigHashType sighash = SigHashType(),
+                   const ScriptExecutionContextOpt &context = {});

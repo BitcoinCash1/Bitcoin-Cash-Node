@@ -9,6 +9,7 @@
 #include <coins.h>
 #include <compat/byteswap.h>
 #include <config.h>
+#include <consensus/activation.h>
 #include <consensus/validation.h>
 #include <core_io.h>
 #include <index/txindex.h>
@@ -34,6 +35,7 @@
 #include <validationinterface.h>
 
 #include <cstdint>
+#include <optional>
 
 #include <univalue.h>
 
@@ -133,6 +135,14 @@ static UniValue getrawtransaction(const Config &config,
             "           \"address\"        (string) Bitcoin Cash address\n"
             "           ,...\n"
             "         ]\n"
+            "       },\n"
+            "       \"tokenData\" : {             (json object optional)\n"
+            "         \"category\" : \"hex\",       (string) token id\n"
+            "         \"amount\" : \"xxx\",         (string) fungible amount (is a string to support >53-bit amounts)\n"
+            "         \"nft\" : {                 (json object optional)\n"
+            "           \"capability\" : \"xxx\",   (string) one of \"none\", \"mutable\", \"minting\"\n"
+            "           \"commitment\" : \"hex\"    (string) NFT commitment\n"
+            "         }\n"
             "       }\n"
             "     }\n"
             "     ,...\n"
@@ -504,14 +514,57 @@ CMutableTransaction ConstructTransaction(const CChainParams &params,
             }
 
             CScript scriptPubKey = GetScriptForDestination(destination);
-            Amount nAmount = AmountFromValue(entry.second);
+            Amount nAmount;
+            token::OutputDataPtr tokenDataPtr;
 
-            CTxOut out(nAmount, scriptPubKey);
+            if (entry.second.isObject()) {
+                const UniValue::Object &o = entry.second.get_obj();
+                // parse object { "amount" : n,  "tokenData" : { ... } }
+                nAmount = AmountFromValue(o.at("amount"));
+                if (auto *val = o.locate("tokenData")) {
+                    tokenDataPtr.emplace(DecodeTokenDataUV(*val));
+                }
+            } else {
+                // parse amount directly
+                nAmount = AmountFromValue(entry.second);
+            }
+
+            CTxOut out(nAmount, scriptPubKey, std::move(tokenDataPtr));
             rawTx.vout.push_back(out);
         }
     }
 
     return rawTx;
+}
+
+RPCArg GetTokenDataArgSpec(bool optional) {
+    return
+    {"tokenData", RPCArg::Type::OBJ, /* opt */ optional, /* default_val */ "",  "Optional CashToken data to add to this output",
+        std::vector<RPCArg>{{
+            {"category", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "The token id"},
+            {"amount", RPCArg::Type::NUM, /* opt */ true, /* default_val */ "",  "The token fungible amount, use JSON strings for >53-bit amounts"},
+            {"nft", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "NFT data for the token",
+                std::vector<RPCArg>{{
+                    {"capability", RPCArg::Type::STR, /* opt */ true, /* default_val */ "", "One of \"none\", \"mutable\", \"minting\""},
+                    {"commitment", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "",  "The token NFT commitment"},
+                }}
+            }
+        }}
+    };
+}
+
+RPCArg GetAlternateAddressObjectOutputArgSpec(bool optional) {
+    return
+    {"", RPCArg::Type::OBJ, /* opt */ optional, /* default_val */ "", "",
+        std::vector<RPCArg>{{
+            {"address", RPCArg::Type::OBJ, /* opt */ false, /* default_val */ "", "A key-value pair. The key (string) is the Bitcoin Cash address, the value is a JSON object",
+                std::vector<RPCArg>{{
+                    {"amount", RPCArg::Type::AMOUNT, /* opt */ false, /* default_val */ "",  "The amount in " + CURRENCY_UNIT},
+                    GetTokenDataArgSpec(),
+                }}
+            }
+        }}
+    };
 }
 
 static UniValue createrawtransaction(const Config &config,
@@ -546,6 +599,7 @@ static UniValue createrawtransaction(const Config &config,
                                     {"address", RPCArg::Type::AMOUNT, /* opt */ false, /* default_val */ "", "A key-value pair. The key (string) is the Bitcoin Cash address, the value (float or string) is the amount in " + CURRENCY_UNIT},
                                 },
                                 },
+                            GetAlternateAddressObjectOutputArgSpec(),
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
                                     {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},
@@ -625,6 +679,14 @@ static UniValue decoderawtransaction(const Config &config,
             "Bitcoin Cash address\n"
             "           ,...\n"
             "         ]\n"
+            "       },\n"
+            "       \"tokenData\" : {           (json object optional)\n"
+            "         \"category\" : \"hex\",   (string) token id\n"
+            "         \"amount\" : \"xxx\",       (string) fungible amount (is a string to support >53-bit amounts)\n"
+            "         \"nft\" : {               (json object optional)\n"
+            "           \"capability\" : \"xxx\", (string) one of \"none\", \"mutable\", \"minting\"\n"
+            "           \"commitment\" : \"hex\"  (string) NFT commitment\n"
+            "         }\n"
             "       }\n"
             "     }\n"
             "     ,...\n"
@@ -644,7 +706,7 @@ static UniValue decoderawtransaction(const Config &config,
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
     }
 
-    return TxToUniv(config, CTransaction(std::move(mtx)), uint256(), false);
+    return TxToUniv(config, CTransaction(std::move(mtx)), uint256(), false, RPCSerializationFlags());
 }
 
 static UniValue decodescript(const Config &config,
@@ -703,7 +765,7 @@ static UniValue::Object TxInErrorToJSON(const CTxIn& txin, std::string&& strMess
     return entry;
 }
 
-static UniValue combinerawtransaction(const Config &,
+static UniValue combinerawtransaction(const Config &config,
                                       const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() != 1) {
         throw std::runtime_error(
@@ -749,6 +811,7 @@ static UniValue combinerawtransaction(const Config &,
     // Fetch previous transactions (inputs):
     CCoinsView viewDummy;
     CCoinsViewCache view(&viewDummy);
+    uint32_t scriptFlags = 0;
     {
         LOCK(cs_main);
         LOCK(g_mempool.cs);
@@ -773,6 +836,9 @@ static UniValue combinerawtransaction(const Config &,
 
         // switch back to avoid locking mempool for too long
         view.SetBackend(viewDummy);
+
+        // Grab script flags which we will need for signature verification, etc
+        scriptFlags = GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ::ChainActive().Tip());
     }
 
     // Assumption: Below code does NOT push_back new inputs to mergedTx.
@@ -794,15 +860,15 @@ static UniValue combinerawtransaction(const Config &,
         // ... and merge in other signatures:
         for (const CMutableTransaction &txv : txVariants) {
             if (txv.vin.size() > i) {
-                const auto txvContexts = ScriptExecutionContext::createForAllInputs(txv, view);
-                sigdata.MergeSignatureData(DataFromTransaction(txv, i, txout, txvContexts[i]));
+                sigdata.MergeSignatureData(DataFromTransaction(ScriptExecutionContext{unsigned(i), txout, txv},
+                                                               scriptFlags));
             }
         }
 
         ProduceSignature(
             DUMMY_SIGNING_PROVIDER,
-            MutableTransactionSignatureCreator(&mergedTx, i, txout.nValue),
-            txout.scriptPubKey, sigdata, contexts[i]);
+            TransactionSignatureCreator(contexts[i]),
+            txout.scriptPubKey, sigdata, scriptFlags);
 
         UpdateInput(txin, sigdata);
     }
@@ -815,6 +881,9 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
     // Fetch previous transactions (inputs):
     CCoinsView viewDummy;
     CCoinsViewCache view(&viewDummy);
+    uint32_t scriptFlags = 0;
+    int chainHeight;
+    std::optional<int> upgrade9Height; // the first actual block height for upgrade9 rules, if unset, not activated
     {
         LOCK2(cs_main, g_mempool.cs);
         CCoinsViewCache &viewChain = *pcoinsTip;
@@ -829,6 +898,17 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
 
         // Switch back to avoid locking mempool for too long.
         view.SetBackend(viewDummy);
+
+        // Grab script flags which we will need for signature verification, etc
+        const auto *tip = ::ChainActive().Tip();
+        const auto &params = ::Params().GetConsensus();
+        scriptFlags = GetMemPoolScriptFlags(params, tip);
+        chainHeight = tip->nHeight;
+        if (IsUpgrade9Enabled(params, tip)) {
+            if (const auto *ablk = g_upgrade9_block_tracker.GetActivationBlock(tip, params)) {
+                upgrade9Height = ablk->nHeight + 1;
+            }
+        }
     }
 
     // Add previous txouts given in the RPC call:
@@ -848,6 +928,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
                                 {"vout", UniValue::VNUM},
                                 {"scriptPubKey", UniValue::VSTR},
                                 {"amount", UniValue::VNUM|UniValue::VSTR},
+                                {"tokenData", UniValue::VOBJ|UniValue::VNULL}
                             });
 
             TxId txid(ParseHashO(prevOut, "txid"));
@@ -858,37 +939,62 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
                                    "vout must be positive");
             }
 
+            token::OutputDataPtr tokenDataPtr;
+            if (auto *td = prevOut.locate("tokenData")) {
+                tokenDataPtr = DecodeTokenDataUV(*td);
+            }
+
             COutPoint out(txid, nOut);
             std::vector<uint8_t> pkData(ParseHexO(prevOut, "scriptPubKey"));
             CScript scriptPubKey(pkData.begin(), pkData.end());
+            std::optional<int> coinHeight;
 
             {
                 const Coin &coin = view.AccessCoin(out);
-                if (!coin.IsSpent() &&
-                    coin.GetTxOut().scriptPubKey != scriptPubKey) {
-                    std::string err("Previous output scriptPubKey mismatch:\n");
-                    err = err + ScriptToAsmStr(coin.GetTxOut().scriptPubKey) +
-                          "\nvs:\n" + ScriptToAsmStr(scriptPubKey);
-                    throw JSONRPCError(RPC_DESERIALIZATION_ERROR, std::move(err));
+                if (!coin.IsSpent()) {
+                    if (coin.GetTxOut().scriptPubKey != scriptPubKey) {
+                        std::string err = "Previous output scriptPubKey mismatch:\n";
+                        err = err + ScriptToAsmStr(coin.GetTxOut().scriptPubKey)
+                              + "\nvs:\n" + ScriptToAsmStr(scriptPubKey);
+                        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, std::move(err));
+                    }
+                    if (coin.GetTxOut().tokenDataPtr != tokenDataPtr) {
+                        std::string err = "Previous output tokenData mismatch:\n";
+                        std::string td1 = coin.GetTxOut().tokenDataPtr ? coin.GetTxOut().tokenDataPtr->ToString(true)
+                                                                       : "<null>";
+                        std::string td2 = tokenDataPtr ? tokenDataPtr->ToString(true) : "<null>";
+                        err = err + std::move(td1) + "\nvs:\n" + std::move(td2);
+                        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, std::move(err));
+                    }
+                    // grab the real coin height
+                    coinHeight = coin.GetHeight();
                 }
 
                 CTxOut txout;
                 txout.scriptPubKey = scriptPubKey;
                 txout.nValue = AmountFromValue(prevOut["amount"]);
+                txout.tokenDataPtr = tokenDataPtr;
 
-                view.AddCoin(out, Coin(txout, 1, false), true);
+                if (tokenDataPtr && !coinHeight) {
+                    // Ensure we can sign and that token doesn't end up as categorized as a PATFO
+                    // so set the height to either when upgrade9 activated or the latest chain tip
+                    // height, whichever is earlier.
+                    coinHeight = upgrade9Height.value_or(chainHeight);
+                }
+
+                view.AddCoin(out, Coin(txout, coinHeight.value_or(1), false), true);
             }
 
             // If redeemScript and private keys were given, add redeemScript to
             // the keystore so it can be signed
-            if (is_temp_keystore && scriptPubKey.IsPayToScriptHash()) {
+            if (bool isP2SH32{}; is_temp_keystore && scriptPubKey.IsPayToScriptHash(scriptFlags, nullptr, &isP2SH32)) {
                 RPCTypeCheckObj(prevOut,
                                 {
                                     {"redeemScript", UniValue::VSTR},
                                 });
                 std::vector<uint8_t> rsData(ParseHexO(prevOut, "redeemScript"));
                 CScript redeemScript(rsData.begin(), rsData.end());
-                keystore->AddCScript(redeemScript);
+                keystore->AddCScript(redeemScript, isP2SH32);
             }
         }
     }
@@ -917,22 +1023,22 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
         }
 
         const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
-        const Amount amount = coin.GetTxOut().nValue;
 
-        SignatureData sigdata = DataFromTransaction(mtx, i, coin.GetTxOut(), contexts[i]);
+        SignatureData sigdata = DataFromTransaction(contexts[i], scriptFlags);
 
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
             (i < mtx.vout.size())) {
             ProduceSignature(*keystore,
-                             MutableTransactionSignatureCreator(&mtx, i, amount, sigHashType),
-                             prevPubKey, sigdata, contexts[i]);
+                             TransactionSignatureCreator(contexts[i], sigHashType),
+                             prevPubKey, sigdata, scriptFlags);
         }
 
         UpdateInput(txin, sigdata);
 
         ScriptError serror = ScriptError::OK;
-        if ( ! VerifyScript(txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&txConst, i, amount), contexts[i], &serror)) {
+        if ( ! VerifyScript(txin.scriptSig, prevPubKey, scriptFlags,
+                            TransactionSignatureChecker(contexts[i]), &serror)) {
             if (serror == ScriptError::INVALID_STACK_OPERATION) {
                 // Unable to sign input and verification failed (possible
                 // attempt to partially sign).
@@ -983,17 +1089,21 @@ static UniValue signrawtransactionwithkey(const Config &,
                                     {"scriptPubKey", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "script key"},
                                     {"redeemScript", RPCArg::Type::STR_HEX, /* opt */ true, /* default_val */ "", "(required for P2SH or P2WSH) redeem script"},
                                     {"amount", RPCArg::Type::AMOUNT, /* opt */ false, /* default_val */ "", "The amount spent"},
+                                    GetTokenDataArgSpec(),
                                 },
                                 },
                         },
                         },
-                    {"sighashtype", RPCArg::Type::STR, /* opt */ true, /* default_val */ "ALL", "The signature hash type. Must be one of:\n"
-            "       \"ALL\"\n"
-            "       \"NONE\"\n"
-            "       \"SINGLE\"\n"
-            "       \"ALL|ANYONECANPAY\"\n"
-            "       \"NONE|ANYONECANPAY\"\n"
-            "       \"SINGLE|ANYONECANPAY\"\n"
+                    {"sighashtype", RPCArg::Type::STR, /* opt */ true, /* default_val */ "ALL|FORKID", "The signature hash type. Must be one of:\n"
+            "       \"ALL|FORKID\"\n"
+            "       \"NONE|FORKID\"\n"
+            "       \"SINGLE|FORKID\"\n"
+            "       \"ALL|FORKID|ANYONECANPAY\"\n"
+            "       \"NONE|FORKID|ANYONECANPAY\"\n"
+            "       \"SINGLE|FORKID|ANYONECANPAY\"\n"
+            "       \"ALL|FORKID|UTXOS\"    (after May 2023 upgrade)\n"
+            "       \"NONE|FORKID|UTXOS\"   (after May 2023 upgrade)\n"
+            "       \"SINGLE|FORKID|UTXOS\" (after May 2023 upgrade)\n"
                     },
                 }}
                 .ToString() +
@@ -1239,6 +1349,14 @@ static UniValue decodepsbt(const Config &config,
             "'pubkeyhash'\n"
             "          \"address\" : \"address\"     (string) Bitcoin Cash address "
             "if there is one\n"
+            "        },\n"
+            "        \"tokenData\" : {           (json object optional)\n"
+            "          \"category\" : \"hex\",     (string) token id\n"
+            "          \"amount\" : \"xxx\",       (string) fungible amount (is a string to support >53-bit amounts)\n"
+            "          \"nft\" : {               (json object optional)\n"
+            "            \"capability\" : \"xxx\", (string) one of \"none\", \"mutable\", \"minting\"\n"
+            "            \"commitment\" : \"hex\"  (string) NFT commitment\n"
+            "          }\n"
             "        }\n"
             "      },\n"
             "      \"partial_signatures\" : {             (json object, "
@@ -1330,7 +1448,7 @@ static UniValue decodepsbt(const Config &config,
     UniValue::Object result;
 
     // Add the decoded tx
-    result.emplace_back("tx", TxToUniv(config, CTransaction(*psbtx.tx), uint256(), false));
+    result.emplace_back("tx", TxToUniv(config, CTransaction(*psbtx.tx), uint256(), false, RPCSerializationFlags()));
 
     // Unknown data
     if (!psbtx.unknown.empty()) {
@@ -1355,12 +1473,15 @@ static UniValue decodepsbt(const Config &config,
             const CTxOut &txout = input.utxo;
 
             UniValue::Object out;
-            out.reserve(2);
+            out.reserve(txout.tokenDataPtr ? 3u : 2u);
 
             out.emplace_back("amount", ValueFromAmount(txout.nValue));
             total_in += txout.nValue;
 
             out.emplace_back("scriptPubKey", ScriptToUniv(config, txout.scriptPubKey, true));
+            if (txout.tokenDataPtr) {
+                out.emplace_back("tokenData", TokenDataToUniv(*txout.tokenDataPtr));
+            }
             in.emplace_back("utxo", std::move(out));
         } else {
             have_all_utxos = false;
@@ -1537,7 +1658,7 @@ static UniValue combinepsbt(const Config &,
     return EncodeBase64(MakeUInt8Span(ssTx));
 }
 
-static UniValue finalizepsbt(const Config &,
+static UniValue finalizepsbt(const Config &config,
                              const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() < 1 ||
         request.params.size() > 2) {
@@ -1584,11 +1705,15 @@ static UniValue finalizepsbt(const Config &,
     //   that created this PartiallySignedTransaction did not understand them),
     //   this will combine them into a final script.
     bool complete = true;
+    const uint32_t scriptFlags = [&config] {
+        LOCK(cs_main);
+        return GetMemPoolScriptFlags(config.GetChainParams().GetConsensus(), ::ChainActive().Tip());
+    }();
     // Assumption: Below code does NOT push_back new inputs to psbtx.tx.
     const auto contexts = ScriptExecutionContext::createForAllInputs(*psbtx.tx, psbtx.inputs);
     for (size_t i = 0; i < psbtx.tx->vin.size(); ++i) {
         complete &=
-            SignPSBTInput(DUMMY_SIGNING_PROVIDER, psbtx, i, SigHashType(), contexts[i]);
+            SignPSBTInput(DUMMY_SIGNING_PROVIDER, psbtx, i, scriptFlags, SigHashType(), contexts[i]);
     }
 
     UniValue::Object result;
@@ -1640,6 +1765,7 @@ static UniValue createpsbt(const Config &config,
                                     {"address", RPCArg::Type::AMOUNT, /* opt */ false, /* default_val */ "", "A key-value pair. The key (string) is the Bitcoin Cash address, the value (float or string) is the amount in " + CURRENCY_UNIT},
                                 },
                                 },
+                            GetAlternateAddressObjectOutputArgSpec(),
                             {"", RPCArg::Type::OBJ, /* opt */ true, /* default_val */ "", "",
                                 {
                                     {"data", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "A key-value pair. The key must be \"data\", the value is hex-encoded data"},

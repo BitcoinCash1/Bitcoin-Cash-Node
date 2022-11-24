@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <prevector.h>
 #include <streams.h>
 
 #include <support/allocators/zeroafterfree.h>
@@ -12,67 +13,85 @@
 
 BOOST_FIXTURE_TEST_SUITE(streams_tests, BasicTestingSetup)
 
-BOOST_AUTO_TEST_CASE(streams_vector_writer) {
+template <typename VecT>
+static bool test_generic_vector_writer() {
     uint8_t a(1);
     uint8_t b(2);
     uint8_t bytes[] = {3, 4, 5, 6};
-    std::vector<uint8_t> vch;
+    VecT vch;
+    using T = typename VecT::value_type;
+
+    auto ToUInt8Vec = [](const auto &v) {
+        const uint8_t *begin = reinterpret_cast<const uint8_t *>(v.data());
+        const uint8_t *end = reinterpret_cast<const uint8_t *>(v.data() + v.size());
+        return std::vector<uint8_t>(begin, end);
+    };
 
     // Each test runs twice. Serializing a second time at the same starting
     // point should yield the same results, even if the first test grew the
     // vector.
 
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{1, 2}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{1, 2}}));
     vch.clear();
 
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 1, 2}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 1, 2}}));
     vch.clear();
 
-    vch.resize(5, 0);
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 1, 2, 0}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 1, 2, 0}}));
+    vch.resize(5, T(0));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 1, 2, 0}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 1, 2, 0}}));
     vch.clear();
 
-    vch.resize(4, 0);
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 3, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 0, 1, 2}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 3, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 0, 1, 2}}));
+    vch.resize(4, T(0));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 3, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 0, 1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 3, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 0, 1, 2}}));
     vch.clear();
 
-    vch.resize(4, 0);
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 4, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 0, 0, 1, 2}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 4, a, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{0, 0, 0, 0, 1, 2}}));
+    vch.resize(4, T(0));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 4, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 0, 0, 1, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 4, a, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{0, 0, 0, 0, 1, 2}}));
     vch.clear();
 
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, bytes);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{3, 4, 5, 6}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, bytes);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{3, 4, 5, 6}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, bytes);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{3, 4, 5, 6}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 0, bytes);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{3, 4, 5, 6}}));
     vch.clear();
 
-    vch.resize(4, 8);
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, bytes, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{8, 8, 1, 3, 4, 5, 6, 2}}));
-    CVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, bytes, b);
-    BOOST_CHECK((vch == std::vector<uint8_t>{{8, 8, 1, 3, 4, 5, 6, 2}}));
+    vch.resize(4, T(8));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, bytes, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{8, 8, 1, 3, 4, 5, 6, 2}}));
+    GenericVectorWriter(SER_NETWORK, INIT_PROTO_VERSION, vch, 2, a, bytes, b);
+    BOOST_CHECK((ToUInt8Vec(vch) == std::vector<uint8_t>{{8, 8, 1, 3, 4, 5, 6, 2}}));
     vch.clear();
+
+    return true;
 }
 
-BOOST_AUTO_TEST_CASE(streams_vector_reader) {
-    std::vector<uint8_t> vch = {1, 255, 3, 4, 5, 6};
+BOOST_AUTO_TEST_CASE(streams_vector_writer) {
+    BOOST_CHECK(test_generic_vector_writer<std::vector<uint8_t>>());
+    BOOST_CHECK(test_generic_vector_writer<std::vector<char>>());
+    BOOST_CHECK((test_generic_vector_writer<prevector<28, uint8_t>>()));
+}
 
-    VectorReader reader(SER_NETWORK, INIT_PROTO_VERSION, vch, 0);
+template <typename VecT>
+static bool test_generic_vector_reader() {
+    VecT vch;
+    for (auto val : {1, 255, 3, 4, 5, 6}) vch.push_back(typename VecT::value_type(val));
+
+    GenericVectorReader reader(SER_NETWORK, INIT_PROTO_VERSION, vch, 0);
     BOOST_CHECK_EQUAL(reader.size(), 6);
     BOOST_CHECK(!reader.empty());
 
@@ -103,7 +122,7 @@ BOOST_AUTO_TEST_CASE(streams_vector_reader) {
     BOOST_CHECK_THROW(reader >> d, std::ios_base::failure);
 
     // Read a 4 bytes as a (signed) int32_t from the beginning of the buffer.
-    VectorReader new_reader(SER_NETWORK, INIT_PROTO_VERSION, vch, 0);
+    GenericVectorReader new_reader(SER_NETWORK, INIT_PROTO_VERSION, vch, 0);
     new_reader >> d;
     // 67370753 = 1,255,3,4 in little-endian base-256
     BOOST_CHECK_EQUAL(d, 67370753);
@@ -113,6 +132,14 @@ BOOST_AUTO_TEST_CASE(streams_vector_reader) {
     // Reading after end of byte vector throws an error even if the reader is
     // not totally empty.
     BOOST_CHECK_THROW(new_reader >> d, std::ios_base::failure);
+
+    return true;
+}
+
+BOOST_AUTO_TEST_CASE(streams_vector_reader) {
+    BOOST_CHECK(test_generic_vector_reader<std::vector<uint8_t>>());
+    BOOST_CHECK(test_generic_vector_reader<std::vector<char>>());
+    BOOST_CHECK((test_generic_vector_reader<prevector<28, uint8_t>>()));
 }
 
 BOOST_AUTO_TEST_CASE(bitstream_reader_writer) {

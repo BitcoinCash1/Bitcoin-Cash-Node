@@ -270,7 +270,6 @@ const char *GetOpName(opcodetype opcode) {
             return "OP_TXOUTPUTCOUNT";
         case OP_TXLOCKTIME:
             return "OP_TXLOCKTIME";
-
         case OP_UTXOVALUE:
             return "OP_UTXOVALUE";
         case OP_UTXOBYTECODE:
@@ -287,6 +286,25 @@ const char *GetOpName(opcodetype opcode) {
             return "OP_OUTPUTVALUE";
         case OP_OUTPUTBYTECODE:
             return "OP_OUTPUTBYTECODE";
+
+        // Token introspection
+        case OP_UTXOTOKENCATEGORY:
+            return "OP_UTXOTOKENCATEGORY";
+        case OP_UTXOTOKENCOMMITMENT:
+            return "OP_UTXOTOKENCOMMITMENT";
+        case OP_UTXOTOKENAMOUNT:
+            return "OP_UTXOTOKENAMOUNT";
+        case OP_OUTPUTTOKENCATEGORY:
+            return "OP_OUTPUTTOKENCATEGORY";
+        case OP_OUTPUTTOKENCOMMITMENT:
+            return "OP_OUTPUTTOKENCOMMITMENT";
+        case OP_OUTPUTTOKENAMOUNT:
+            return "OP_OUTPUTTOKENAMOUNT";
+
+        // Token prefix byte
+        case SPECIAL_TOKEN_PREFIX:
+            return "SPECIAL_TOKEN_PREFIX";
+
         case OP_RESERVED3:
             return "OP_RESERVED3";
         case OP_RESERVED4:
@@ -401,10 +419,35 @@ bool CScriptNum::MinimallyEncode(std::vector<uint8_t> &data) {
     return true;
 }
 
-bool CScript::IsPayToScriptHash() const {
+bool CScript::IsPayToScriptHash(uint32_t flags, std::vector<uint8_t> *hash_out, bool *is_p2sh_32) const {
+    // If caller wants to know if it was p2sh_32, default the boolean to false (common case)
+    if (is_p2sh_32) {
+        *is_p2sh_32 = false;
+    }
     // Extra-fast test for pay-to-script-hash CScripts:
-    return (this->size() == 23 && (*this)[0] == OP_HASH160 &&
-            (*this)[1] == 0x14 && (*this)[22] == OP_EQUAL);
+    // - Legacy p2sh uses 160-bit hash:   OP_HASH160 20 [20 byte hash] OP_EQUAL
+    // - Newer p2sh_32 uses 256-bit hash: OP_HASH256 32 [32 byte hash] OP_EQUAL
+    if (size() == 23 && (*this)[0] == OP_HASH160 && (*this)[1] == 0x14 && (*this)[22] == OP_EQUAL) {
+        /* 160 bit */
+        if (hash_out) {
+            hash_out->assign(&(*this)[2], &(*this)[22]);
+        }
+        return true;
+    } else if ((flags & SCRIPT_ENABLE_P2SH_32)
+               && size() == 35 && (*this)[0] == OP_HASH256 && (*this)[1] == 0x20 && (*this)[34] == OP_EQUAL) {
+        /* 256 bit */
+        if (hash_out) {
+            hash_out->assign(&(*this)[2], &(*this)[34]);
+        }
+        // Set is_p2sh_32 pointer if specified.  Caller could deduce this from size of hash_out vector, however caller
+        // may not want the overhead of the vector but may just want this bool flag instead (such as in interpreter.cpp
+        // VerifyScript())
+        if (is_p2sh_32) {
+            *is_p2sh_32 = true;
+        }
+        return true;
+    }
+    return false;
 }
 
 bool CScript::IsPayToPubKeyHash() const {

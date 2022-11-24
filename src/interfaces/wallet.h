@@ -6,7 +6,7 @@
 
 #include <amount.h>                 // For Amount
 #include <primitives/transaction.h> // For CTxOut
-#include <pubkey.h> // For CKeyID and CScriptID (definitions needed in CTxDestination instantiation)
+#include <pubkey.h> // For CKeyID and ScriptID (definitions needed in CTxDestination instantiation)
 #include <script/ismine.h>             // For isminefilter, isminetype
 #include <script/standard.h>           // For CTxDestination
 #include <support/allocators/secure.h> // For SecureString

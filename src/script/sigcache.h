@@ -46,11 +46,9 @@ private:
                   const uint256 &sighash) const;
 
 public:
-    CachingTransactionSignatureChecker(const CTransaction *txToIn,
-                                       unsigned int nInIn,
-                                       const Amount amountIn, bool storeIn,
+    CachingTransactionSignatureChecker(const ScriptExecutionContext &contextIn, bool storeIn,
                                        PrecomputedTransactionData &txdataIn)
-        : TransactionSignatureChecker(txToIn, nInIn, amountIn, txdataIn),
+        : TransactionSignatureChecker(contextIn, txdataIn),
           store(storeIn) {}
 
     bool VerifySignature(const std::vector<uint8_t> &vchSig,

@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2017-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -122,8 +123,7 @@ private:
 };
 
 /** Modify the extranonce in a block */
-void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev,
-                         uint64_t nExcessiveBlockSize,
+void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev, const Config &config,
                          unsigned int &nExtraNonce);
 int64_t UpdateTime(CBlockHeader *pblock, const Consensus::Params &params,
                    const CBlockIndex *pindexPrev);
