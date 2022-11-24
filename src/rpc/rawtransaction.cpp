@@ -30,12 +30,14 @@
 #include <script/standard.h>
 #include <txmempool.h>
 #include <uint256.h>
+#include <util/saltedhashers.h>
 #include <util/strencodings.h>
 #include <validation.h>
 #include <validationinterface.h>
 
 #include <cstdint>
 #include <optional>
+#include <unordered_map>
 
 #include <univalue.h>
 
@@ -83,8 +85,15 @@ static UniValue getrawtransaction(const Config &config,
             "DEPRECATED: for now, it also works for transactions with unspent outputs.\n"
 
             "\nReturn the raw transaction data.\n"
+            "\nIf verbose is 'false' or omitted, returns a string that is serialized, hex-encoded data for 'txid'.\n"
             "\nIf verbose is 'true', returns an Object with information about 'txid'.\n"
-            "If verbose is 'false' or omitted, returns a string that is serialized, hex-encoded data for 'txid'.\n"
+            "\nIf verbose is a numeric value, then it indicates the verbosity level:\n"
+            "* Level 0: Same as verbose=false\n"
+            "* Level 1: Same as verbose=true\n"
+            "* Level 2: Input value and transaction fee data will be made available\n"
+            "  - This operation will lookup the input transactions loading the data\n"
+            "    from disk if necessary, which might be slow. Also, it might fail if\n"
+            "    this data is not available (due to pruning or no -txindex enabled).\n"
                 ,
                 {
                     {"txid", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "The transaction id"},
@@ -96,7 +105,7 @@ static UniValue getrawtransaction(const Config &config,
             "\"data\"      (string) The serialized, hex-encoded data for "
             "'txid'\n"
 
-            "\nResult (if verbose is set to true):\n"
+            "\nResult (if verbose is set to true, or numeric value indicating verbosity level greater than 0):\n"
             "{\n"
             "  \"hex\" : \"data\",       (string) The serialized, hex-encoded "
             "data for 'txid'\n"
@@ -116,12 +125,14 @@ static UniValue getrawtransaction(const Config &config,
             "         \"hex\": \"hex\"   (string) hex\n"
             "       },\n"
             "       \"sequence\": n      (numeric) The script sequence number\n"
+            "       \"value\" : x.xxx,   (numeric) The input value in " +
+            CURRENCY_UNIT + " (available at verbosity level 2)\n"
             "     }\n"
             "     ,...\n"
             "  ],\n"
             "  \"vout\" : [              (array of json objects)\n"
             "     {\n"
-            "       \"value\" : x.xxx,            (numeric) The value in " +
+            "       \"value\" : x.xxx,            (numeric) The output value in " +
             CURRENCY_UNIT +
             "\n"
             "       \"n\" : n,                    (numeric) index\n"
@@ -156,6 +167,8 @@ static UniValue getrawtransaction(const Config &config,
             "  \"in_active_chain\": b  (bool) Whether specified block is in "
             "the active chain or not (only present with explicit \"blockhash\" "
             "argument)\n"
+            "  \"fee\" : x.xxx,            (numeric) Transaction fee in " +
+            CURRENCY_UNIT + " (available at verbosity level 2)\n"
             "}\n"
 
             "\nExamples:\n" +
@@ -180,13 +193,25 @@ static UniValue getrawtransaction(const Config &config,
                            "ordinary transaction and cannot be retrieved");
     }
 
-    // Accept either a bool (true) or a num (>=1) to indicate verbose output.
-    bool fVerbose = false;
+    // Accept either a bool (true) or a num (>=0) to indicate verbosity level.
+    int verbosityLevel = 0;
     if (!request.params[1].isNull()) {
-        fVerbose = request.params[1].isNum()
-                       ? request.params[1].get_int() != 0
-                       : request.params[1].get_bool();
+        verbosityLevel = request.params[1].isNum()
+                        ? request.params[1].get_int()
+                        : int(request.params[1].get_bool());
     }
+
+    if (verbosityLevel < 0 || verbosityLevel > 2) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                           "Wrong verbosity level " + std::to_string(verbosityLevel));
+    }
+
+    // At minimal verbosity level 1 we return transaction deserialized into json
+    bool fVerbose = verbosityLevel >= 1;
+
+    // At verbosity level 2 we lookup the transaction's prevouts
+    // get their values and calculate transaction fee
+    bool fGetPrevouts = verbosityLevel >= 2;
 
     if (!request.params[2].isNull()) {
         LOCK(cs_main);
@@ -238,6 +263,73 @@ static UniValue getrawtransaction(const Config &config,
         result.reserve(result.size() + 1);
         result.emplace_back("in_active_chain", in_active_chain);
     }
+
+    if (fGetPrevouts) {
+        Amount vinSum;
+
+        // we use separate flag for txindex being ready since we attempt
+        // to look in `blockindex` provided and then in txindex
+        bool txindex_ready = false;
+        if (g_txindex) {
+            txindex_ready = g_txindex->BlockUntilSyncedToCurrentChain();
+        }
+
+        size_t vinIndex = 0u;
+        std::unordered_map<TxId, CTransactionRef, SaltedTxIdHasher> txcache;
+        txcache.reserve(tx->vin.size());
+
+        for (const CTxIn& vin : tx->vin) {
+            CTransactionRef prevoutTx;
+
+            if (const auto findIter = txcache.find(vin.prevout.GetTxId()); findIter == txcache.end()) {
+                BlockHash prevoutHashBlock;
+
+                std::string errmsg;
+                // let's first try to search for a prevout transaction in the mempool or `blockindex`, and not fail
+                // covers a rare case of this transaction and its prevouts being in the same block, so txindex is not needed
+                if (blockindex && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(), prevoutHashBlock,
+                        true, blockindex)) {
+                    errmsg = "Prevout transaction not found in the provided block and ";
+                }
+
+                // if prevout was not found in the block provided, we look for it in transaction index and fail if needed
+                if (!prevoutTx && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(), prevoutHashBlock,
+                        true, nullptr)) {
+                    if (!g_txindex) {
+                        errmsg += "Prevout transaction not found in the mempool. Use -txindex to enable "
+                                "blockchain transaction queries";
+                    } else if (!txindex_ready) {
+                        errmsg += "Prevout transaction not found in the mempool. Blockchain transactions are "
+                                "still in the process of being indexed";
+                    } else {
+                        errmsg += "Prevout transaction not found in the mempool and blockchain";
+                    }
+                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                                    "Failed to fetch transaction with id " +
+                                    vin.prevout.GetTxId().ToString() + " for fee estimation. " +
+                                    errmsg);
+                }
+                txcache.emplace(vin.prevout.GetTxId(), prevoutTx);
+            } else {
+                prevoutTx = findIter->second;
+            }
+
+            // derive prevout values and inputs' statistics
+            const Amount value = prevoutTx->vout.at(vin.prevout.GetN()).nValue;
+            vinSum += value;
+
+            // update the output json
+            auto& vinUniv = result.at("vin").at(vinIndex).get_obj();
+            vinUniv.emplace_back("value", ValueFromAmount(value));
+
+            ++vinIndex;
+        }
+
+        // calculate the transaction fee and update the output json
+        Amount fee(vinSum - tx->GetValueOut());
+        result.emplace_back("fee", ValueFromAmount(fee));
+    }
+
     return result;
 }
 
