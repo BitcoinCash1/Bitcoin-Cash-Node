@@ -285,6 +285,7 @@ public:
                 // Upgrade 8; May 15, 2022 (MTP time >= 1652616000), first upgrade block: 740238
                 {740238, BlockHash::fromHex("000000000000000002afc6fbd302f01f8cf4533f4b45207abc61d9f4297bf969")},
                 {741245, BlockHash::fromHex("000000000000000001c46d1d0f35df726bfb3e84cdc396d9edd9e2f8414191cd")},
+                {768220, BlockHash::fromHex("0000000000000000012f9d67fc9304253bdf204b65782816cbbc64913398e25b")},
 
             }};
 
@@ -469,6 +470,7 @@ public:
 
                 // Upgrade 8; May 15, 2022 (MTP time >= 1652616000), first upgrade block: 1500206
                 {1500206, BlockHash::fromHex("000000000000360769353e933530c40d3f00565a4e7731ff56027e23fa74a8ef")},
+                {1526155, BlockHash::fromHex("0000000057fa336560212f0ff351ca6b2008c6c48032bc305e5b4663e837953f")},
             }};
 
         // Data as of block
@@ -626,6 +628,8 @@ public:
 
                 // Upgrade 8; May 15, 2022 (MTP time >= 1652616000), first upgrade block: 95465
                 {95465, BlockHash::fromHex("00000000a77206a2265cabc47cc2c34706ba1c5e5a5743ac6681b83d43c91a01")},
+                {115252, BlockHash::fromHex("00000000ae25e85d9e22cd6c8d72c2f5d4b0222289d801b7f633aeae3f8c6367")},
+                {121428, BlockHash::fromHex("00000000002cf277337c504f7ce708cce851d5d20cad2936fedf3be95a9ca5eb")},
             }};
 
         // Data as of block
@@ -923,6 +927,10 @@ public:
                 // Fork block for chipnet
                 {115252, BlockHash::fromHex("00000000040ba9641ba98a37b2e5ceead38e4e2930ac8f145c8094f94c708727")},
                 {115510, BlockHash::fromHex("000000006ad16ee5ee579bc3712b6f15cdf0a7f25a694e1979616794b73c5122")},
+
+                // Upgrade9 - first block mined under upgrade9 rules for chipnet (Nov. 15, 2022)
+                {121957, BlockHash::fromHex("0000000056087dee73fb66178ca70da89dfd0be098b1a63cf6fe93934cd04c78")},
+                {122396, BlockHash::fromHex("000000000363cd56e49a46684cec1d99854c4aae662a6faee0df4c9a49dc8a33")},
             }};
 
         // Data as of block
