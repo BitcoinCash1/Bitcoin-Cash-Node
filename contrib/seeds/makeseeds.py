@@ -32,16 +32,16 @@ PATTERN_IPV4 = re.compile(
     r"^((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})):(\d+)$")
 PATTERN_IPV6 = re.compile(r"^\[([0-9a-z:]+)\]:(\d+)$")
 PATTERN_ONION = re.compile(
-    r"^([abcdefghijklmnopqrstuvwxyz234567]{16}\.onion):(\d+)$")
+    r"^([abcdefghijklmnopqrstuvwxyz234567]{56}\.onion):(\d+)$")
 
 # Used to only select nodes with a user agent string compatible with the
 # Bitcoin Cash specification.
 PATTERN_AGENT = re.compile(
-    r"^(/Bitcoin Cash Node:2[34]\.(\d+)\.(\d+)[^/]*/"
-    r"|/Flowee:1[^/]*/|/kth-bch:0\.20\.(\d+)[^/]*/"
-    r"|/bchd:0\.1[78]\.(\d+)[^/]*/"
+    r"^(/Bitcoin Cash Node:2[45]\.(\d+)\.(\d+)[^/]*/"
+    r"|/Flowee:1[^/]*/|/kth-bch:0\.[23][0-9]\.(\d+)[^/]*/"
+    r"|/bchd:0\.(20|1[89])\.(\d+)[^/]*/"
     r"|/Bitcoin Verde:2\.(\d+)\.(\d+)[^/]*/"
-    r"|/BCH Unlimited:1\.9\.(\d+)[^/]*/)")
+    r"|/BCH Unlimited:1\.(9|1[01])\.(\d+)[^/]*/)")
 
 
 def parseline(line):
