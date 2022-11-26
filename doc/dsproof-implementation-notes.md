@@ -18,7 +18,7 @@ We are providing here
 some additional notes on the BCHN implementation of this feature.
 
 1. The DSProof functionality is enabled by default, this means
-   DS proofs are created and relayed. Both creation and relay  can
+   DS proofs are created and relayed. Both creation and relay can
    be disabled by setting `doublespendproof=0` in the configuration
    or passing `-doublespendproof=0` or `-disabledoublespendproof`
    on the command line.
@@ -78,6 +78,6 @@ Notes on the DSProof specification
 
 2. The sizes of the `FirstSpender` and `DoubleSpender` fields are variable.
 
-3. The value of the  first `list-size` field in the spender record
+3. The value of the first `list-size` field in the spender record
    (the `Number-of-pushdata's`) is currently fixed to 1, and thus its
    encoding only occupies a single byte.

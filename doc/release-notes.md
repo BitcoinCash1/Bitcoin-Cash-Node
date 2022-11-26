@@ -9,7 +9,6 @@ Bitcoin Cash Node version 24.1.1 is now available from:
 This is a minor release of Bitcoin Cash Node (BCHN) which contains many
 corrections and improvements.
 
-
 ## Usage recommendations
 
 Users who are running v24.1.0 or earlier are encouraged to upgrade to v24.1.1.
@@ -29,7 +28,7 @@ TODO
 
 ## Modified functionality
 
-#### Two error messages have changed:
+### Two error messages have changed:
 
 - If the node receives a transaction that spends an UTXO with a locking script >10,000 bytes, the node now generates
   the error message `bad-txns-input-scriptpubkey-unspendable`. Previously it would generate the message
@@ -50,7 +49,7 @@ an invalid transaction that triggers these error conditions.  However, no known 
 exact format of the error message that they receive when a transaction is rejected by a peer, so this change should
 be relatively benign.
 
-#### P2SH-32 addresses are now supported by RPC
+### P2SH-32 addresses are now supported by RPC
 
 Certain RPC methods that take an `address` parameter (such as `sendtoaddress`) will now
 also correctly parse P2SH-32 addresses and thus will allow composing of transactions and
@@ -59,7 +58,6 @@ on mainnet such transactions will remain non-standard and cannot be relayed unti
 activates on May 15, 2023. For reference, P2SH-32 addresses are longer than regular P2SH
 addresses, for example: `bitcoincash:pwqwzrf7z06m7nn58tkdjyxqfewanlhyrpxysack85xvf3mt0rv02l9dxc5uf`
 is a P2SH-32 address.
-
 
 ## Removed functionality
 
@@ -159,7 +157,6 @@ TODO
 ### Removed documents
 
 TODO
-
 
 ### Notable commits grouped by functionality
 

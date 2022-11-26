@@ -220,7 +220,7 @@ and wait for user input to advance the test.
 Test plan window will become irresponsive upon test logic execution and user must allow the test steps
 to be finished before advancing to the next step
 
-To implement an example UI test one can start with te following bolerplate code:
+To implement an example UI test one can start with te following boilerplate code:
 
 ```python
 from test_framework.test_framework import BitcoinTestFramework
@@ -232,7 +232,7 @@ class UITestFramework(BitcoinTestFramework):
         self.extra_args = [["-splash=0", "-ui"]]
 
     def run_test(self):
-        # self.meaninfulWork()
+        # self.meaningfulWork()
         self.testPlan.waitUntilMaxReachedStep(1)
 
         # self.moreMeaningfulWork()

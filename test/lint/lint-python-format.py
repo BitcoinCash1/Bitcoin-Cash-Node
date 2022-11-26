@@ -98,7 +98,7 @@ def build_replacement(error):
         #    To avoid type errors, just use {}
         #  - {:i} does not exists, it should be {:d} or better {}.
         #  - {:r} is invalid, the new syntax is {!r}
-        #  - The left alignement marker (e.g. %-5s) is now the default, remove it
+        #  - The left alignment marker (e.g. %-5s) is now the default, remove it
         specifier = match.group(1)
         specifier_converts_to_empty_brackets = ["s", "i", "d"]
         if specifier in specifier_converts_to_empty_brackets:

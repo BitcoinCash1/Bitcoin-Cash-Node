@@ -31,6 +31,7 @@ Check out, build and run benchmarks on two branches, and compare their results.
 - If one of the branches is checked out already, it builds and benchmarks that one first, to make best use of any cached build artefacts.
 
 Dependencies:
+
 - `git` to check out the project.
 - `ninja` for building the project.
 - All dependencies of `bench_compare.sh`.

@@ -101,7 +101,7 @@ during the lifetime of a connection and receipt of multiple such
 messages should be considered misbehavior of the remote peer.
 
 After receipt of an `xversion` message, a node must answer with an
-empty `verack` message to confirm recept.
+empty `verack` message to confirm receipt.
 
 A node signals that it is using xversion by setting service bit 11.
 

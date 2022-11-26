@@ -150,7 +150,7 @@ complications.
 
 At the time of writing (April 2020) the Windows Subsystem for Linux installs Ubuntu
 Focal 20.04 if you just search for Ubuntu in the Microsoft Shop. However, there is
-a problem with the sleep function on WSL, so Ubuntu Bionic 18.04 is recomended, and
+a problem with the sleep function on WSL, so Ubuntu Bionic 18.04 is recommended, and
 will be covered in these notes. See [this issue](https://github.com/microsoft/WSL/issues/4898)
 for further info.
 

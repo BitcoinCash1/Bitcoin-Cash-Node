@@ -13,7 +13,7 @@ class UITestFramework(BitcoinTestFramework):
         self.extra_args = [["-splash=0", "-ui"]]
 
     def run_test(self):
-        # self.meaninfulWork()
+        # self.meaningfulWork()
         self.testPlan.waitUntilMaxReachedStep(1)
 
         # self.moreMeaningfulWork()
