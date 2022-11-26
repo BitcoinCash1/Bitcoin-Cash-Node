@@ -65,10 +65,10 @@ private:
 public:
     /**
     * The documentation before a function or class method should follow Doxygen
-    * spec. The name of the function should start with an english verb which
+    * spec. The name of the function should start with an English verb which
     * indicates the intended purpose of this code.
     *
-    * The  function name should be should be CamelCase.
+    * The function name should be should be CamelCase.
     *
     * @param[in] s    A description
     * @param[in] n    Another argument description
@@ -481,12 +481,12 @@ pay attention to for reviewers of Bitcoin Cash Node code.
     - *Rationale*: `[]` does an insert (of the default element) if the item doesn't
       exist in the map yet. This has resulted in memory leaks in the past, as
       well as race conditions (expecting read-read behavior). Using `[]` is fine
-      for *writing* to a map
+      for *writing* to a map.
 - Do not compare an iterator from one data structure with an iterator of
   another data structure (even if of the same type)
-    - *Rationale*: Behavior is undefined. In C++ parlor this means "may reformat
+    - *Rationale*: Behavior is undefined. In C++ parlance this means "may reformat
       the universe", in practice this has resulted in at least one hard-to-debug
-      crash bug
+      crash bug.
 - Watch out for out-of-bounds vector access. `&vch[vch.size()]` is illegal,
   including `&vch[0]` for an empty vector. Use `vch.data()` and `vch.data() +
   vch.size()` instead.
@@ -509,22 +509,25 @@ pay attention to for reviewers of Bitcoin Cash Node code.
     - *Rationale*: Easier to understand what is happening, thus easier to spot
       mistakes, even for those that are not language lawyers
 - Use `Span` as function argument when it can operate on any range-like container.
-  - *Rationale*: Compared to `Foo(const vector<int>&)` this avoids the need for a (potentially expensive)
-    conversion to vector if the caller happens to have the input stored in another type of container.
-    However, be aware of the pitfalls documented in [span.h](../src/span.h).
-```cpp
-void Foo(Span<const int> data);
-std::vector<int> vec{1,2,3};
-Foo(vec);
-```
+
+    ```cpp
+    void Foo(Span<const int> data);
+    std::vector<int> vec{1,2,3};
+    Foo(vec);
+    ```
+
+    - *Rationale*: Compared to `Foo(const vector<int>&)` this avoids the need for a (potentially expensive)
+      conversion to vector if the caller happens to have the input stored in another type of container.
+      However, be aware of the pitfalls documented in [span.h](../src/span.h).
+
 - Initialize all non-static class members where they are defined
 
-  ```cpp
-  class A
-  {
-      uint32_t m_count{0};
-  }
-  ```
+    ```cpp
+    class A
+    {
+        uint32_t m_count{0};
+    }
+    ```
 
     - *Rationale*: Initializing the members in the declaration makes it easy to
       spot uninitialized ones, and avoids accidentally reading uninitialized memory
@@ -725,7 +728,7 @@ Current subtrees include:
       when merging upstream changes to the leveldb subtree.
 - src/libsecp256k1
     - Upstream at [https://github.com/bitcoin-core/secp256k1/](https://github.com/bitcoin-core/secp256k1/);
-      actively maintaned by Core contributors.
+      actively maintained by Core contributors.
 - src/crypto/ctaes
     - Upstream at [https://github.com/bitcoin-core/ctaes](https://github.com/bitcoin-core/ctaes);
       actively maintained by Core contributors.

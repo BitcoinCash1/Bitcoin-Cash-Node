@@ -175,7 +175,7 @@ enum class CreateTransactionResult : uint32_t {
     CT_INVALID_PARAMETER,
     //! Error: The wallet balance is insufficient
     CT_INSUFFICIENT_FUNDS,
-    //! Error: The input amount is insufficent for creating the outputs + fee
+    //! Error: The input amount is insufficient for creating the outputs + fee
     CT_INSUFFICIENT_AMOUNT,
 };
 

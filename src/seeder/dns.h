@@ -48,7 +48,7 @@ ParseNameStatus parse_name(const uint8_t **inpos, const uint8_t *inend,
 
 //  0: k
 // -1: component > 63 characters
-// -2: insufficent space in output
+// -2: insufficient space in output
 // -3: two subsequent dots
 int write_name(uint8_t **outpos, const uint8_t *outend, const char *name,
                int offset);

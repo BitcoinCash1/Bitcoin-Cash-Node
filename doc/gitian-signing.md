@@ -12,7 +12,7 @@ please add you fingerprint here.
 
 TODO: Add reference to gitian keys process instructions once that document is
 written. It should be clear to signers that there are expectations associated
-with the siginging process and that it's unacceptable to blindly sign builds.
+with the signing process and that it's unacceptable to blindly sign builds.
 
 ## Sign your Gitian builds
 
