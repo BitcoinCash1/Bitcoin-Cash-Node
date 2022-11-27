@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
+# Copyright (c) 2022 The Bitcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+"""Bitcoin test framework miscellaneous transaction tools."""
 import random
+from typing import Optional
 
 from .cdefs import MAX_TXOUT_PUBKEY_SCRIPT, MIN_TX_SIZE_MAGNETIC_ANOMALY
-from .messages import CTransaction, CTxOut, FromHex, ToHex
-from .script import CScript, OP_RETURN
+from .messages import CTransaction, CTxOut, FromHex, ToHex, TokenOutputData
+from .script import CScript, OP_CHECKSIG, OP_DUP, OP_EQUAL, OP_EQUALVERIFY, OP_HASH160, OP_HASH256, OP_RETURN
 
 
 def pad_tx(tx, pad_to_size=MIN_TX_SIZE_MAGNETIC_ANOMALY):
@@ -70,3 +75,36 @@ def pad_raw_tx(rawtx_hex, min_size=MIN_TX_SIZE_MAGNETIC_ANOMALY):
     FromHex(tx, rawtx_hex)
     pad_tx(tx, min_size)
     return ToHex(tx)
+
+
+def calc_dust_limit(*, typ: Optional[str] = None, txout: Optional[CTxOut] = None, sats_per_kb: int = 1000,
+                    token_data: Optional[TokenOutputData] = None) -> int:
+    """
+    Calculates the dust limit for an output (in satoshis). Pass either `typ` or a `txout`.
+    :param typ: One of: 'p2pkh', 'p2sh', 'p2sh32' or None. If None, defaults to 'p2pkh'.
+    :param txout: A CTxOut for which to calculate the dust limit.
+    :param sats_per_kb: The fee rate in sats per kb. Default of 1000 is what most nodes use on non-full mempools.
+    :param token_data: Use only in conjunction with the `typ` param to specify optional token data to add to the
+                       calculation.
+    :return: The dust limit it satoshis for this output type (if using `typ`), or or for this exact CTxOut if using
+             `txout`.
+    """
+    if typ is None and txout is None:
+        typ = 'p2pkh'
+    if typ is not None and txout is None:
+        # Fake an output to calculate size using a real CTxOut
+        if typ == 'p2pkh':
+            script = CScript([OP_DUP, OP_HASH160, bytes(20), OP_EQUALVERIFY, OP_CHECKSIG])
+        elif typ == 'p2sh':
+            script = CScript([OP_HASH160, bytes(20), OP_EQUAL])
+        elif typ == 'p2sh32':
+            script = CScript([OP_HASH256, bytes(32), OP_EQUAL])
+        else:
+            assert False, "typ param must be one of: 'p2pkh', 'p2sh', 'p2sh32'"
+        return calc_dust_limit(txout=CTxOut(0, script, tokenData=token_data), sats_per_kb=sats_per_kb)
+    elif txout is not None and typ is None:
+        assert token_data is None, "Param `token_data` may only be used with param `typ`"
+        # Dust limit formula is taken from BCHN sources: src/policy/policy.cpp
+        return ((148 + len(txout.serialize())) * 3000) // sats_per_kb
+    else:
+        assert False, 'Must specify extactly one of one param typ= or param txout='

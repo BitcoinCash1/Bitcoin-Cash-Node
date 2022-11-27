@@ -2,6 +2,7 @@
 # Copyright (c) 2010 ArtForz -- public domain half-a-node
 # Copyright (c) 2012 Jeff Garzik
 # Copyright (c) 2010-2019 The Bitcoin Core developers
+# Copyright (c) 2022 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Bitcoin test framework primitive and message structures
@@ -538,7 +539,7 @@ class token:
 
     @classmethod
     def unwrap_spk(cls, wrapped_spk: bytes) -> Tuple[Optional[TokenOutputData], bytes]:
-        if not wrapped_spk or wrapped_spk[0] != cls.PREFIX_BYTE:
+        if not wrapped_spk or wrapped_spk[0] != cls.PREFIX_BYTE[0]:
             return None, wrapped_spk
         token_data = TokenOutputData()
         f = BytesIO(wrapped_spk)
