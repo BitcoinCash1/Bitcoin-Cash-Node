@@ -322,7 +322,7 @@ std::optional<Options> parseEnv()
     Options options;
     if (const char *e = std::getenv("DECODE_ERRORS")) {
         uint8_t yesno;
-        if (std::sscanf(e, "%" PRIu8, &yesno) != 1) {
+        if (std::sscanf(e, "%" SCNu8, &yesno) != 1) {
             std::fprintf(stderr, "Error parsing DECODE_ERRORS env var. '%s'. Not a number.\n\n", e);
             return std::nullopt;
         }
