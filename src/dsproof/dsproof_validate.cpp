@@ -2,6 +2,7 @@
 // Copyright (C) 2020 Calin Culianu <calin.culianu@gmail.com>
 // Copyright (C) 2021 Fernando Pelliccioni <fpelliccioni@gmail.com>
 // Copyright (C) 2022 The Bitcoin developers
+// Copyright (c) 2021-2022 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
