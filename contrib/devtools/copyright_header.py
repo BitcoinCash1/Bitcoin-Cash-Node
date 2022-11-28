@@ -29,6 +29,8 @@ EXCLUDE = [
     'src/univalue/lib/univalue_escapes.h',
     'src/qt/bitcoinstrings.cpp',
     'src/chainparamsseeds.h',
+    'src/chainparamsconstants.h',
+    'src/bench/data.h',
     # other external copyrights:
     'src/tinyformat.h',
     'src/leveldb/util/env_win.cc',
@@ -328,7 +330,7 @@ def report_cmd(argv):
 
 
 # only look for changes since the fork commit
-GIT_LOG_CMD = "git log --pretty=format:%ai 964a185cc83af34587194a6ecda3ed9cf6b49263^..HEAD {}"
+GIT_LOG_CMD = "git log --pretty=format:%ci 964a185cc83af34587194a6ecda3ed9cf6b49263^..HEAD {}"
 
 
 def call_git_log(filename):
@@ -441,6 +443,15 @@ def update_updatable_copyright(filename):
     if line == new_line:
         print_file_action_message(filename, "Copyright up-to-date.")
         return
+
+    # We want to update - first check if the last commit was a copyright update:
+    GIT_LOG_LAST_COMMIT_CMD = "git log -1 --pretty=%s {}"
+    last_commit_subject = subprocess.check_output((GIT_LOG_LAST_COMMIT_CMD.format(filename)).split(' ')).decode("utf-8")
+    match_string = "copyright"
+    if match_string.casefold() in last_commit_subject.casefold():
+        print_file_action_message(filename, "Copyright updated in the last commit.")
+        return
+
     file_lines[index] = new_line
     write_file_lines(filename, file_lines)
     print_file_action_message(filename,
@@ -594,6 +605,9 @@ def insert_cpp_header(filename, file_lines, start_year, end_year):
 
 def exec_insert_header(filename, style):
     file_lines = read_file_lines(filename)
+    if not applies_to_file(filename):
+        sys.exit('*** {} is not applicable for copyright insertion'.format(
+            filename))
     if file_already_has_bitcoin_copyright(file_lines):
         sys.exit('*** {} already has a copyright by The Bitcoin developers'.format(
             filename))
