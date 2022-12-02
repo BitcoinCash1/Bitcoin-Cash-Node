@@ -31,7 +31,7 @@ ScriptExecutionContext::ScriptExecutionContext(unsigned input, const std::vector
     std::vector<Coin> coins;
     coins.reserve(tx.vin().size());
     for (size_t i = 0; i < tx.vin().size(); ++i) {
-        auto &psbti = psbtInputs.at(i);
+        auto const &psbti = psbtInputs.at(i);
         coins.emplace_back(psbti.utxo, 1 /* height ignored */, false /* isCoinbase ignored */);
     }
     shared = std::make_shared<Shared>(std::move(coins), tx);

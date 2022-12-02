@@ -897,14 +897,15 @@ auto CTxMemPool::recursiveDSProofSearch(const TxId &txId, DspDescendants *desc, 
 
         // caller wants a score -- we abort early in that case if we reach a tx that cannot have a proof (not p2pkh)
         if (score) {
-            bool isProtected{};
+            bool isProtected = false;
             const bool isPossible = DoubleSpendProof::checkIsProofPossibleForAllInputsOfTx(*this, txit->GetTx(),
                                                                                            &isProtected);
             if (!isPossible) {
                 // proof not possible for this tx, stop searching
                 *score = 0.0;
                 return;
-            } else if (!isProtected) {
+            }
+            if (!isProtected) {
                 // This txn is not protected because some inputs are not signed with SIGHASH_ALL or some are signed
                 // with SIGHASH_ANYONECANPAY.
                 *score = std::min(0.25, *score);

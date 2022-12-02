@@ -72,7 +72,8 @@ void CMutableTransaction::SortOutputsBip69() {
         if (a.nValue == b.nValue) {
             // Note: prevector operator< does NOT properly order scriptPubKeys lexicographically. So instead we
             // use std::lexicographical_compare
-            const auto &spkA = a.scriptPubKey, &spkB = b.scriptPubKey;
+            const auto &spkA = a.scriptPubKey;
+            const auto &spkB = b.scriptPubKey;
             if (spkA == spkB) {
                 // SPK's equal, drill down to comparing tokenData (see token::OutputData::operator<)
                 return a.tokenDataPtr < b.tokenDataPtr;
