@@ -40,7 +40,8 @@ static bool IsFinalTx(const CTransaction &tx, int nBlockHeight,
 static uint64_t GetMinimumTxSize(const Consensus::Params &params, int nHeightPrev, int64_t nMedianTimePastPrev) {
     if (IsUpgrade9Enabled(params, nMedianTimePastPrev)) {
         return MIN_TX_SIZE_UPGRADE9;
-    } else if (IsMagneticAnomalyEnabled(params, nHeightPrev)) {
+    }
+    if (IsMagneticAnomalyEnabled(params, nHeightPrev)) {
         return MIN_TX_SIZE_MAGNETIC_ANOMALY;
     }
     return 0;

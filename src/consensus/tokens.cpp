@@ -128,9 +128,6 @@ bool CheckTxTokens(const CTransaction &tx, CValidationState &state, const CCoins
     }
 
     try {
-        using InputIndex = size_t;
-        using OutputIndex = size_t;
-
         // TxIds from ins with prevout index 0 that can become new categories (genesis candidates)
         Set<token::Id> potentialGenesisIds; // tokenId/txid's where the input coin had GetN == 0
 
@@ -147,8 +144,8 @@ bool CheckTxTokens(const CTransaction &tx, CValidationState &state, const CCoins
         Map<token::Id, Map<NFT, size_t>> inputImmutables; // id -> NFT -> count seen in inputs
 
         // Scan the inputs, tallying amounts seen and NFTs seen
-        for (InputIndex i = 0; i < tx.vin.size(); ++i) {
-            const auto &prevout = tx.vin[i].prevout;
+        for (auto const& in : tx.vin) {
+            const auto &prevout = in.prevout;
             const auto &coin = view.AccessCoin(prevout);
             if (coin.IsSpent()) {
                 // this should already be checked for us in Consensus::CheckTxInputs() but we can be paranoid here
@@ -210,8 +207,8 @@ bool CheckTxTokens(const CTransaction &tx, CValidationState &state, const CCoins
         }
 
         // Scan outputs, handle spends and genesis tallies, and NFT ownership transfer
-        for (OutputIndex i = 0; i < tx.vout.size(); ++i) {
-            const auto &pdata = tx.vout[i].tokenDataPtr;
+        for (auto const& out : tx.vout) {
+            const auto &pdata = out.tokenDataPtr;
             if (!pdata) continue;
             // Check token consensus sanity (amount + everything else)
             if ( ! CheckTokenData(pdata, state)) {

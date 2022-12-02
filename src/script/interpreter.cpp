@@ -779,8 +779,8 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 2) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        CScriptNum bn1(stacktop(-2), fRequireMinimal, maxIntegerSize);
-                        CScriptNum bn2(stacktop(-1), fRequireMinimal, maxIntegerSize);
+                        CScriptNum const bn1(stacktop(-2), fRequireMinimal, maxIntegerSize);
+                        CScriptNum const bn2(stacktop(-1), fRequireMinimal, maxIntegerSize);
                         auto bn = CScriptNum::fromIntUnchecked(0);
 
                         switch (opcode) {
@@ -882,9 +882,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 3) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        CScriptNum bn1(stacktop(-3), fRequireMinimal, maxIntegerSize);
-                        CScriptNum bn2(stacktop(-2), fRequireMinimal, maxIntegerSize);
-                        CScriptNum bn3(stacktop(-1), fRequireMinimal, maxIntegerSize);
+                        CScriptNum const bn1(stacktop(-3), fRequireMinimal, maxIntegerSize);
+                        CScriptNum const bn2(stacktop(-2), fRequireMinimal, maxIntegerSize);
+                        CScriptNum const bn3(stacktop(-1), fRequireMinimal, maxIntegerSize);
 
                         bool fValue = (bn2 <= bn1 && bn1 < bn3);
                         popstack(stack);
@@ -1877,8 +1877,6 @@ void PrecomputedTransactionData::PopulateFromContext(const ScriptExecutionContex
     populated = true;
 }
 
-SignatureHashMissingUtxoDataError::~SignatureHashMissingUtxoDataError() {}
-
 uint256 SignatureHash(const CScript &scriptCode, const ScriptExecutionContext &context, SigHashType sigHashType,
                       const PrecomputedTransactionData *cache, uint32_t flags) {
     const unsigned nIn = context.inputIndex();
@@ -1991,7 +1989,7 @@ ContextOptSignatureChecker::~ContextOptSignatureChecker() {}
 
 bool TransactionSignatureChecker::CheckSig(const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey,
                                            const CScript &scriptCode, uint32_t flags) const {
-    CPubKey pubkey(vchPubKey);
+    CPubKey const pubkey(vchPubKey);
     if (!pubkey.IsValid()) {
         return false;
     }
@@ -2006,11 +2004,7 @@ bool TransactionSignatureChecker::CheckSig(const std::vector<uint8_t> &vchSigIn,
 
     uint256 const sighash = SignatureHash(scriptCode, context, sigHashType, this->txdata, flags);
 
-    if (!VerifySignature(vchSig, pubkey, sighash)) {
-        return false;
-    }
-
-    return true;
+    return VerifySignature(vchSig, pubkey, sighash);
 }
 
 bool TransactionSignatureChecker::CheckLockTime(const CScriptNum &nLockTime) const {

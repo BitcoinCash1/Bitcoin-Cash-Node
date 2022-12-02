@@ -45,7 +45,7 @@ struct PrecomputedTransactionData {
 /// !cache->hashUtxos.
 struct SignatureHashMissingUtxoDataError : std::runtime_error {
     using std::runtime_error::runtime_error;
-    virtual ~SignatureHashMissingUtxoDataError() override;
+    virtual ~SignatureHashMissingUtxoDataError() override = default;
 };
 
 /// Returns the transaction input hash digest for signature creation and/or verification
