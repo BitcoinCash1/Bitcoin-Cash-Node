@@ -210,6 +210,9 @@ public:
 
     /** Ensures the convertible-to constructor works */
     template <typename O> friend class Span;
+
+    /** value_type is used for generic code compatibility */
+    using value_type = C;
 };
 
 // Deduction guides for Span

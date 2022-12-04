@@ -133,8 +133,8 @@ using CVectorWriter = GenericVectorWriter<std::vector<uint8_t>>; //! for compat.
  */
 template <typename VecT>
 class GenericVectorReader {
-    const int m_type;
-    const int m_version;
+    int m_type;
+    int m_version;
     const VecT &m_data;
     size_t m_pos = 0;
 
@@ -173,7 +173,10 @@ public:
     }
 
     int GetVersion() const { return m_version; }
+    void SetVersion(int version) { m_version = version; }
+
     int GetType() const { return m_type; }
+    void SetType(int type) { m_type = type; }
 
     size_t size() const { return m_data.size() - m_pos; }
     bool empty() const { return m_data.size() == m_pos; }

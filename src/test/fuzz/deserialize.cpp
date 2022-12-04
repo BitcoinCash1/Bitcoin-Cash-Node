@@ -26,8 +26,8 @@
 #include <unistd.h>
 #include <vector>
 
-void test_one_input(std::vector<uint8_t> buffer) {
-    CDataStream ds(buffer, SER_NETWORK, INIT_PROTO_VERSION);
+void test_one_input(Span<const uint8_t> buffer) {
+    GenericVectorReader ds(SER_NETWORK, INIT_PROTO_VERSION, buffer, 0);
     try {
         int nVersion;
         ds >> nVersion;

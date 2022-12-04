@@ -5,11 +5,12 @@
 
 #pragma once
 
+#include <span.h>
+
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <vector>
 
 const std::function<std::string(const char *)> G_TRANSLATION_FUN = nullptr;
 
-void test_one_input(std::vector<uint8_t> buffer);
+void test_one_input(Span<const uint8_t> buffer);

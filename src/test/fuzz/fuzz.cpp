@@ -29,7 +29,7 @@ static void initialize() {
 
 // This function is used by libFuzzer
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-    test_one_input(std::vector<uint8_t>(data, data + size));
+    test_one_input(Span<const uint8_t>(data, size));
     return 0;
 }
 
