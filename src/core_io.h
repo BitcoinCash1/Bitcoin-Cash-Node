@@ -19,10 +19,20 @@ class CMutableTransaction;
 class Config;
 class CScript;
 class CTransaction;
+class CTxUndo;
 struct PartiallySignedTransaction;
 class uint160;
 class uint256;
 namespace token { class OutputData; struct SafeAmount; }
+
+/**
+ * Verbose level for block's transaction
+ */
+enum class TxVerbosity {
+    SHOW_TXID,                //!< Only TXID for each block's transaction
+    SHOW_DETAILS,             //!< Include TXID, inputs, outputs, and other common block's transaction information
+    SHOW_DETAILS_AND_PREVOUT  //!< The same as previous option with information about prevouts if available
+};
 
 // core_read.cpp
 CScript ParseScript(const std::string &s);
@@ -73,7 +83,8 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
                                     bool fIncludeP2SH = false);
 UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address);
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex = true,
-                          int serialize_flags = 0);
+                          int serialize_flags = 0, const CTxUndo* txundo = nullptr,
+                          TxVerbosity verbosity = TxVerbosity::SHOW_DETAILS);
 UniValue::Object TokenDataToUniv(const token::OutputData &token);
 
 /// Returns a UniValue::VSTR (string) for any token amount.  We are forced to unconditionally wrap token amounts

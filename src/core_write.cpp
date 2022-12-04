@@ -13,6 +13,7 @@
 #include <script/standard.h>
 #include <serialize.h>
 #include <streams.h>
+#include <undo.h>
 #include <util/moneystr.h>
 #include <util/strencodings.h>
 #include <util/system.h>
@@ -249,11 +250,16 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
 }
 
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex,
-                          int serialize_flags) {
+                          int serialize_flags, const CTxUndo* txundo, TxVerbosity verbosity) {
     bool include_blockhash = !hashBlock.IsNull();
+    // If available, use Undo data to calculate the fee. Note that txundo == nullptr
+    // for coinbase transactions and for transactions where undo data is unavailable.
+    const bool have_undo = txundo != nullptr;
+    Amount amt_total_in = Amount::zero();
+    Amount amt_total_out = Amount::zero();
 
     UniValue::Object entry;
-    entry.reserve(7 + include_blockhash + include_hex);
+    entry.reserve(7 + include_blockhash + include_hex + have_undo);
     entry.emplace_back("txid", tx.GetId().GetHex());
     entry.emplace_back("hash", tx.GetHash().GetHex());
     entry.emplace_back("version", tx.nVersion);
@@ -262,13 +268,15 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
 
     UniValue::Array vin;
     vin.reserve(tx.vin.size());
-    for (const CTxIn &txin : tx.vin) {
+    for (size_t i = 0; i < tx.vin.size(); ++i) {
+        const CTxIn &txin = tx.vin[i];
         UniValue::Object in;
-        if (tx.IsCoinBase()) {
-            in.reserve(2);
+        const bool tx_is_coinbase = tx.IsCoinBase();
+        const size_t in_rsv_sz = (tx_is_coinbase ? 2u : 4u) + have_undo;
+        in.reserve(in_rsv_sz);
+        if (tx_is_coinbase) {
             in.emplace_back("coinbase", HexStr(txin.scriptSig));
         } else {
-            in.reserve(4);
             in.emplace_back("txid", txin.prevout.GetTxId().GetHex());
             in.emplace_back("vout", txin.prevout.GetN());
             UniValue::Object o;
@@ -276,6 +284,28 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
             o.emplace_back("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.emplace_back("hex", HexStr(txin.scriptSig));
             in.emplace_back("scriptSig", std::move(o));
+        }
+        if (have_undo) {
+            const Coin& prev_coin = txundo->vprevout.at(i);
+            const CTxOut& prev_txout = prev_coin.GetTxOut();
+
+            amt_total_in += prev_txout.nValue;
+
+            if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT) {
+                UniValue::Object o_script_pub_key = ScriptToUniv(config, prev_txout.scriptPubKey,
+                                                                 /*include_address=*/true);
+                UniValue::Object p;
+                const bool has_token_data = prev_txout.tokenDataPtr;
+                p.reserve(5u + has_token_data);
+                p.emplace_back("generated", prev_coin.IsCoinBase());
+                p.emplace_back("height", prev_coin.GetHeight());
+                p.emplace_back("value", ValueFromAmount(prev_txout.nValue));
+                p.emplace_back("scriptPubKey", std::move(o_script_pub_key));
+                if (has_token_data) {
+                    p.emplace_back("tokenData", TokenDataToUniv(*prev_txout.tokenDataPtr));
+                }
+                in.emplace_back("prevout", p);
+            }
         }
         in.emplace_back("sequence", txin.nSequence);
         vin.emplace_back(std::move(in));
@@ -286,16 +316,29 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
     vout.reserve(tx.vout.size());
     for (const CTxOut &txout : tx.vout) {
         UniValue::Object out;
-        out.reserve(3u + unsigned(txout.tokenDataPtr));
+        const bool has_token_data = txout.tokenDataPtr;
+        out.reserve(3u + has_token_data);
         out.emplace_back("value", ValueFromAmount(txout.nValue));
         out.emplace_back("n", vout.size());
         out.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, true));
-        if (txout.tokenDataPtr) {
+        if (has_token_data) {
             out.emplace_back("tokenData", TokenDataToUniv(*txout.tokenDataPtr));
+        }
+        if (have_undo) {
+            amt_total_out += txout.nValue;
         }
         vout.emplace_back(std::move(out));
     }
     entry.emplace_back("vout", std::move(vout));
+
+    if (have_undo) {
+        const Amount fee = amt_total_in - amt_total_out;
+        if (!MoneyRange(fee)) {
+            throw std::runtime_error(strprintf("Bad amount \"%s\" encountered for fee for tx %s in %s",
+                                               fee.ToString(), tx.GetId().ToString(), __func__));
+        }
+        entry.emplace_back("fee", ValueFromAmount(fee));
+    }
 
     if (include_blockhash) {
         entry.emplace_back("blockhash", hashBlock.GetHex());

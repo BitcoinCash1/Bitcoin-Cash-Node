@@ -32,7 +32,7 @@ static void RPCBlockVerbose(const std::vector<uint8_t> &data, benchmark::State &
     blockindex.nBits = block.nBits;
 
     BENCHMARK_LOOP {
-        (void)blockToJSON(GetConfig(), block, &blockindex, &blockindex, /*verbose*/ true);
+        (void)blockToJSON(GetConfig(), block, &blockindex, &blockindex, TxVerbosity::SHOW_DETAILS);
     }
 }
 

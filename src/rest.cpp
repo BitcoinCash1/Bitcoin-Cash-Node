@@ -205,7 +205,7 @@ static bool rest_headers(const std::any& context, Config &config, HTTPRequest *r
 }
 
 static bool rest_block(const Config &config, HTTPRequest *req,
-                       const std::string &strURIPart, bool showTxDetails) {
+                       const std::string &strURIPart, TxVerbosity tx_verbosity) {
     if (!CheckWarmup(req)) {
         return false;
     }
@@ -264,7 +264,7 @@ static bool rest_block(const Config &config, HTTPRequest *req,
         }
 
         case RetFormat::JSON: {
-            UniValue::Object objBlock = blockToJSON(config, block, tip, pblockindex, showTxDetails);
+            UniValue::Object objBlock = blockToJSON(config, block, tip, pblockindex, tx_verbosity);
             std::string strJSON = UniValue::stringify(objBlock) + "\n";
             req->WriteHeader("Content-Type", "application/json");
             req->WriteReply(HTTP_OK, strJSON);
@@ -281,12 +281,12 @@ static bool rest_block(const Config &config, HTTPRequest *req,
 
 static bool rest_block_extended(const std::any& context, Config &config, HTTPRequest *req,
                                 const std::string &strURIPart) {
-    return rest_block(config, req, strURIPart, true);
+    return rest_block(config, req, strURIPart, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
 }
 
 static bool rest_block_notxdetails(const std::any& context, Config &config, HTTPRequest *req,
                                    const std::string &strURIPart) {
-    return rest_block(config, req, strURIPart, false);
+    return rest_block(config, req, strURIPart, TxVerbosity::SHOW_TXID);
 }
 
 static bool rest_chaininfo(const std::any& context, Config &config, HTTPRequest *req,

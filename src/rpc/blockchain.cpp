@@ -112,7 +112,8 @@ UniValue::Object blockheaderToJSON(const CBlockIndex *tip, const CBlockIndex *bl
     return result;
 }
 
-UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CBlockIndex *tip, const CBlockIndex *blockindex, bool txDetails) {
+UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CBlockIndex *tip,
+                             const CBlockIndex *blockindex, TxVerbosity verbosity) LOCKS_EXCLUDED(cs_main) {
     const CBlockIndex *pnext;
     int confirmations = ComputeNextBlockAndDepth(tip, blockindex, pnext);
     bool previousblockhash = blockindex->pprev;
@@ -128,13 +129,30 @@ UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CB
     result.emplace_back("merkleroot", block.hashMerkleRoot.GetHex());
     UniValue::Array txs;
     txs.reserve(block.vtx.size());
-    for (const auto &tx : block.vtx) {
-        if (txDetails) {
-            txs.emplace_back(TxToUniv(config, *tx, uint256(), true, RPCSerializationFlags()));
-        } else {
+
+    switch (verbosity) {
+    case TxVerbosity::SHOW_TXID:
+        for (const auto &tx : block.vtx) {
             txs.emplace_back(tx->GetId().GetHex());
         }
+        break;
+
+    case TxVerbosity::SHOW_DETAILS:
+    case TxVerbosity::SHOW_DETAILS_AND_PREVOUT:
+        CBlockUndo blockUndo;
+        const bool have_undo{WITH_LOCK(::cs_main, return !IsBlockPruned(blockindex) && UndoReadFromDisk(blockUndo, blockindex))};
+
+        for (size_t i = 0u; i < block.vtx.size(); ++i) {
+            const CTransactionRef& tx = block.vtx[i];
+            // coinbase transaction (i.e. i == 0) doesn't have undo data
+            const CTxUndo* txundo = (have_undo && i > 0u) ? &blockUndo.vtxundo.at(i - 1u) : nullptr;
+            txs.push_back(TxToUniv(config, *tx, /*block_hash=*/uint256(), /*include_hex=*/true, RPCSerializationFlags(),
+                                   txundo, verbosity));
+        }
+        break;
+
     }
+
     result.emplace_back("tx", std::move(txs));
     result.emplace_back("time", block.GetBlockTime());
     result.emplace_back("mediantime", blockindex->GetMedianTimePast());
@@ -881,10 +899,11 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             RPCHelpMan{"getblock",
                 "\nIf verbosity is 0 or false, returns a string that is serialized, hex-encoded data for block 'hash'.\n"
                 "If verbosity is 1 or true, returns an Object with information about block <hash>.\n"
-                "If verbosity is 2, returns an Object with information about block <hash> and information about each transaction.\n",
+                "If verbosity is 2, returns an Object with information about block <hash> and information about each transaction, including fee.\n"
+                "If verbosity is >=3, returns an Object with information about block <hash> and information about each transaction, including fee, and including prevout information for inputs (only for unpruned blocks in the current best chain).\n",
                 {
                     {"blockhash", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "The block hash"},
-                    {"verbosity", RPCArg::Type::NUM, /* opt */ true, /* default_val */ "1", "0 for hex-encoded data, 1 for a json object, and 2 for json object with transaction data"},
+                    {"verbosity", RPCArg::Type::NUM, /* opt */ true, /* default_val */ "1", "0 for hex-encoded data, 1 for a json object, and 2 for json object with transaction data, and 3 for JSON object with transaction data including prevout information for inputs"},
                 }}
                 .ToString() +
             "\nResult (for verbosity = 0):\n"
@@ -925,12 +944,51 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             "\nResult (for verbosity = 2):\n"
             "{\n"
             "  ...,                   Same output as verbosity = 1\n"
-            "  \"tx\" : [               (array of Objects) The transactions in "
-            "the format of the getrawtransaction RPC; different from verbosity "
+            "  \"tx\" : [               (json array)\n"
+            "    {                    (json object)\n"
+            "      ...,               The transactions in the format of the getrawtransaction RPC; different from verbosity "
             "= 1 \"tx\" result\n"
+            "      \"fee\" : n          (numeric) The transaction fee in " + CURRENCY_UNIT + ", omitted if block undo data is not available\n"
+            "    },\n"
             "    ...\n"
             "  ],\n"
             "  ...                    Same output as verbosity = 1\n"
+            "}\n"
+            "\nResult (for verbosity >= 3):\n"
+            "{\n"
+            "  ...,                   Same output as verbosity = 2\n"
+            "  \"tx\" : [               (json array)\n"
+            "    {                    (json object)\n"
+            "      ...,               Same output as verbosity = 2\n"
+            "      \"vin\" : [          (json array)\n"
+            "        {                (json object)\n"
+            "          ...,           Same output as verbosity = 2\n"
+            "          \"prevout\" : {                 (json object, optional) (Only if undo information is available)\n"
+            "            \"generated\" : true|false,   (boolean) Coinbase or not\n"
+            "            \"height\" : n,               (numeric) The height of the prevout\n"
+            "            \"value\" : n,                (numeric) The value in " + CURRENCY_UNIT + "\n"
+            "            \"scriptPubKey\" : {          (json object)\n"
+            "              \"asm\" : \"str\",            (string) The asm\n"
+            "              \"hex\" : \"str\",            (string) The hex\n"
+            "              \"type\" : \"str\",           (string) The type (one of: nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)\n"
+            "              \"address\" : \"str\"         (string, optional) The Bitcoin Cash address (only if well-defined address exists)\n"
+            "            },\n"
+            "            \"tokenData\" : {             (json object, optional) CashToken data (only if the input contained a token)\n"
+            "              \"category\" : \"hex\",       (string) Token id\n"
+            "              \"amount\" : \"xxx\",         (string) Fungible amount (is a string to support >53-bit amounts)\n"
+            "              \"nft\" : {                 (json object, optional) NFT data (only if the token has an NFT)\n"
+            "                \"capability\" : \"xxx\",   (string) One of \"none\", \"mutable\", \"minting\"\n"
+            "                \"commitment\" : \"hex\"    (string) NFT commitment formatted as hexadecimal\n"
+            "              },\n"
+            "            }\n"
+            "          }\n"
+            "        },\n"
+            "        ...\n"
+            "      ]\n"
+            "    },\n"
+            "    ...\n"
+            "  ],\n"
+            "  ...                    Same output as verbosity = 2\n"
             "}\n"
             "\nExamples:\n" +
             HelpExampleCli("getblock", "\"00000000c937983704a73af28acdec37b049d"
@@ -943,10 +1001,10 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
 
     int verbosity = 1;
     if (!request.params[1].isNull()) {
-        if (request.params[1].isNum()) {
-            verbosity = request.params[1].get_int();
-        } else {
+        if (request.params[1].isBool()) {
             verbosity = request.params[1].get_bool() ? 1 : 0;
+        } else {
+            verbosity = request.params[1].get_int();
         }
     }
 
@@ -972,7 +1030,16 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
         return strHex;
     }
 
-    return blockToJSON(config, block, tip, pblockindex, verbosity >= 2);
+    TxVerbosity tx_verbosity;
+    if (verbosity == 1) {
+        tx_verbosity = TxVerbosity::SHOW_TXID;
+    } else if (verbosity == 2) {
+        tx_verbosity = TxVerbosity::SHOW_DETAILS;
+    } else {
+        tx_verbosity = TxVerbosity::SHOW_DETAILS_AND_PREVOUT;
+    }
+
+    return blockToJSON(config, block, tip, pblockindex, tx_verbosity);
 }
 
 struct CCoinsStats {
