@@ -29,6 +29,18 @@ add_custom_target(doc-html
 
 option(ENABLE_MAN "Enable manpages" ON)
 if(ENABLE_MAN AND BUILD_BITCOIN_DAEMON)
+
+	# help2man is required by the `gen-doc-man.sh` script.
+	find_program(HELP2MAN "help2man")
+	if(NOT HELP2MAN)
+		message(
+			FATAL_ERROR
+			"Failed to find the program 'help2man' required for building manpages. "
+			"Please make sure that it is installed and reachable through the system PATH. "
+			"To disable manpages, add cmake build option '-DENABLE_MAN=OFF'."
+		)
+	endif()
+
 	configure_file(
 		../cmake/utils/gen-doc-man-footer.sh.in
 		man/gen-doc-man-footer.sh

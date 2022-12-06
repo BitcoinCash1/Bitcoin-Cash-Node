@@ -118,7 +118,7 @@ static-run-linters:
     cache: {}
     script:
         - mkdir build
-        - (cd build; cmake -GNinja ..)
+        - (cd build; cmake -GNinja -DENABLE_MAN=OFF ..)
         - (cd build; ninja check-lint)
     artifacts:
         paths:
