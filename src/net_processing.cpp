@@ -2397,7 +2397,6 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
         // set expected to false, we got the message
         pfrom->extversionExpected = false;
         if (pfrom->fSuccessfullyConnected) {
-            LOCK(cs_main);
             pfrom->fDisconnect = true;
             return error("peer=%d received extversion message after verack, disconnecting", pfrom->GetId());
         }
