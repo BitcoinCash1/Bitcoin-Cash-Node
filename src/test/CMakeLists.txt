@@ -188,8 +188,8 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     flatfile_tests.cpp
     gbtlight_tests.cpp
     getarg_tests.cpp
-    heapoptional_tests.cpp
     hash_tests.cpp
+    heapoptional_tests.cpp
     inv_tests.cpp
     key_io_tests.cpp
     key_tests.cpp
@@ -232,6 +232,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     sighash_tests.cpp
     sighashtype_tests.cpp
     skiplist_tests.cpp
+    span_tests.cpp
     streams_tests.cpp
     sync_tests.cpp
     testlib_tests.cpp
