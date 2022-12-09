@@ -63,6 +63,8 @@ static SendCoinsRecipient handleRequest(PaymentServer *server,
 }
 
 void PaymentServerTests::paymentServerTests() {
+    QSKIP("FIXME: the certificates need to be renewed", true);
+
     SelectParams(CBaseChainParams::MAIN);
     auto node = interfaces::MakeNode();
     OptionsModel optionsModel(*node);
