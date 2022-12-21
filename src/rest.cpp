@@ -590,9 +590,12 @@ static bool rest_getutxos(const std::any& context, Config &config, HTTPRequest *
             // serialize data
             // use exact same output as mentioned in Bip64
             CDataStream ssGetUTXOResponse(SER_NETWORK, PROTOCOL_VERSION);
-            ssGetUTXOResponse << ::ChainActive().Height()
-                              << ::ChainActive().Tip()->GetBlockHash() << bitmap
-                              << outs;
+            {
+                LOCK(cs_main);
+                ssGetUTXOResponse << ::ChainActive().Height()
+                                  << ::ChainActive().Tip()->GetBlockHash() << bitmap
+                                  << outs;
+            }
             std::string ssGetUTXOResponseString = ssGetUTXOResponse.str();
 
             req->WriteHeader("Content-Type", "application/octet-stream");
@@ -602,9 +605,12 @@ static bool rest_getutxos(const std::any& context, Config &config, HTTPRequest *
 
         case RetFormat::HEX: {
             CDataStream ssGetUTXOResponse(SER_NETWORK, PROTOCOL_VERSION);
-            ssGetUTXOResponse << ::ChainActive().Height()
-                              << ::ChainActive().Tip()->GetBlockHash() << bitmap
-                              << outs;
+            {
+                LOCK(cs_main);
+                ssGetUTXOResponse << ::ChainActive().Height()
+                                  << ::ChainActive().Tip()->GetBlockHash() << bitmap
+                                  << outs;
+            }
             std::string strHex = HexStr(ssGetUTXOResponse) + "\n";
 
             req->WriteHeader("Content-Type", "text/plain");
@@ -617,8 +623,11 @@ static bool rest_getutxos(const std::any& context, Config &config, HTTPRequest *
 
             // pack in some essentials
             // use more or less the same output as mentioned in Bip64
-            objGetUTXOResponse.emplace_back("chainHeight", ::ChainActive().Height());
-            objGetUTXOResponse.emplace_back("chaintipHash", ::ChainActive().Tip()->GetBlockHash().GetHex());
+            {
+                LOCK(cs_main);
+                objGetUTXOResponse.emplace_back("chainHeight", ::ChainActive().Height());
+                objGetUTXOResponse.emplace_back("chaintipHash", ::ChainActive().Tip()->GetBlockHash().GetHex());
+            }
             objGetUTXOResponse.emplace_back("bitmap", bitmapStringRepresentation);
 
             UniValue::Array utxos;

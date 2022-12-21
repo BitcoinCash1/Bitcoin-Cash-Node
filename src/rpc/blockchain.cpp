@@ -951,9 +951,11 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
     }
 
     const CBlockIndex *pblockindex{};
+    const CBlockIndex *tip{};
     {
         LOCK(cs_main);
         pblockindex = LookupBlockIndex(hash);
+        tip = ::ChainActive().Tip();
         if (!pblockindex) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
@@ -970,7 +972,7 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
         return strHex;
     }
 
-    return blockToJSON(config, block, ::ChainActive().Tip(), pblockindex, verbosity >= 2);
+    return blockToJSON(config, block, tip, pblockindex, verbosity >= 2);
 }
 
 struct CCoinsStats {
