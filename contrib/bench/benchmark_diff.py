@@ -100,7 +100,7 @@ class BenchmarkFile(object):
             self.filename = filename
             self.benchmarks = self.from_file(filename)
         else:
-            assert(isinstance(benchmarks, list))
+            assert isinstance(benchmarks, list)
             if isinstance(benchmarks, list):
                 self.benchmarks = benchmarks
             else:

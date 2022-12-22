@@ -105,18 +105,18 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         pubkey = self.getpubkey()
         sighash1 = getSighashes(dsp.getPrevOutput(), dsp.spender1, fundingtx)
         sighash2 = getSighashes(dsp.getPrevOutput(), dsp.spender2, fundingtx)
-        assert(pubkey.verify_ecdsa(dsp.spender1.pushData[0][:-1], sighash1))
-        assert(pubkey.verify_ecdsa(dsp.spender2.pushData[0][:-1], sighash2))
+        assert pubkey.verify_ecdsa(dsp.spender1.pushData[0][:-1], sighash1)
+        assert pubkey.verify_ecdsa(dsp.spender2.pushData[0][:-1], sighash2)
 
         # 2. For p2pkh these is exactly one pushdata per spender
         assert_equal(1, len(dsp.spender1.pushData))
         assert_equal(1, len(dsp.spender2.pushData))
 
         # 3. The two spenders are different, specifically the signature (push data) has to be different.
-        assert(dsp.spender1.pushData != dsp.spender2.pushData)
+        assert dsp.spender1.pushData != dsp.spender2.pushData
 
         # 4. The first & double spenders are sorted with two hashes as keys.
-        assert(dsp.spender1.hashOutputs < dsp.spender2.hashOutputs)
+        assert dsp.spender1.hashOutputs < dsp.spender2.hashOutputs
 
         # 5. The double spent output is still available in the UTXO database,
         #    implying no spending transaction has been mined.
@@ -187,7 +187,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         )
         dsp2 = dspReceiver.last_message["dsproof-beta"].dsproof
         dsps.add(dsp2.serialize())
-        assert(len(dsps) == 2)
+        assert len(dsps) == 2
 
         # Check that a double spent tx, which has some non-P2PKH inputs
         # in its ancestor, still results in a dsproof being emitted.
@@ -228,7 +228,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         )
         dsp3 = dspReceiver.last_message["dsproof-beta"].dsproof
         dsps.add(dsp3.serialize())
-        assert(len(dsps) == 3)
+        assert len(dsps) == 3
 
         # Check that a double spent tx, which has some unconfirmed ANYONECANPAY
         # transactions in its ancestry, still results in a dsproof being emitted.
@@ -267,7 +267,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         )
         dsp4 = dspReceiver.last_message["dsproof-beta"].dsproof
         dsps.add(dsp4.serialize())
-        assert(len(dsps) == 4)
+        assert len(dsps) == 4
 
         # Create a P2SH to double-spend directly (1-of-1 multisig)
         self.generate(self.nodes[0], 1)
@@ -295,7 +295,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         # Check end conditions - still only 4 DSPs
         last_dsp = dspReceiver.last_message["dsproof-beta"].dsproof
         dsps.add(last_dsp.serialize())
-        assert(len(dsps) == 4)
+        assert len(dsps) == 4
 
         # Next, test that submitting a double-spend via the RPC interface also results in a broadcasted
         # dsproof
