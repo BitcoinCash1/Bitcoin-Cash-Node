@@ -862,12 +862,11 @@ static void ThrowIfPrunedBlock(const CBlockIndex *pblockindex) EXCLUSIVE_LOCKS_R
     }
 }
 
-/// Lock-free -- will throw if block not found or was pruned, etc. Guaranteed to return a valid block or fail.
-static CBlock ReadBlockChecked(const Config &config, const CBlockIndex *pblockindex) {
-    CBlock block;
+/// Helper for the below Read*Block*() functions
+template <typename BlockReadFunc>
+void GenericReadBlockHelper(const BlockReadFunc &readFunc) {
     auto doRead = [&] {
-        if (!ReadBlockFromDisk(block, pblockindex,
-                               config.GetChainParams().GetConsensus())) {
+        if (!readFunc()) {
             // Block not found on disk. This could be because we have the block
             // header in our index but don't have the block (for example if a
             // non-whitelisted node sends us an unrequested long chain of valid
@@ -888,8 +887,26 @@ static CBlock ReadBlockChecked(const Config &config, const CBlockIndex *pblockin
         // go away -- this increases parallelism in the case of non-pruning nodes.
         doRead();
     }
+}
 
+/// Lock-free -- will throw if block not found or was pruned, etc. Guaranteed to return a valid block or fail.
+static CBlock ReadBlockChecked(const Config &config, const CBlockIndex *pblockindex) {
+    CBlock block;
+    GenericReadBlockHelper([&]{
+        return ReadBlockFromDisk(block, pblockindex, config.GetChainParams().GetConsensus());
+    });
     return block;
+}
+
+/// Lock-free -- will throw if block not found or was pruned, etc. Guaranteed to return valid bytes or fail.
+/// Like the above function but does no sanity checking on the block. Just returns the bytes it read from disk.
+static std::vector<uint8_t> ReadRawBlockUnchecked(const Config &config, const CBlockIndex *pblockindex) {
+    std::vector<uint8_t> rawBlock;
+    GenericReadBlockHelper([&]{
+        return ReadRawBlockFromDisk(rawBlock, pblockindex, config.GetChainParams(), SER_NETWORK,
+                                    PROTOCOL_VERSION | RPCSerializationFlags());
+    });
+    return rawBlock;
 }
 
 static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
@@ -1020,15 +1037,12 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
         ThrowIfPrunedBlock(pblockindex);
     }
 
-    const CBlock block = ReadBlockChecked(config, pblockindex);
-
     if (verbosity <= 0) {
-        CDataStream ssBlock(SER_NETWORK,
-                            PROTOCOL_VERSION | RPCSerializationFlags());
-        ssBlock << block;
-        std::string strHex = HexStr(ssBlock);
-        return strHex;
+        const auto rawBlock = ReadRawBlockUnchecked(config, pblockindex);
+        return HexStr(rawBlock);
     }
+
+    const CBlock block = ReadBlockChecked(config, pblockindex);
 
     TxVerbosity tx_verbosity;
     if (verbosity == 1) {

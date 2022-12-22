@@ -45,6 +45,16 @@ TODO
   - `scriptPubKey`
   - `tokenData` (after May 2023 upgrade, appears if the transaction input had token data)
 
+- The `getblock` RPC command with verbosity level 0 now takes a faster path when returning raw
+  block data to clients. It now skips some sanity checks, and assumes the block data read from
+  disk is valid. Clients that read this serialized block data via this RPC call should
+  be aware that it is not as stictly checked as it was previous to this release, and that
+  it's now possible (in theory at least) to retrieve a corrupted block via the RPC interface.
+  In practice, it's almost always the case that blocks are not corrupt on-disk and this changed
+  guarantee yields significant performance improvements for RPC clients retrieving raw block data.
+  Node admins can disable this new fast-path behavior by using the `-checkblockreads=1`
+  configuration option, which will enable extra consistency checks for raw block reads via RPC.
+
 
 ## Removed functionality
 

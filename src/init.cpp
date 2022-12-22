@@ -868,7 +868,7 @@ void SetupServerArgs() {
         ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-checkblockreads",
                  strprintf("Do extra sanity checking for blocks read from disk that are to be served up for the p2p"
-                           " network. This option is intented for testing and may negatively impact performance."
+                           " network or RPC. This option is intented for testing and may negatively impact performance."
                            " (default: %u, regtest: %u)", defaultChainParams->DefaultConsistencyChecks(),
                            regtestChainParams->DefaultConsistencyChecks()),
                  ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
