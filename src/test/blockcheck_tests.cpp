@@ -10,6 +10,7 @@
 #include <consensus/validation.h>
 #include <span.h>
 #include <streams.h>
+#include <util/defer.h>
 #include <validation.h>
 
 #include <test/setup_common.h>
@@ -166,6 +167,77 @@ BOOST_AUTO_TEST_CASE(blockserialization) {
         BOOST_REQUIRE(*networkBlock.vtx[i] == *diskBlock.vtx[i]);
     }
     BOOST_REQUIRE_EQUAL(block.ToString(), diskBlock.ToString());
+}
+
+// Check that ReadRawBlockFromDisk succeeds and passes basic sanity checks.
+BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
+    const bool orig_fCheckBlockReads = fCheckBlockReads;
+    fCheckBlockReads = true; // ReadRawBlockFromDisk() does additional checks if this is set
+    Defer d([&]{ fCheckBlockReads = orig_fCheckBlockReads; }); // undo above at function exit
+    const auto &chainParams = GetConfig().GetChainParams();
+    const CBlockIndex *pindex;
+    FlatFilePos blockPos;
+    WITH_LOCK(cs_main, ((pindex = ::ChainActive().Tip()), (blockPos = pindex->GetBlockPos())));
+
+    CAutoFile file(OpenBlockFile(blockPos, false), SER_DISK, CLIENT_VERSION);
+    BOOST_REQUIRE(!file.IsNull());
+    FILE *filep = file.Get();
+    BOOST_REQUIRE(filep != nullptr);
+
+    CMessageHeader::MessageMagic origMagic;
+    unsigned int origBlockSize;
+    const long headerPos = long(blockPos.nPos) - long(sizeof(origMagic) + sizeof(origBlockSize));
+    BOOST_REQUIRE(0 == std::fseek(filep, headerPos, SEEK_SET));
+
+    file >> origMagic >> origBlockSize;
+
+    BOOST_REQUIRE(origMagic == chainParams.DiskMagic());
+
+    // Check that reading a raw block works
+    std::vector<uint8_t> rawBlock;
+    BOOST_REQUIRE(ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+    BOOST_REQUIRE(rawBlock.size() == origBlockSize);
+    rawBlock.clear();
+
+    // Next, mess up the on-disk magic -- ReadRawBlockFromDisk() should fail
+    BOOST_REQUIRE(0 == std::fseek(filep, headerPos, SEEK_SET));
+    auto badMagic = origMagic;
+    std::reverse(badMagic.begin(), badMagic.end());
+    file << badMagic;
+    BOOST_REQUIRE(0 == std::fflush(filep));
+
+    rawBlock.clear();
+    BOOST_REQUIRE(!ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+    BOOST_REQUIRE(rawBlock.empty());
+    // Restore the on-disk magic
+    BOOST_REQUIRE(0 == std::fseek(filep, headerPos, SEEK_SET));
+    file << origMagic;
+    BOOST_REQUIRE(0 == std::fflush(filep));
+    // Should work again
+    rawBlock.clear();
+    BOOST_REQUIRE(ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+    BOOST_REQUIRE(rawBlock.size() == origBlockSize);
+
+    // Try forbidden sizes -- ReadRawBlockFromDisk() should always guard against these
+    for (const unsigned badSize : {unsigned{BLOCK_HEADER_SIZE-1u}, unsigned{MAX_EXCESSIVE_BLOCK_SIZE+1u}}) {
+        // Next, mess up the on-disk size -- ReadRawBlockFromDisk() should fail
+        BOOST_REQUIRE(0 == std::fseek(filep, headerPos + sizeof(origMagic), SEEK_SET));
+        file << badSize;
+        BOOST_REQUIRE(0 == std::fflush(filep));
+
+        rawBlock.clear();
+        BOOST_REQUIRE(!ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+        BOOST_REQUIRE(rawBlock.empty());
+        // Restore the on-disk size
+        BOOST_REQUIRE(0 == std::fseek(filep, headerPos + sizeof(origMagic), SEEK_SET));
+        file << origBlockSize;
+        BOOST_REQUIRE(0 == std::fflush(filep));
+        // Should work again
+        rawBlock.clear();
+        BOOST_REQUIRE(ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+        BOOST_REQUIRE(rawBlock.size() == origBlockSize);
+        rawBlock.clear();
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

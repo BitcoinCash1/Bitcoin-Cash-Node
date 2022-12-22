@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 /** 1MB */
 inline constexpr uint64_t ONE_MEGABYTE = 1000000;
@@ -27,6 +28,9 @@ inline constexpr uint64_t DEFAULT_EXCESSIVE_BLOCK_SIZE = 32 * ONE_MEGABYTE;
  *  this constant should be raised well beyond 32-bit addressing limits.
  */
 inline constexpr uint64_t MAX_EXCESSIVE_BLOCK_SIZE = uint64_t(2000) * ONE_MEGABYTE;
+static_assert(MAX_EXCESSIVE_BLOCK_SIZE <= std::numeric_limits<unsigned int>::max(),
+              "MAX_EXCESSIVE_BLOCKSIZE must fit within an unsigned int due to current block file data format");
+
 /** Allowed number of signature check operations per transaction. */
 inline constexpr uint64_t MAX_TX_SIGCHECKS = 3000;
 /**

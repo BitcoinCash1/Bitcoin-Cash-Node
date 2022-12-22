@@ -1068,10 +1068,11 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
             return error("%s: block DiskMagic verification failed for %s", __func__, blockPos.ToString());
         }
 
-        // check the block size and populate data
-        if (blockSize < BLOCK_HEADER_SIZE) {
+        // check the block size for sanity
+        if (blockSize < BLOCK_HEADER_SIZE || blockSize > MAX_EXCESSIVE_BLOCK_SIZE) {
             return error("%s: block size verification failed for %s", __func__, blockPos.ToString());
         }
+        // populate data
         rawBlock.resize(blockSize);
         filein >> Span{rawBlock};
     } catch (const std::exception &e) {
