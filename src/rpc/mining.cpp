@@ -49,7 +49,7 @@
  * or from the last difficulty change if 'lookup' is nonpositive. If 'height' is
  * nonnegative, compute the estimate at the time when a given block was found.
  */
-static double GetNetworkHashPS(int lookup, int height) {
+static double GetNetworkHashPS(int lookup, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     CBlockIndex *pb = ::ChainActive().Tip();
 
     if (height >= 0 && height < ::ChainActive().Height()) {
