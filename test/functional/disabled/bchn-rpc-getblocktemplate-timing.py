@@ -60,7 +60,7 @@ class GBTTimingTest(BitcoinTestFramework):
 
         self.log.info("{} passes, {} fails. Pass rate: {:2.0f}%".format(
             passes, fails, 100 * (passes / (passes + fails))))
-        assert(passes > (passes + fails) * success_threshold)
+        assert passes > (passes + fails) * success_threshold
 
     def test_run(self):
         # Calibrate performance constants: node 3 will make blocks that are limited only by available tx count

@@ -438,7 +438,7 @@ class WalletTest(BitcoinTestFramework):
                 self.nodes[0].setlabel(addr, label)
                 assert_equal(self.nodes[0].getaddressinfo(
                     addr)['label'], label)
-                assert(label in self.nodes[0].listlabels())
+                assert label in self.nodes[0].listlabels()
         # restore to default
         self.nodes[0].rpc.ensure_ascii = True
 

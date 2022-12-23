@@ -32,7 +32,7 @@ class OpReturnTest(BitcoinTestFramework):
     def create_null_data_tx(self, data_count):
         node = self.nodes[0]
         utxos = node.listunspent()
-        assert(len(utxos) > 0)
+        assert len(utxos) > 0
         utxo = utxos[0]
         tx = CTransaction()
         value = int(satoshi_round((utxo["amount"] - self.relayfee) / data_count) * COIN)
@@ -52,17 +52,17 @@ class OpReturnTest(BitcoinTestFramework):
         # single opreturn are ok.
         tx = self.create_null_data_tx(1)
         txid = node.sendrawtransaction(tx)
-        assert(txid in set(node.getrawmempool()))
+        assert txid in set(node.getrawmempool())
 
         # 2 outputs is now accepted after the May 15 2021 upgrade.
         tx = self.create_null_data_tx(2)
         txid = node.sendrawtransaction(tx)
-        assert(txid in set(node.getrawmempool()))
+        assert txid in set(node.getrawmempool())
 
         # 44 outputs (220 script bytes) are now accepted.
         tx = self.create_null_data_tx(44)
         txid = node.sendrawtransaction(tx)
-        assert(txid in set(node.getrawmempool()))
+        assert txid in set(node.getrawmempool())
 
         # 45 outputs (225 script bytes) are rejected.
         tx = self.create_null_data_tx(45)

@@ -48,7 +48,7 @@ def create_transaction(prevtx, n, sig, value, out=PADDED_ANY_SPEND):
     if not type(value) is list:
         value = [value]
     tx = CTransaction()
-    assert(n < len(prevtx.vout))
+    assert n < len(prevtx.vout)
     tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), sig, 0xffffffff))
     for v in value:
         tx.vout.append(CTxOut(v, out))

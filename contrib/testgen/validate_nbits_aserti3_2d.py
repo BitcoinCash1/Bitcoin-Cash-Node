@@ -91,7 +91,7 @@ def next_bits_aserti3_2d(anchor_bits, time_diff, height_diff):
     # Next, we use the 2^x = 2 * 2^(x-1) identity to shift our exponent into the (0, 1] interval.
     shifts = exponent >> RBITS
     exponent -= shifts * RADIX
-    assert(exponent >= 0 and exponent < 65536)
+    assert exponent >= 0 and exponent < 65536
 
     # Now we compute an approximated target * 2^(fractional part) * 65536
     # target * 2^x ~= target * (1 + 0.695502049*x + 0.2262698*x**2 + 0.0782318*x**3)

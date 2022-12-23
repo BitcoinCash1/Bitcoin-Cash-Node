@@ -29,7 +29,7 @@ class InvReceiver(P2PInterface):
         timeArrived = time.time()
         # If an inv contains more then one transaction, then the number of invs (==samplesize)
         # will be non-deterministic. This would be an error.
-        assert(len(message.inv) == 1)
+        assert len(message.inv) == 1
         self.invTimes.append(timeArrived)
         if len(self.invTimes) > 1:
             timediff = self.invTimes[-1] - self.invTimes[-2]
@@ -136,9 +136,9 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
             self.options.interval,
             inboundkstestresult,
             outboundkstestresult))
-        assert(inboundkstestresult.pvalue > self.options.alpha), inboundReceiver.invDelays
+        assert inboundkstestresult.pvalue > self.options.alpha, inboundReceiver.invDelays
         if self.options.testoutbound:
-            assert(outboundkstestresult.pvalue > self.options.alpha), outboundReceiver.invDelays
+            assert outboundkstestresult.pvalue > self.options.alpha, outboundReceiver.invDelays
 
 
 if __name__ == '__main__':
