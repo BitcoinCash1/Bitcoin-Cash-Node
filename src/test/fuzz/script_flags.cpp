@@ -22,8 +22,8 @@ static bool IsValidFlagCombination(uint32_t flags);
 static bool IsExpected(bool ret, bool ret_fuzzed, uint32_t verify_flags, ScriptError serror,
                        uint32_t verify_flags_fuzzed, ScriptError serror_fuzzed);
 
-void test_one_input(std::vector<uint8_t> buffer) {
-    CDataStream ds(buffer, SER_NETWORK, INIT_PROTO_VERSION);
+void test_one_input(Span<const uint8_t> buffer) {
+    GenericVectorReader ds(SER_NETWORK, INIT_PROTO_VERSION, buffer, 0);
     try {
         int nVersion;
         ds >> nVersion;
