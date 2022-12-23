@@ -33,7 +33,18 @@ TODO
 
 ## Modified functionality
 
-TODO
+- The `getblock` RPC command has been modified: verbosity level 2 now returns `fee`
+  information per transaction in the block. Additionally a new verbosity level 3 has
+  been added which is like level 2 but each transaction will include inputs' `prevout`
+  information.  The existing `/rest/block/` REST endpoint is modified to contain
+  this information too. Every `vin` field will contain an additional `prevout` subfield
+  describing the spent output. `prevout` contains the following keys:
+  - `generated` - true if the spent coin was a coinbase
+  - `height`
+  - `value`
+  - `scriptPubKey`
+  - `tokenData` (after May 2023 upgrade, appears if the transaction input had token data)
+
 
 ## Removed functionality
 

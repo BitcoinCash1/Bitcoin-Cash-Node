@@ -22,11 +22,12 @@ Tests correspond to code in rpc/blockchain.cpp.
 
 from decimal import Decimal
 import http.client
+import os
 import subprocess
 import string
 from io import BytesIO
 
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import BitcoinTestFramework, get_datadir_path
 from test_framework.util import (
     assert_equal,
     assert_greater_than,
@@ -43,6 +44,7 @@ from test_framework.blocktools import (
 )
 from test_framework.messages import (
     CBlockHeader,
+    COIN,
     msg_block,
 )
 from test_framework.p2p import (
@@ -436,6 +438,86 @@ class BlockchainTest(BitcoinTestFramework):
         assert_equal(
             blockinfo['nextblockhash'],
             blockheaderinfo['nextblockhash'])
+
+        fee_per_byte = 2.5
+        node.settxfee(Decimal(fee_per_byte * 1e3) / Decimal(COIN))
+        txid = node.sendtoaddress(node.getnewaddress(), 51)  # Send at least 2 coins
+        assert txid in node.getrawmempool(False)
+        blockhash, = node.generate(1)
+
+        def assert_fee_not_in_block(verbosity):
+            block = node.getblock(blockhash, verbosity)
+            assert 'fee' not in block['tx'][1]
+
+        def assert_fee_in_block(verbosity):
+            block = node.getblock(blockhash, verbosity)
+            tx = block['tx'][1]
+            assert 'fee' in tx
+            assert_equal(tx['fee'] * COIN, tx['size'] * fee_per_byte)
+
+        def assert_vin_contains_prevout(verbosity):
+            block = node.getblock(blockhash, verbosity)
+            tx = block["tx"][1]
+            total_vin = Decimal("0.00000000")
+            total_vout = Decimal("0.00000000")
+            for vin in tx["vin"]:
+                assert "prevout" in vin
+                assert_equal(set(vin["prevout"].keys()), {"value", "height", "generated", "scriptPubKey"})
+                assert_equal(vin["prevout"]["generated"], True)
+                total_vin += vin["prevout"]["value"]
+            for vout in tx["vout"]:
+                total_vout += vout["value"]
+            assert_equal(total_vin, total_vout + tx["fee"])
+
+        def assert_vin_does_not_contain_prevout(verbosity):
+            block = node.getblock(blockhash, verbosity)
+            tx = block["tx"][1]
+            if isinstance(tx, str):
+                # In verbosity level 1, only the transaction hashes are written
+                pass
+            else:
+                for vin in tx["vin"]:
+                    assert "prevout" not in vin
+
+        self.log.info("Test that getblock with verbosity 1 doesn't include fee")
+        assert_fee_not_in_block(1)
+
+        self.log.info('Test that getblock with verbosity 2 and 3 includes expected fee')
+        assert_fee_in_block(2)
+        assert_fee_in_block(3)
+
+        self.log.info("Test that getblock with verbosity 1 and 2 does not include prevout")
+        assert_vin_does_not_contain_prevout(1)
+        assert_vin_does_not_contain_prevout(2)
+
+        self.log.info("Test that getblock with verbosity 3 includes prevout")
+        assert_vin_contains_prevout(3)
+
+        self.log.info("Test that getblock with verbosity 2 and 3 still works with pruned Undo data")
+        datadir = get_datadir_path(self.options.tmpdir, 0)
+
+        self.log.info("Test getblock with invalid verbosity type returns proper error message")
+        assert_raises_rpc_error(-1, "JSON value is not an integer as expected", node.getblock, blockhash, "2")
+
+        def move_block_file(old, new):
+            old_path = os.path.join(datadir, self.chain, 'blocks', old)
+            new_path = os.path.join(datadir, self.chain, 'blocks', new)
+            os.rename(old_path, new_path)
+
+        # Move instead of deleting so we can restore chain state afterwards
+        move_block_file('rev00000.dat', 'rev_wrong')
+
+        block = node.getblock(blockhash, 2)
+        assert 'fee' not in block['tx'][1]
+        assert_fee_not_in_block(2)
+        assert_fee_not_in_block(3)
+        assert_vin_does_not_contain_prevout(2)
+        assert_vin_does_not_contain_prevout(3)
+
+        # Restore chain state
+        move_block_file('rev_wrong', 'rev00000.dat')
+        assert 'previousblockhash' not in node.getblock(node.getblockhash(0))
+        assert 'nextblockhash' not in node.getblock(node.getbestblockhash())
 
 
 if __name__ == '__main__':

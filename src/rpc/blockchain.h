@@ -4,10 +4,15 @@
 
 #pragma once
 
-#include <univalue.h>
-#include <vector>
-#include <stdint.h>
 #include <amount.h>
+#include <core_io.h>
+#include <sync.h>
+#include <univalue.h>
+
+#include <cstdint>
+#include <vector>
+
+extern RecursiveMutex cs_main;
 
 class CBlock;
 class CBlockIndex;
@@ -31,7 +36,8 @@ double GetDifficulty(const CBlockIndex *blockindex);
 void RPCNotifyBlockChange(bool ibd, const CBlockIndex *pindex);
 
 /** Block description to JSON */
-UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CBlockIndex *tip, const CBlockIndex *blockindex, bool txDetails = false);
+UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CBlockIndex *tip,
+                             const CBlockIndex *blockindex, TxVerbosity verbosity) LOCKS_EXCLUDED(cs_main);
 
 /** Mempool information to JSON */
 UniValue::Object MempoolInfoToJSON(const Config &config, const CTxMemPool &pool);

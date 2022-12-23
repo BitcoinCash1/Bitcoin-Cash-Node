@@ -31,7 +31,7 @@ static void JSONReadWriteBlock(const std::vector<uint8_t> &data, unsigned int pr
     const auto blockHash = block.GetHash();
     blockindex.phashBlock = &blockHash;
     blockindex.nBits = block.nBits;
-    const auto blockuv = blockToJSON(GetConfig(), block, &blockindex, &blockindex, /*verbose*/ true);
+    const auto blockuv = blockToJSON(GetConfig(), block, &blockindex, &blockindex, TxVerbosity::SHOW_DETAILS);
 
     if (write) {
         BENCHMARK_LOOP {
