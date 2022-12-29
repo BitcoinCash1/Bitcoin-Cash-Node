@@ -13,6 +13,7 @@ Test the following RPCs:
    - getrawtransaction
 """
 
+import os
 from decimal import Decimal
 
 from collections import OrderedDict
@@ -25,7 +26,7 @@ from test_framework.messages import (
     ToHex,
 )
 from test_framework.script import CScript
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import BitcoinTestFramework, get_datadir_path
 from test_framework.txtools import pad_raw_tx
 from test_framework.util import (
     assert_equal,
@@ -594,43 +595,71 @@ class RawTransactionsTest(BitcoinTestFramework):
         assert_raises_rpc_error(-22, 'TX decode failed',
                                 self.nodes[0].decoderawtransaction, ToHex(tx) + '00')
 
-
         # 11. getrawtransaction verbosity level 2
         # confirm all pending transactions
         self.generate(self.nodes[0], 1)
         self.sync_all(synced_nodes)
 
+        def assert_raises_if_no_undo_but_works_otherwise(code, msg, node_num, *args):
+            datadir = get_datadir_path(self.options.tmpdir, node_num)
+            node = self.nodes[0]
+
+            def move_undo_file(old, new):
+                old_path = os.path.join(datadir, self.chain, 'blocks', old)
+                new_path = os.path.join(datadir, self.chain, 'blocks', new)
+                os.rename(old_path, new_path)
+                self.log.info(f"Moved {old} -> {new} (node {node_num})")
+
+            # Move undo file(s) out of the way
+            files = []
+            for i in range(99999):
+                try:
+                    old, new = f'rev{i:05}.dat', f'rev_wrong_{i:05}'
+                    move_undo_file(old, new)
+                    files.append((old, new))
+                except FileNotFoundError:
+                    break  # Break out of loop on first missing undo file
+            try:
+                assert_raises_rpc_error(code, msg, node.getrawtransaction, *args)
+            finally:
+                # restore undo file(s)
+                for old, new in files:
+                    move_undo_file(new, old)
+
+            # Finally, try the above again and it should not raise
+            return node.getrawtransaction(*args)
 
         # 11.1 working with past transaction, prevout of which is in past block, also not present in coin database
         # no -txindex enabled node
-        assert_raises_rpc_error(
-            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, firstSentTx["hash"], 2)
-        assert_raises_rpc_error(
-            -5, "fee estimation. Prevout transaction not found in the provided block and Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
+        result0_no_bh = assert_raises_if_no_undo_but_works_otherwise(
+            -5, "for fee calculation. An input's transaction was not found in the mempool or blockchain. Use -txindex",
+            0, firstSentTx["hash"], 2)
+        result0_bh = assert_raises_if_no_undo_but_works_otherwise(
+            -5, "for fee calculation. An input's transaction was not found in the mempool or blockchain. Use -txindex",
+            0, firstSentTx["hash"], 2, firstSentTx["blockhash"])
 
         # disconnected node
         assert_raises_rpc_error(
-            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions", self.nodes[4].getrawtransaction, firstSentTx["hash"], 2)
+            -5, "No such mempool or blockchain transaction. Use gettransaction for wallet transactions",
+            self.nodes[4].getrawtransaction, firstSentTx["hash"], 2)
         assert_raises_rpc_error(
             -5, "Block hash not found", self.nodes[4].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
 
         # -txindex enabled node
-        result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2)
+        result_no_bh = result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2)
+        assert_equal(result0_no_bh, result_no_bh)
         assert_equal(result["vin"][0]["value"], Decimal('2.20'))
         assert_equal(result["vout"][0]["value"], Decimal('2.19'))
         assert_equal(result["fee"], Decimal('0.01'))
-        result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2, firstSentTx["blockhash"])
+        result_bh = result = self.nodes[1].getrawtransaction(firstSentTx["hash"], 2, firstSentTx["blockhash"])
+        assert_equal(result0_bh, result_bh)
         assert_equal(result["vin"][0]["value"], Decimal('2.20'))
         assert_equal(result["vout"][0]["value"], Decimal('2.19'))
         assert_equal(result["fee"], Decimal('0.01'))
-
 
         # pruning node
-        assert_raises_rpc_error(
-            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, firstSentTx["hash"], 2)
-        assert_raises_rpc_error(
-            -5, "for fee estimation. Prevout transaction not found in the provided block and Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, firstSentTx["hash"], 2, firstSentTx["blockhash"])
-
+        assert_equal(result_no_bh, self.nodes[3].getrawtransaction(firstSentTx["hash"], 2))
+        assert_equal(result_bh, self.nodes[3].getrawtransaction(firstSentTx["hash"], 2, firstSentTx["blockhash"]))
 
         # 11.2 make new mempool transaction spending confirmed transaction
         inputs = [{'txid': lastSentTx["hash"], 'vout': 0}]
@@ -698,11 +727,12 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         lastSentTx = self.nodes[0].getrawtransaction(hash, True)
 
-        # no -txindex enabled node, will not find tx without block specified
-        assert_raises_rpc_error(
-            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[0].getrawtransaction, lastSentTx["hash"], 2)
-        # will find all txs in the same block
-        self.nodes[0].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+        # no -txindex enabled node, will not find all input to tx without undo info, but works otherwise
+        res = assert_raises_if_no_undo_but_works_otherwise(
+            -5, "for fee calculation. An input's transaction was not found in the mempool or blockchain. Use -txindex",
+            0, lastSentTx["hash"], 2)
+        # Test also with blockhash param
+        res2 = self.nodes[0].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
 
         # disconnected node
         assert_raises_rpc_error(
@@ -711,22 +741,25 @@ class RawTransactionsTest(BitcoinTestFramework):
             -5, "Block hash not found", self.nodes[4].getrawtransaction, lastSentTx["hash"], 2, lastSentTx["blockhash"])
 
         # -txindex enabled node
-        result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2)
+        result = result_no_bh = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2)
         assert_equal(result["vin"][0]["value"], Decimal('2.00'))
         assert_equal(result["vin"][1]["value"], Decimal('0.18'))
         assert_equal(result["vout"][0]["value"], Decimal('2.17'))
         assert_equal(result["fee"], Decimal('0.01'))
-        result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+        assert_equal(res, result)
+        result = result_bh = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
         assert_equal(result["vin"][0]["value"], Decimal('2.00'))
         assert_equal(result["vin"][1]["value"], Decimal('0.18'))
         assert_equal(result["vout"][0]["value"], Decimal('2.17'))
         assert_equal(result["fee"], Decimal('0.01'))
+        assert_equal(res2, result)
 
-        # pruning node, will not find tx without txindex or block specified
-        assert_raises_rpc_error(
-            -5, "for fee estimation. Prevout transaction not found in the mempool. Use -txindex", self.nodes[3].getrawtransaction, lastSentTx["hash"], 2)
-        # will find all txs in the same block
-        self.nodes[3].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+        # pruning node, will find tx due to lookup in coins db
+        res = self.nodes[3].getrawtransaction(lastSentTx["hash"], 2)
+        assert_equal(res, result_no_bh)
+        # will find all txs in the same block as well if given a blockhash
+        res = self.nodes[3].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
+        assert_equal(res, result_bh)
 
         # Test coinbase txn always is missing fee, never has an error
         for node in synced_nodes:
