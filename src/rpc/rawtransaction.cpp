@@ -197,8 +197,8 @@ static UniValue getrawtransaction(const Config &config,
     int verbosityLevel = 0;
     if (!request.params[1].isNull()) {
         verbosityLevel = request.params[1].isNum()
-                        ? request.params[1].get_int()
-                        : int(request.params[1].get_bool());
+                         ? request.params[1].get_int()
+                         : int(request.params[1].get_bool());
     }
 
     if (verbosityLevel < 0 || verbosityLevel > 2) {
@@ -219,8 +219,7 @@ static UniValue getrawtransaction(const Config &config,
         BlockHash blockhash(ParseHashV(request.params[2], "parameter 3"));
         blockindex = LookupBlockIndex(blockhash);
         if (!blockindex) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                               "Block hash not found");
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block hash not found");
         }
         in_active_chain = ::ChainActive().Contains(blockindex);
     }
@@ -232,8 +231,7 @@ static UniValue getrawtransaction(const Config &config,
 
     CTransactionRef tx;
     BlockHash hash_block;
-    if (!GetTransaction(txid, tx, params.GetConsensus(), hash_block, true,
-                        blockindex)) {
+    if (!GetTransaction(txid, tx, params.GetConsensus(), hash_block, true, blockindex)) {
         std::string errmsg;
         if (blockindex) {
             if (!blockindex->nStatus.hasData()) {
@@ -241,17 +239,13 @@ static UniValue getrawtransaction(const Config &config,
             }
             errmsg = "No such transaction found in the provided block";
         } else if (!g_txindex) {
-            errmsg = "No such mempool transaction. Use -txindex to enable "
-                     "blockchain transaction queries";
+            errmsg = "No such mempool transaction. Use -txindex to enable blockchain transaction queries";
         } else if (!f_txindex_ready) {
-            errmsg = "No such mempool transaction. Blockchain transactions are "
-                     "still in the process of being indexed";
+            errmsg = "No such mempool transaction. Blockchain transactions are still in the process of being indexed";
         } else {
             errmsg = "No such mempool or blockchain transaction";
         }
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                           errmsg +
-                               ". Use gettransaction for wallet transactions.");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, errmsg + ". Use gettransaction for wallet transactions.");
     }
 
     if (!fVerbose) {
@@ -286,27 +280,26 @@ static UniValue getrawtransaction(const Config &config,
                 std::string errmsg;
                 // let's first try to search for a prevout transaction in the mempool or `blockindex`, and not fail
                 // covers a rare case of this transaction and its prevouts being in the same block, so txindex is not needed
-                if (blockindex && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(), prevoutHashBlock,
-                        true, blockindex)) {
+                if (blockindex && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(),
+                                                  prevoutHashBlock, true, blockindex)) {
                     errmsg = "Prevout transaction not found in the provided block and ";
                 }
 
                 // if prevout was not found in the block provided, we look for it in transaction index and fail if needed
-                if (!prevoutTx && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(), prevoutHashBlock,
-                        true, nullptr)) {
+                if (!prevoutTx && !GetTransaction(vin.prevout.GetTxId(), prevoutTx, params.GetConsensus(),
+                                                  prevoutHashBlock, true, nullptr)) {
                     if (!g_txindex) {
                         errmsg += "Prevout transaction not found in the mempool. Use -txindex to enable "
-                                "blockchain transaction queries";
+                                  "blockchain transaction queries";
                     } else if (!txindex_ready) {
                         errmsg += "Prevout transaction not found in the mempool. Blockchain transactions are "
-                                "still in the process of being indexed";
+                                  "still in the process of being indexed";
                     } else {
                         errmsg += "Prevout transaction not found in the mempool and blockchain";
                     }
                     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                                    "Failed to fetch transaction with id " +
-                                    vin.prevout.GetTxId().ToString() + " for fee estimation. " +
-                                    errmsg);
+                                       "Failed to fetch transaction with id " + vin.prevout.GetTxId().ToString()
+                                       + " for fee estimation. " + errmsg);
                 }
                 txcache.emplace(vin.prevout.GetTxId(), prevoutTx);
             } else {
@@ -325,7 +318,7 @@ static UniValue getrawtransaction(const Config &config,
         }
 
         // calculate the transaction fee and update the output json
-        Amount fee(vinSum - tx->GetValueOut());
+        const Amount fee(vinSum - tx->GetValueOut());
         result.emplace_back("fee", ValueFromAmount(fee));
     }
 
