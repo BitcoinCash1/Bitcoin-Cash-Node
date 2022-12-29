@@ -260,12 +260,12 @@ static UniValue getrawtransaction(const Config &config,
     if (fGetPrevouts && !tx->IsCoinBase()) {
         Amount vinSum;
 
-        // we use separate flag for txindex being ready since we attempt
-        // to look in `blockindex` provided and then in txindex
-        bool txindex_ready = false;
-        if (g_txindex) {
-            txindex_ready = g_txindex->BlockUntilSyncedToCurrentChain();
+        // We use should ensure txindex is ready since we attempt to look in `blockindex` provided and then in txindex
+        if (g_txindex && !f_txindex_ready) {
+            f_txindex_ready = g_txindex->BlockUntilSyncedToCurrentChain();
         }
+
+        auto &resultVinArr = result.at("vin").get_array();
 
         size_t vinIndex = 0u;
         std::unordered_map<TxId, CTransactionRef, SaltedTxIdHasher> txcache;
@@ -291,7 +291,7 @@ static UniValue getrawtransaction(const Config &config,
                     if (!g_txindex) {
                         errmsg += "Prevout transaction not found in the mempool. Use -txindex to enable "
                                   "blockchain transaction queries";
-                    } else if (!txindex_ready) {
+                    } else if (!f_txindex_ready) {
                         errmsg += "Prevout transaction not found in the mempool. Blockchain transactions are "
                                   "still in the process of being indexed";
                     } else {
@@ -311,7 +311,7 @@ static UniValue getrawtransaction(const Config &config,
             vinSum += value;
 
             // update the output json
-            auto& vinUniv = result.at("vin").at(vinIndex).get_obj();
+            auto& vinUniv = resultVinArr.at(vinIndex).get_obj();
             vinUniv.emplace_back("value", ValueFromAmount(value));
 
             ++vinIndex;
