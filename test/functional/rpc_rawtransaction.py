@@ -728,6 +728,12 @@ class RawTransactionsTest(BitcoinTestFramework):
         # will find all txs in the same block
         self.nodes[3].getrawtransaction(lastSentTx["hash"], 2, lastSentTx["blockhash"])
 
+        # Test coinbase txn always is missing fee, never has an error
+        for node in synced_nodes:
+            block_hash = node.getbestblockhash()
+            cb_txid = node.getblock(block_hash, 1)["tx"][0]
+            result = node.getrawtransaction(cb_txid, 2, block_hash)
+            assert "fee" not in result
 
 
 if __name__ == '__main__':

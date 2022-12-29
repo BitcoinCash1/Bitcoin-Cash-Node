@@ -260,11 +260,10 @@ static UniValue getrawtransaction(const Config &config,
 
     UniValue::Object result = TxToJSON(config, *tx, hash_block);
     if (blockindex) {
-        result.reserve(result.size() + 1);
         result.emplace_back("in_active_chain", in_active_chain);
     }
 
-    if (fGetPrevouts) {
+    if (fGetPrevouts && !tx->IsCoinBase()) {
         Amount vinSum;
 
         // we use separate flag for txindex being ready since we attempt
