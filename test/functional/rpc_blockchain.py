@@ -447,7 +447,12 @@ class BlockchainTest(BitcoinTestFramework):
 
         def assert_fee_not_in_block(verbosity):
             block = node.getblock(blockhash, verbosity)
-            assert 'fee' not in block['tx'][1]
+            tx = block['tx'][1]
+            if isinstance(tx, str):
+                # In verbosity level 1, only the transaction hashes are written
+                pass
+            else:
+                assert isinstance(tx, dict) and 'fee' not in tx
 
         def assert_fee_in_block(verbosity):
             block = node.getblock(blockhash, verbosity)
