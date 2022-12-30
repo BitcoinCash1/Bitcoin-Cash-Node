@@ -454,6 +454,7 @@ add_library(common
   feerate.cpp
   core_read.cpp
   core_write.cpp
+  ec_multiset.cpp
   hash.cpp
   key.cpp
   key_io.cpp

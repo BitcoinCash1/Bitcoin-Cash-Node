@@ -180,6 +180,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     dsproof_dspidptr_tests.cpp
     dsproof_tests.cpp
     dstencode_tests.cpp
+    ec_multiset_tests.cpp
     excessiveblock_tests.cpp
     extversion_tests.cpp
     feerate_tests.cpp
