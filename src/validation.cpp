@@ -1084,6 +1084,7 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
         // This is normally only enabled for regtest and is provided in order to guarantee additional sanity checks
         // when returning raw blocks in this manner. For real networks, we prefer the performance benefit of not
         // deserializing and not doing these slower checks here.
+        Tic elapsed;
         CBlock block;
         std::vector<uint8_t> rawBlock2;
         rawBlock2.reserve(rawBlock.size());
@@ -1111,7 +1112,8 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
             return error("%s: Consistency check failed; GetHash() doesn't match index for %s at %s",
                          __func__, pindex->ToString(), blockPos.ToString());
         }
-        LogPrintf("%s: checks passed for block %s (%i bytes)\n", __func__, block.GetHash().ToString(), rawBlock2.size());
+        LogPrint(BCLog::BENCH, "%s: checks passed for block %s (%i bytes) in %s msec\n", __func__,
+                 block.GetHash().ToString(), rawBlock2.size(), elapsed.msecStr());
     }
 
     return true;
