@@ -14,16 +14,16 @@ If you download the associated signature files with the binaries from the above 
 you can verify the integrity of the binaries by following these instructions, replacing
 VERSION with the value relevant to you:
 
-Get the keys for versions 0.21.1 or later:
+Get the keys for versions 25.0.0 or later:
 
 ```
-VERSION="0.21.1"
+VERSION="25.0.0"
 URL="https://download.bitcoincashnode.org/releases/${VERSION}/src/bitcoin-cash-node-${VERSION}.tar.gz"
 KEYS_FILE="bitcoin-cash-node-${VERSION}/contrib/gitian-signing/keys.txt"
 wget -q -O - "${URL}" | tar -zxOf - "${KEYS_FILE}" | while read FINGERPRINT _; do gpg --recv-keys "${FINGERPRINT}"; done
 ```
 
-Get the keys for version 0.21.0:
+Get the keys for version 25.0.0:
 
 ```
 URL="https://download.bitcoincashnode.org/keys/keys.txt"
