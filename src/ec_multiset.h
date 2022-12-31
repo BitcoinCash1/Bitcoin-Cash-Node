@@ -113,7 +113,7 @@ public:
         if constexpr (ser_action.ForRead()) {
             obj.SetPubKeyBytes(bytes);
             // validate that the pubkey is valid on reading, or throw
-            if (constexpr const PubKeyBytes allZeroes = {0u}; obj.IsEmpty() && bytes != allZeroes) {
+            if (constexpr const PubKeyBytes allZeroes = {{0u}}; obj.IsEmpty() && bytes != allZeroes) {
                 throw std::ios_base::failure("Invalid pubkey on read: expected either a valid compressed pubkey or"
                                              " all zeroes");
             }
