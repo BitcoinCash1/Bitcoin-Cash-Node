@@ -31,36 +31,63 @@ if [ ! -f "$build_dir/build.ninja" ]; then
   exit 1
 fi
 
+exit_state_str="Premature exit"
+
+# save the currently checked out branch, and return to it when we're finished
+old_branch=$(git branch | grep '^\* ' | cut -d ' ' -f 2-)
+# later versions of git have git branch --show-current, but we need to support older versions which don't
+function restore_branch {
+  if [ ! -z "$old_branch" ]; then
+    echo "$exit_state_str, returning to previously checked out branch: $old_branch" >&2
+    git checkout "$old_branch"
+  else
+    # no previous branch to check out (i.e. HEAD was already in a detached state, or similar)
+    echo "$exit_state_str, current branch left in undefined state." >&2
+  fi
+}
+# restore the branch even if the benchmark process is interrupted
+trap restore_branch EXIT
+
+# if eatmydata is installed locally, we'll use it to call the benchmarks to reduce IO-induced jitter
+if which eatmydata >/dev/null; then
+  echo "Eatmydata is available in the path - will use it to build and call the benchmarks." >&2
+  launch="eatmydata"
+else
+  launch=""
+fi
+
 function get_bench_time {
   echo "Building..." >&2
-  cd "$build_dir"
-  ninja bench_bitcoin >/dev/null 2>&1
+  cd "$build_dir" || (echo "Unable to enter build directory $build_dir - aborting." >&2; exit 1) || exit 1
+  $launch ninja bench_bitcoin >/dev/null 2>&1
   echo "Running $benchmark benchmark..." >&2
-  src/bench/bench_bitcoin -filter="$benchmark" | cut -d ' ' -f 4 | cut -d ',' -f 1 | tail -1
+  $launch src/bench/bench_bitcoin -filter="$benchmark" | cut -d ' ' -f 4 | cut -d ',' -f 1 | tail -1
 }
 
 function time_compare {
-  if (( $(bc <<< "$1 $2 $3") )); then
-    echo "true"
-  else
-    echo "false"
-  fi
+  # $2 is < or >, bc outputs "0" or "1" for the comparison result - we then return that as the status code
+  (( $(bc <<< "$1 $2 $3") ))
 }
 
 # check out the fast commit, and take a benchmark time
 echo "Getting baseline times: benchmarking fast commit..."
-git -c advice.detachedHead=false checkout "$fast_commit"
+if ! git -c advice.detachedHead=false checkout "$fast_commit"; then
+  echo "Unable to check out $fast_commit - cannot continue."
+  exit 1
+fi
 fast_time=$(get_bench_time)
 
 # check out the slow commit, and take a benchmark time
 echo "Getting baseline times: benchmarking slow commit..."
-git -c advice.detachedHead=false checkout "$slow_commit"
+if ! git -c advice.detachedHead=false checkout "$slow_commit"; then
+  echo "Unable to checkout $slow_commit - cannot continue."
+fi
 slow_time=$(get_bench_time)
 
 echo "Benchmark $benchmark runs in ${fast_time}s at $fast_commit, and ${slow_time}s at $slow_commit"
 
 # make sure the fast time is actually faster
-if ! "$(time_compare "$fast_time" "<" "$slow_time" )"; then
+if ! time_compare "$fast_time" "<" "$slow_time"; then
   echo "The \"slow\" time is actually faster than the fast time!  Make sure you have the commit order the right way round, and the benchmark is sufficiently repeatable." >&2
   exit 1
 fi
@@ -75,7 +102,7 @@ git bisect start --term-old "fast" --term-new "slow" "$slow_commit" "$fast_commi
 
 while true; do
   bench_time=$(get_bench_time)
-  if "$(time_compare "$bench_time" ">" "$time_threshold" )"; then
+  if time_compare "$bench_time" ">" "$time_threshold"; then
     echo "Benchmark time is ${bench_time}s - slower than threshold"
     response=$(git -c color.status=always bisect slow)
   else
@@ -83,9 +110,11 @@ while true; do
     response=$(git -c color.status=always bisect fast)
   fi
   echo "$response"
-  if fgrep -q ' is the first slow commit' <<< "$response"; then
+  if grep -Fq ' is the first slow commit' <<< "$response"; then
     break
   fi
 done
+
+exit_state_str="Benchmark comparison finished"
 
 git bisect reset
