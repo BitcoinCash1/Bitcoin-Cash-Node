@@ -5,13 +5,14 @@
 #pragma once
 
 #include <crypto/sha256.h>
+#include <span.h>
 
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 
 /** A hasher class for HMAC-SHA-256. */
 class CHMAC_SHA256 {
-private:
     CSHA256 outer;
     CSHA256 inner;
 
@@ -24,4 +25,8 @@ public:
         return *this;
     }
     void Finalize(uint8_t hash[OUTPUT_SIZE]);
+
+    // Support Span-style API
+    CHMAC_SHA256 &Write(Span<const uint8_t> data) { return Write(data.data(), data.size()); }
+    void Finalize(Span<uint8_t> hash) { assert(hash.size() == OUTPUT_SIZE); Finalize(hash.data()); }
 };

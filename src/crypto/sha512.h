@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <span.h>
+
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 
@@ -21,4 +24,8 @@ public:
     CSHA512 &Write(const uint8_t *data, size_t len);
     void Finalize(uint8_t hash[OUTPUT_SIZE]);
     CSHA512 &Reset();
+
+    // Support Span-style API
+    CSHA512 &Write(Span<const uint8_t> data) { return Write(data.data(), data.size()); }
+    void Finalize(Span<uint8_t> hash) { assert(hash.size() == OUTPUT_SIZE); Finalize(hash.data()); }
 };

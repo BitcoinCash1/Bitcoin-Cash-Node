@@ -23,40 +23,65 @@
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 
+#include <algorithm>
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(crypto_tests, BasicTestingSetup)
 
 template <typename Hasher, typename In, typename Out>
 static void TestVector(const Hasher &h, const In &in, const Out &out) {
-    Out hash;
+    Out hash, hash2;
     BOOST_CHECK(out.size() == h.OUTPUT_SIZE);
-    hash.resize(out.size());
+    auto ClearOutHashes = [&] {
+        hash.resize(out.size());
+        hash2.resize(out.size());
+        // ensure hash and has2 are cleared in-between runs
+        std::fill(hash.begin(), hash.end(), typename Out::value_type{});
+        std::fill(hash2.begin(), hash2.end(), typename Out::value_type{});
+        BOOST_CHECK(hash != out);
+        BOOST_CHECK(hash2 != out);
+    };
+    ClearOutHashes();
+
     {
         // Test that writing the whole input string at once works.
         Hasher(h).Write((uint8_t *)&in[0], in.size()).Finalize(&hash[0]);
         BOOST_CHECK(hash == out);
+        // Also run test using the "Span" API
+        Hasher(h).Write(Span{UInt8Cast(&in[0]), in.size()}).Finalize(Span{hash2});
+        BOOST_CHECK(hash2 == out);
     }
     for (int i = 0; i < 32; i++) {
         // Test that writing the string broken up in random pieces works.
         Hasher hasher(h);
+        Hasher hasher_alt(h);
         size_t pos = 0;
         while (pos < in.size()) {
             size_t len = InsecureRandRange((in.size() - pos + 1) / 2 + 1);
             hasher.Write((uint8_t *)&in[pos], len);
+            hasher_alt.Write({UInt8Cast(&in[pos]), len}); // also use alternate Span API
             pos += len;
             if (pos > 0 && pos + 2 * out.size() > in.size() &&
                 pos < in.size()) {
                 // Test that writing the rest at once to a copy of a hasher
                 // works.
+                ClearOutHashes(); // ensure hashes are cleared between runs
                 Hasher(hasher)
                     .Write((uint8_t *)&in[pos], in.size() - pos)
                     .Finalize(&hash[0]);
                 BOOST_CHECK(hash == out);
+                // also test same using the alternate "Span" API
+                Hasher(hasher)
+                    .Write({UInt8Cast(&in[pos]), in.size() - pos})
+                    .Finalize(Span{hash2});
+                BOOST_CHECK(hash2 == out);
             }
         }
+        ClearOutHashes(); // ensure hashes are cleared between runs
         hasher.Finalize(&hash[0]);
+        hasher_alt.Finalize(Span{hash2});
         BOOST_CHECK(hash == out);
+        BOOST_CHECK(hash2 == out);
     }
 }
 
@@ -722,20 +747,23 @@ static void TestSHA3_256(const std::string &input, const std::string &output) {
 BOOST_AUTO_TEST_CASE(keccak_tests) {
     // Start with the zero state.
     uint64_t state[25] = {0};
-    CSHA256 tester;
+    CSHA256 tester, tester2;
     for (int i = 0; i < 262144; ++i) {
         KeccakF(state);
         for (int j = 0; j < 25; ++j) {
             std::array<uint8_t, 8> buf;
             WriteLE64(buf.data(), state[j]);
             tester.Write(buf.data(), 8);
+            tester2.Write(Span{buf}); // also test alternate API using Span
         }
     }
-    uint256 out;
+    uint256 out, out2;
     tester.Finalize(out.begin());
+    tester2.Finalize(Span{out2}); // also test alternate API using Span
     // Expected hash of the concatenated serialized states after 1...262144 iterations of KeccakF.
     // Verified against an independent implementation.
     BOOST_CHECK_EQUAL(out.ToString(), "5f4a7f2eca7d57740ef9f1a077b4fc67328092ec62620447fe27ad8ed5f7e34f");
+    BOOST_CHECK_EQUAL(out2.ToString(), "5f4a7f2eca7d57740ef9f1a077b4fc67328092ec62620447fe27ad8ed5f7e34f");
 }
 
 BOOST_AUTO_TEST_CASE(sha3_256_tests) {

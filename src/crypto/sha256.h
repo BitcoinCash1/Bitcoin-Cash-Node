@@ -4,13 +4,15 @@
 
 #pragma once
 
+#include <span.h>
+
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
 
 /** A hasher class for SHA-256. */
 class CSHA256 {
-private:
     uint32_t s[8];
     uint8_t buf[64];
     uint64_t bytes;
@@ -22,6 +24,10 @@ public:
     CSHA256 &Write(const uint8_t *data, size_t len);
     void Finalize(uint8_t hash[OUTPUT_SIZE]);
     CSHA256 &Reset();
+
+    // Support Span-style API
+    CSHA256 &Write(Span<const uint8_t> data) { return Write(data.data(), data.size()); }
+    void Finalize(Span<uint8_t> hash) { assert(hash.size() == OUTPUT_SIZE); Finalize(hash.data()); }
 };
 
 /**
