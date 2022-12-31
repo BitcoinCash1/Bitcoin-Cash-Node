@@ -26,7 +26,7 @@ BOOST_FIXTURE_TEST_SUITE(ec_multiset_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(should_be_an_empty_hash_if_empty) {
     const uint256 expectedHash{}; // all zeroes
-    const ECMultiSet::PubKeyBytes expectedPubKeyBytes = {0x0u}; // all zeroes
+    const ECMultiSet::PubKeyBytes expectedPubKeyBytes = {{0x0u}}; // all zeroes
     const ECMultiSet emptySet;
 
     BOOST_CHECK(emptySet.GetPubKeyBytes() == expectedPubKeyBytes);
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(should_calculate_multiset_hash_of_d1_d2_after_adding_and_re
 BOOST_AUTO_TEST_CASE(should_calculate_merged_multiset_hash_of_d1p_d2p_and_d3p) {
     // Setup
     const uint256 expectedValue = uint256SRev("1CBCCDA23D7CE8C5A8B008008E1738E6BF9CFFB1D5B86A92A4E62B5394A636E2");
-    const ECMultiSet::PubKeyBytes pkb0 = {0x0u};
+    const ECMultiSet::PubKeyBytes pkb0 = {{0x0u}};
 
     const CPubKey d1pk = []{
         ECMultiSet ecm;
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(should_calculate_merged_multiset_hash_of_d1p_d2p_and_d3p) {
 BOOST_AUTO_TEST_CASE(should_noop_when_adding_two_empty_sets) {
     // Setup
     const uint256 expectedValue{}; // all zeroes
-    const ECMultiSet::PubKeyBytes pkb0 = {0x0u};
+    const ECMultiSet::PubKeyBytes pkb0 = {{0x0u}};
     const ECMultiSet emptyEcm;
     ECMultiSet ecm;
 
@@ -260,7 +260,7 @@ BOOST_AUTO_TEST_CASE(should_noop_when_adding_two_empty_sets) {
 BOOST_AUTO_TEST_CASE(should_noop_when_adding_empty_pk) {
     // Setup
     const uint256 expectedValue{}; // all zeroes
-    const ECMultiSet::PubKeyBytes pkb0 = {0x0u};
+    const ECMultiSet::PubKeyBytes pkb0 = {{0x0u}};
     const ECMultiSet emptyEcm;
     ECMultiSet ecm;
 
@@ -275,7 +275,7 @@ BOOST_AUTO_TEST_CASE(should_noop_when_adding_empty_pk) {
 
 BOOST_AUTO_TEST_CASE(unserialize_zeroes_should_work) {
     // Setup
-    const ECMultiSet::PubKeyBytes pkb0 = {0x0u};
+    const ECMultiSet::PubKeyBytes pkb0 = {{0x0u}};
     ECMultiSet ecm;
 
     ecm += D1_BYTES;
@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(unserialize_zeroes_should_work) {
 
 BOOST_AUTO_TEST_CASE(unserialize_zero_prefix_but_nonzero_everything_else_should_not_work) {
     // Setup
-    const ECMultiSet::PubKeyBytes pkb01 = {0x0u, 0x01u, 0x2u, 0x3u, 0x4, 0x5u, 0x6u};
+    const ECMultiSet::PubKeyBytes pkb01 = {{0x0u, 0x01u, 0x2u, 0x3u, 0x4, 0x5u, 0x6u}};
     ECMultiSet ecm;
 
     ecm += D1_BYTES;
@@ -382,7 +382,7 @@ BOOST_AUTO_TEST_CASE(randomized_serialize_unserialize_round_trip_tests) {
 
         BOOST_REQUIRE(ecm.IsEmpty());
         BOOST_REQUIRE(ecm.GetHash() == uint256{});
-        const ECMultiSet::PubKeyBytes pkb0 = {0x0u};
+        const ECMultiSet::PubKeyBytes pkb0 = {{0x0u}};
         BOOST_REQUIRE(ecm.GetPubKeyBytes() == pkb0);
     }
 
