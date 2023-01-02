@@ -42,3 +42,13 @@ CheckAssertResult CheckAssert(std::function<void()> func, std::string_view expec
         BOOST_CHECK_MESSAGE(res == CheckAssertResult::AssertEncountered, \
                             "Failed to trap the appropriate assert for: \"" BOOST_STRINGIZE(stmt) "\""); \
     } while (0)
+
+/**
+ *  Define a macro that tests can use to check for an AssertEncountered unless running under sanitizers/unknown
+ *  platform where CheckAssert is not supported (in which case accept CheckAssertResult::Unsupported as well).
+ */
+#define BCHN_CHECK_ASSERT_IF_SUPPORTED(stmt) \
+    do { \
+        const auto res = CheckAssert([&]{ stmt; }); \
+        BOOST_CHECK(res == CheckAssertResult::AssertEncountered || res == CheckAssertResult::Unsupported); \
+    } while(0)
