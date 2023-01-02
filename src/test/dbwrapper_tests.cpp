@@ -125,6 +125,55 @@ BOOST_AUTO_TEST_CASE(dbwrapper_iterator) {
     }
 }
 
+BOOST_AUTO_TEST_CASE(dbwrapper_iterator_snapshot) {
+    // Perform tests to ensure snapshotted iterators only see the old view of the db
+    const fs::path ph = SetDataDir(std::string("dbwrapper_iterator_snapshot"));
+    CDBWrapper dbw(ph, (1 << 20), true, false, false);
+
+    const std::vector<std::pair<char, uint256>> original_view{{
+        { 'a', InsecureRand256() },
+        { 'c', InsecureRand256() },
+        { 'e', InsecureRand256() },
+    }};
+
+    const std::vector<std::pair<char, uint256>> updated_view{{
+        original_view[0],
+        { 'b', InsecureRand256() },
+    }};
+
+    for (const auto & [key, value] : original_view) {
+        dbw.Write(key, value);
+    }
+
+    std::unique_ptr<CDBIterator> it_snapshot(dbw.NewIterator(true)); // snapshotted to current view, won't see updates
+
+    auto GetAll = [](CDBIterator *it) {
+        std::vector<std::pair<char, uint256>> found;
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            char k;
+            uint256 v;
+            it->GetKey(k);
+            it->GetValue(v);
+            found.emplace_back(k, v);
+        }
+        return found;
+    };
+
+    BOOST_CHECK(GetAll(it_snapshot.get()) == original_view);
+
+    // Update db: delete 2 keys, add 1 new key, snapshotted iterator should not see this update
+    dbw.Erase('c');
+    dbw.Erase('e');
+    dbw.Write(updated_view[1].first, updated_view[1].second);
+
+    std::unique_ptr<CDBIterator> it_updated(dbw.NewIterator()); // non-snapshotted (latest view)
+
+    // ensure the two iterators have the views of the DB we expect
+    BOOST_CHECK(GetAll(it_updated.get()) == updated_view);
+    BOOST_CHECK(GetAll(it_snapshot.get()) != updated_view);
+    BOOST_CHECK(GetAll(it_snapshot.get()) == original_view);
+}
+
 // Test that we do not obfuscation if there is existing data.
 BOOST_AUTO_TEST_CASE(existing_data_no_obfuscate) {
     // We're going to share this fs::path between two wrappers

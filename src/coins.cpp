@@ -24,7 +24,7 @@ std::vector<BlockHash> CCoinsView::GetHeadBlocks() const {
 bool CCoinsView::BatchWrite(CCoinsMap &mapCoins, const BlockHash &hashBlock) {
     return false;
 }
-CCoinsViewCursor *CCoinsView::Cursor() const {
+CCoinsViewCursor *CCoinsView::Cursor(bool snapshot) const {
     return nullptr;
 }
 bool CCoinsView::HaveCoin(const COutPoint &outpoint) const {
@@ -52,8 +52,8 @@ bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   const BlockHash &hashBlock) {
     return base->BatchWrite(mapCoins, hashBlock);
 }
-CCoinsViewCursor *CCoinsViewBacked::Cursor() const {
-    return base->Cursor();
+CCoinsViewCursor *CCoinsViewBacked::Cursor(bool snapshot) const {
+    return base->Cursor(snapshot);
 }
 size_t CCoinsViewBacked::EstimateSize() const {
     return base->EstimateSize();

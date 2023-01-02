@@ -60,7 +60,7 @@ public:
     BlockHash GetBestBlock() const override;
     std::vector<BlockHash> GetHeadBlocks() const override;
     bool BatchWrite(CCoinsMap &mapCoins, const BlockHash &hashBlock) override;
-    CCoinsViewCursor *Cursor() const override;
+    CCoinsViewCursor *Cursor(bool snapshot = false) const override;
 
     //! Attempt to update from an older database format.
     //! Returns whether an error occurred.

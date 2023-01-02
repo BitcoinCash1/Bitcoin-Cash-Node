@@ -168,9 +168,9 @@ bool CBlockTreeDB::ReadLastBlockFile(int &nFile) {
     return Read(DB_LAST_BLOCK, nFile);
 }
 
-CCoinsViewCursor *CCoinsViewDB::Cursor() const {
+CCoinsViewCursor *CCoinsViewDB::Cursor(bool snapshot) const {
     CCoinsViewDBCursor *i = new CCoinsViewDBCursor(
-        const_cast<CDBWrapper &>(db).NewIterator(), GetBestBlock());
+        const_cast<CDBWrapper &>(db).NewIterator(snapshot), GetBestBlock());
     /**
      * It seems that there are no "const iterators" for LevelDB. Since we only
      * need read operations on it, use a const-cast to get around that
