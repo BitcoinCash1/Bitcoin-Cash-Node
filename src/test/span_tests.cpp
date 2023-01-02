@@ -70,9 +70,10 @@ BOOST_AUTO_TEST_CASE(span_pop) {
     BOOST_CHECK_EQUAL(span.size(), 0);
     BOOST_CHECK(span.empty());
 
-    // popping an empty span should fail an assert
-    BOOST_CHECK(CheckAssert([&]{span.pop_back();}) == CheckAssertResult::AssertEncountered);
-    BOOST_CHECK(CheckAssert([&]{span.pop_front();}) == CheckAssertResult::AssertEncountered);
+    // popping an empty span should trigger an assert - unless sanitizers or unsupported platform
+    // which is why we use BCHN_CHECK_ASSERT_IF_SUPPORTED macro
+    BCHN_CHECK_ASSERT_IF_SUPPORTED(span.pop_back());
+    BCHN_CHECK_ASSERT_IF_SUPPORTED(span.pop_front());
     BOOST_CHECK_EQUAL(span.size(), 0);
 }
 
