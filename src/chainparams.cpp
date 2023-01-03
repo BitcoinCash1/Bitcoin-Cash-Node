@@ -286,7 +286,7 @@ public:
                 {740238, BlockHash::fromHex("000000000000000002afc6fbd302f01f8cf4533f4b45207abc61d9f4297bf969")},
                 {741245, BlockHash::fromHex("000000000000000001c46d1d0f35df726bfb3e84cdc396d9edd9e2f8414191cd")},
                 {768220, BlockHash::fromHex("0000000000000000012f9d67fc9304253bdf204b65782816cbbc64913398e25b")},
-
+                {773784, BlockHash::fromHex("0000000000000000045cc0dbdd5cbbb86f7f63596e699ac5a11b2d41c65c6993")},
             }};
 
         // Data as of block
@@ -471,6 +471,7 @@ public:
                 // Upgrade 8; May 15, 2022 (MTP time >= 1652616000), first upgrade block: 1500206
                 {1500206, BlockHash::fromHex("000000000000360769353e933530c40d3f00565a4e7731ff56027e23fa74a8ef")},
                 {1526155, BlockHash::fromHex("0000000057fa336560212f0ff351ca6b2008c6c48032bc305e5b4663e837953f")},
+                {1532821, BlockHash::fromHex("00000000000000e2e476a806171758c75e6fd4c28d1435a56701df87874ddd2f")},
             }};
 
         // Data as of block
@@ -630,6 +631,7 @@ public:
                 {95465, BlockHash::fromHex("00000000a77206a2265cabc47cc2c34706ba1c5e5a5743ac6681b83d43c91a01")},
                 {115252, BlockHash::fromHex("00000000ae25e85d9e22cd6c8d72c2f5d4b0222289d801b7f633aeae3f8c6367")},
                 {121428, BlockHash::fromHex("00000000002cf277337c504f7ce708cce851d5d20cad2936fedf3be95a9ca5eb")},
+                {128070, BlockHash::fromHex("00000000044f34642fa3d91e34678737cc10a821a4696f50c187091c3df480c2")},
             }};
 
         // Data as of block
@@ -934,6 +936,7 @@ public:
                 // Upgrade9 - first block mined under upgrade9 rules for chipnet (Nov. 15, 2022)
                 {121957, BlockHash::fromHex("0000000056087dee73fb66178ca70da89dfd0be098b1a63cf6fe93934cd04c78")},
                 {122396, BlockHash::fromHex("000000000363cd56e49a46684cec1d99854c4aae662a6faee0df4c9a49dc8a33")},
+                {128042, BlockHash::fromHex("0000000010e506eeb528dd8238947c6fcdf8d752ece66517eea778650600edae")},
             }};
 
         // Data as of block
