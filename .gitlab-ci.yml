@@ -212,6 +212,26 @@ static-run-linters:
         CC: clang-11
         CXX: clang++-11
 
+.sanitizer-common:
+    needs: []
+    variables:
+        CC: clang-11
+        CXX: clang++-11
+        ASAN_OPTIONS: log_path=stdout
+        LSAN_OPTIONS: log_path=stdout
+        TSAN_OPTIONS: log_path=stdout
+        UBSAN_OPTIONS: log_path=stdout
+    before_script:
+        - mkdir build
+
+    artifacts:
+        when: on_failure
+        expire_in: 30 days
+        reports:
+            junit: build/test/tmp/*/junit_results.xml
+
+    allow_failure: true
+
 ## Debian native build
 
 build-debian:
@@ -744,6 +764,31 @@ fuzz-libfuzzer:
         - cmake -GNinja .. -DENABLE_MAN=OFF -DCCACHE=OFF -DENABLE_SANITIZERS="fuzzer;address"
         - ninja bitcoin-fuzzers link-fuzz-test_runner.py
         - ./test/fuzz/test_runner.py -l DEBUG ../qa-assets/fuzz_seed_corpus/
+
+## Sanitizers
+
+# Build and test with the undefined sanitizer
+sanitizer-undefined:
+    stage: test
+    extends: .sanitizer-common
+    cache:
+        key: sanitizer-undefined
+    script:
+        - cd build
+        - cmake -GNinja ..
+                -DCCACHE=OFF
+                -DCMAKE_BUILD_TYPE=Debug
+                -DENABLE_CLANG_TIDY=OFF
+                -DENABLE_MAN=OFF
+                -DENABLE_SANITIZERS=undefined
+        - ninja test_bitcoin
+        - ./src/test/test_bitcoin --logger=HRF:JUNIT,message,junit_unit_tests.xml
+        - ninja
+                check-bitcoin-qt
+                check-bitcoin-seeder
+                check-bitcoin-util
+                check-functional
+
 
 ## Deploy documentation
 pages:
