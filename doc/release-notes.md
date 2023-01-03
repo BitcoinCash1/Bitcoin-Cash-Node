@@ -218,6 +218,8 @@ None.
 
 - 4c30a7fcb6d9e0d042773eb3aaba89d16f595d34 RPC: Read block data directly from disk in `getblock verbosity=0`
 - 7ae7d42f9452323c8235570b98e144ac4e7abe6c Remove spurious lock
+- 8ba475f4c6a2e800859b52b4fe2446ebcfcf6ec3 Update chainparamsconstants.h for version v26.0.0
+- e1d39e5c4d143a3561e8fbd1fe9fb64f8d567ff8 Update checkpoints for v26.0.0 (main, test, test4, and chip)
 
 #### GUI
 
@@ -268,6 +270,7 @@ None.
 #### Seeds / seeder software
 
 - 88f1ac6f45860aa1cc44e3862466acdb0778318c Update regex in makeseeds.py to accept BCHN v26.x.x
+- e8a8d5f1a71924b767bdbdd2b1e6f93f0d4fa8d0 Updated seeds for mainnet for v26.0.0
 
 #### Maintainer tools
 
