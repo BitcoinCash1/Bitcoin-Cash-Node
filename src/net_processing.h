@@ -11,6 +11,9 @@
 #include <sync.h>
 #include <validationinterface.h>
 
+#include <atomic>
+#include <memory>
+
 extern RecursiveMutex cs_main;
 
 /**
@@ -49,6 +52,7 @@ class PeerLogicValidation final : public CValidationInterface,
 private:
     CConnman *const connman;
     BanMan *const m_banman;
+    std::shared_ptr<std::atomic_bool> deleted; ///< Used to suppress further scheduler tasks if this instance is gone.
 
     bool SendRejectsAndCheckIfShouldDiscourage(CNode *pnode, bool enable_bip61)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
@@ -56,6 +60,8 @@ private:
 public:
     PeerLogicValidation(CConnman *connman, BanMan *banman,
                         CScheduler &scheduler, bool enable_bip61);
+
+    ~PeerLogicValidation();
 
     /**
      * Overridden from CValidationInterface.

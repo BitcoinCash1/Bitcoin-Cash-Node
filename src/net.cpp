@@ -2292,7 +2292,7 @@ void CConnman::SetNetworkActive(bool active) {
 }
 
 CConnman::CConnman(const Config &configIn, uint64_t nSeed0In, uint64_t nSeed1In)
-    : config(&configIn), nSeed0(nSeed0In), nSeed1(nSeed1In) {
+    : config(&configIn), nSeed0(nSeed0In), nSeed1(nSeed1In), deleted(std::make_unique<std::atomic_bool>(false)) {
     SetTryNewOutboundPeer(false);
 
     Options connOptions;
@@ -2472,7 +2472,8 @@ bool CConnman::Start(CScheduler &scheduler, const Options &connOptions) {
 
     // Dump network addresses
     scheduler.scheduleEvery(
-        [this]() {
+        [this, this_deleted = this->deleted]() {
+            if (*this_deleted) return false; // guard against case where this instance may be deleted before scheduler
             this->DumpAddresses();
             return true;
         },
@@ -2578,6 +2579,7 @@ void CConnman::DeleteNode(CNode *pnode) {
 CConnman::~CConnman() {
     Interrupt();
     Stop();
+    *deleted = true; // guard againse use-after-free in case our periodic lambda is triggered again
 }
 
 void CConnman::SetServices(const CService &addr, ServiceFlags nServices) {

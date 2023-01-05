@@ -1189,8 +1189,8 @@ static bool BlockRequestAllowed(const CBlockIndex *pindex,
 PeerLogicValidation::PeerLogicValidation(CConnman *connmanIn, BanMan *banman,
                                          CScheduler &scheduler,
                                          bool enable_bip61)
-    : connman(connmanIn), m_banman(banman), m_stale_tip_check_time(0),
-      m_enable_bip61(enable_bip61) {
+    : connman(connmanIn), m_banman(banman), deleted(std::make_shared<std::atomic_bool>(false)),
+      m_stale_tip_check_time(0), m_enable_bip61(enable_bip61) {
     // Initialize global variables that cannot be constructed at startup.
     recentRejects.reset(new CRollingBloomFilter(120000, 0.000001));
 
@@ -1203,11 +1203,16 @@ PeerLogicValidation::PeerLogicValidation(CConnman *connmanIn, BanMan *banman,
         EXTRA_PEER_CHECK_INTERVAL < STALE_CHECK_INTERVAL,
         "peer eviction timer should be less than stale tip check timer");
     scheduler.scheduleEvery(
-        [this, consensusParams]() {
+        [this, consensusParams, this_deleted = this->deleted]() {
+            if (*this_deleted) return false; // guard against case where this instance may be deleted before scheduler
             this->CheckForStaleTipAndEvictPeers(consensusParams);
             return true;
         },
         EXTRA_PEER_CHECK_INTERVAL * 1000);
+}
+
+PeerLogicValidation::~PeerLogicValidation() {
+    *deleted = true; // guard againse use-after-free in case our periodic lambda is triggered again
 }
 
 /**
