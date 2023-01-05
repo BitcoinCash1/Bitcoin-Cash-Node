@@ -1203,7 +1203,7 @@ PeerLogicValidation::PeerLogicValidation(CConnman *connmanIn, BanMan *banman,
         EXTRA_PEER_CHECK_INTERVAL < STALE_CHECK_INTERVAL,
         "peer eviction timer should be less than stale tip check timer");
     scheduler.scheduleEvery(
-        [this, &consensusParams]() {
+        [this, consensusParams]() {
             this->CheckForStaleTipAndEvictPeers(consensusParams);
             return true;
         },
