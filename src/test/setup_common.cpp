@@ -206,10 +206,7 @@ TestingSetup::TestingSetup(const std::string &chainName)
 }
 
 TestingSetup::~TestingSetup() {
-    scheduler.stop();
-    if (schedulerThread.joinable()) {
-        schedulerThread.join();
-    }
+    StopScheduler();
     StopScriptCheckWorkerThreads();
     GetMainSignals().FlushBackgroundCallbacks();
     rpc::UnregisterSubmitBlockCatcher();
@@ -220,6 +217,16 @@ TestingSetup::~TestingSetup() {
     pcoinsTip.reset();
     pcoinsdbview.reset();
     pblocktree.reset();
+}
+
+void TestingSetup::StopScheduler() {
+    if (!schedulerIsStopped) {
+        scheduler.stop();
+        if (schedulerThread.joinable()) {
+            schedulerThread.join();
+        }
+        schedulerIsStopped = true;
+    }
 }
 
 TestChain100Setup::TestChain100Setup()

@@ -24,5 +24,8 @@ WalletTestingSetup::WalletTestingSetup(const std::string &chainName)
 }
 
 WalletTestingSetup::~WalletTestingSetup() {
+    // Ensure the TestingSetup scheduler is stopped before we delete our temporary wallet to avoid defunct delivery of
+    // signals to a now-deleted wallet.
+    StopScheduler();
     UnregisterValidationInterface(&m_wallet);
 }
