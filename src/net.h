@@ -511,6 +511,8 @@ private:
 
     std::atomic<int64_t> m_next_send_inv_to_incoming{0};
 
+    std::shared_ptr<std::atomic_bool> deleted; ///< Used to suppress further scheduler tasks if this instance is gone.
+
     friend struct CConnmanTest;
 };
 
