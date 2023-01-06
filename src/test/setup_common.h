@@ -112,6 +112,14 @@ struct TestingSetup : public BasicTestingSetup {
     explicit TestingSetup(
         const std::string &chainName = CBaseChainParams::MAIN);
     ~TestingSetup() override;
+
+protected:
+    /// Call this from subclass fixture d'tors to stop the scheduler early before deleting objects that may have work
+    /// enqueued on the scheduler. Added for WalletTestingSetup to stop the scheduler before its temp wallet is deleted.
+    void StopScheduler();
+
+private:
+    bool schedulerIsStopped = false;
 };
 
 class CBlock;
