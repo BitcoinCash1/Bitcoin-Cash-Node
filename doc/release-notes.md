@@ -259,6 +259,8 @@ None.
 #### Tests / test framework
 
 - 24479388842befdc54751d4eb8b00e1ad91150fd Fix for rpc_blockchain.py intermittent failure.
+- 4355d67db96fcef6a46cc5f79dda30081405081d Fix potential UB in wallet test fixture
+- 48d8116976cbdf3898187fb39c1bb3d82b634a13 Prevent theoretical UB for CConnMan and PeerLogicValidation mis-use in tests
 - 5256867daae1277108fafd7b629490b80405c504 [fuzz] Avoid double and triple copying of data when running fuzzers
 - d7273ec070786b2eadbde50dad77a2b86be5c890 Tests for C++20 work-alike Span
 - f3e488a853f3c02e45c6eb494c213bfab5e44537 Temporarily disable payment server tests which fail due to expired certificate
@@ -294,3 +296,4 @@ None.
 - 50b7cb4fe3c242a5c147ca8a858ee758023c3483 [backport] tests: Modify rpc_bind to conform to #14532 behaviour.
 - af4a29dd844f7347fa77bd70e9e9587542d5f083 [backport] CNetAddr: Add IsBindAny method to check for INADDR_ANY
 - e07f97db146e61bbc8a8ab018cd09c6b73e86494 [backport] rpcbind: Warn about exposing RPC to untrusted networks
+- 14cab1395fc845c2b3f2c654e5a4f18958dc16df [backport] net: fix use-after-free in tests
