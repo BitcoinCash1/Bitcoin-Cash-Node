@@ -32,6 +32,7 @@ nav:
   - Setup instructions: doc/README.md
   - Release notes:
       - Current release notes: doc/release-notes.md
+      - Bitcoin Cash Node v26.0.0: doc/release-notes/release-notes-26.0.0.md
       - Bitcoin Cash Node v25.0.0: doc/release-notes/release-notes-25.0.0.md
       - Bitcoin Cash Node v24.1.0: doc/release-notes/release-notes-24.1.0.md
       - Bitcoin Cash Node v24.0.0: doc/release-notes/release-notes-24.0.0.md
