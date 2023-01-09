@@ -9,7 +9,7 @@ set(CMAKE_USER_MAKE_RULES_OVERRIDE
 )
 
 project(bitcoin-cash-node
-	VERSION 26.0.0
+	VERSION 26.0.1
 	DESCRIPTION "Bitcoin Cash Node is a full node implementation of the Bitcoin Cash protocol."
 	HOMEPAGE_URL "https://www.bitcoincashnode.org"
 )
@@ -18,7 +18,7 @@ project(bitcoin-cash-node
 set(PACKAGE_NAME "Bitcoin Cash Node")
 
 # Copyright
-set(COPYRIGHT_YEAR 2022)
+set(COPYRIGHT_YEAR 2023)
 set(COPYRIGHT_HOLDERS "The %s developers")
 set(COPYRIGHT_HOLDERS_SUBSTITUTION Bitcoin)
 string(REPLACE "%s" ${COPYRIGHT_HOLDERS_SUBSTITUTION} COPYRIGHT_HOLDERS_FINAL ${COPYRIGHT_HOLDERS})
