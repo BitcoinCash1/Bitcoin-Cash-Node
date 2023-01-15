@@ -35,6 +35,9 @@ TODO
 - The `getpeerinfo` RPC method results now include two new additional data items for each peer: `addr_processed` and
   `addr_rate_limited`. See the `getpeerinfo` RPC help for a description of these new items.
 
+- The `-walletnotify` option now understands an additional %-token: `%w`, which it will replace with the wallet name
+  when executing the external command. For additional information see the help `-hh` for `bitcoind`.
+
 ## Removed functionality
 
 TODO
