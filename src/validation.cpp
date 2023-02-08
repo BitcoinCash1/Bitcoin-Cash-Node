@@ -57,6 +57,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <limits>
 #include <list>
 #include <optional>
