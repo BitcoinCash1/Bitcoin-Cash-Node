@@ -18,7 +18,9 @@ TODO
 
 ## Network changes
 
-TODO
+Unsolicited `ADDR` messages from network peers are now rate-limited to an average rate of 0.1 addresses per second,
+with allowance for burts of up to 1000 addresses. This change should have no noticeable deleterious effect on the
+peer-to-peer network for well-behaved peers, and was merely added as a performance optimization.
 
 ## Added functionality
 
@@ -30,7 +32,8 @@ TODO
 
 ## Modified functionality
 
-TODO
+- The `getpeerinfo` RPC method results now include two new additional data items for each peer: `addr_processed` and
+  `addr_rate_limited`. See the `getpeerinfo` RPC help for a description of these new items.
 
 ## Removed functionality
 

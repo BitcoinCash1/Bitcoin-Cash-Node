@@ -71,6 +71,17 @@ static_assert(MAX_PROTOCOL_MESSAGE_LENGTH > MAX_INV_SZ * sizeof(CInv),
 static const unsigned int MAX_LOCATOR_SZ = 101;
 /** The maximum number of addresses from our addrman to return in response to a getaddr message. */
 static constexpr size_t MAX_ADDR_TO_SEND = 1000;
+/**
+ *  The maximum rate of address records we're willing to process on average. Can be bypassed using
+ *  the NetPermissionFlags::PF_ADDR permission.
+*/
+static constexpr double MAX_ADDR_RATE_PER_SECOND = 0.1;
+/**
+ *  The soft limit of the address processing token bucket (the regular MAX_ADDR_RATE_PER_SECOND
+ *  based increments won't go above this, but the MAX_ADDR_TO_SEND increment following GETADDR
+ *  is exempt from this limit).
+*/
+static constexpr size_t MAX_ADDR_PROCESSING_TOKEN_BUCKET = MAX_ADDR_TO_SEND;
 /** Maximum length of the user agent string in `version` message */
 static const unsigned int MAX_SUBVERSION_LENGTH = 256;
 /** Maximum number of automatic outgoing nodes */
@@ -635,6 +646,8 @@ struct CNodeStats {
     // Bind address of our side of the connection
     CAddress addrBind;
     uint32_t m_mapped_as;
+    uint64_t m_addr_processed = 0;
+    uint64_t m_addr_rate_limited = 0;
 };
 
 class CNetMessage {
@@ -753,6 +766,19 @@ public:
      * messages, implying a preference to receive ADDRv2 instead of ADDR ones.
      */
     std::atomic_bool m_wants_addrv2{false};
+
+    /**
+     *  Number of addresses that can be processed from this peer. Start at 1 to
+     *  permit self-announcement. Owned-by: msghand thread, hence no locks.
+     */
+    double m_addr_token_bucket{1.0};
+    /** When m_addr_token_bucket was last updated. Owned-by: msghand thread. */
+    std::chrono::microseconds m_addr_token_timestamp{GetTime<std::chrono::microseconds>()};
+    /** Total number of addresses that were dropped due to rate limiting. */
+    std::atomic<uint64_t> m_addr_rate_limited{0};
+    /** Total number of addresses that were processed (excludes rate-limited ones). */
+    std::atomic<uint64_t> m_addr_processed{0};
+
     const bool fInbound;
     std::atomic_bool fSuccessfullyConnected{false};
     std::atomic_bool fDisconnect{false};
