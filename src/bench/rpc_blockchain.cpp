@@ -4,8 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <bench/bench.h>
+#include <bench/blockdata.h>
 #include <bench/data.h>
-
+#include <bench/json_util.h>
 #include <chain.h>
 #include <chainparams.h>
 #include <config.h>
@@ -16,32 +17,36 @@
 
 #include <univalue.h>
 
-static void RPCBlockVerbose(const std::vector<uint8_t> &data, benchmark::State &state) {
+
+static void RPCBlockVerbose(int blockHeight, benchmark::State &state, TxVerbosity verbosity) {
     SelectParams(CBaseChainParams::MAIN);
+    BlockData blockData(blockHeight);
 
-    CDataStream stream(data, SER_NETWORK, PROTOCOL_VERSION);
-    char a = '\0';
-    stream.write(&a, 1); // Prevent compaction
-
-    CBlock block;
-    stream >> block;
-
-    CBlockIndex blockindex;
-    const auto blockHash = block.GetHash();
-    blockindex.phashBlock = &blockHash;
-    blockindex.nBits = block.nBits;
+    const auto blockuv = blockToJSON(GetConfig(), blockData.block, &blockData.blockIndex, &blockData.blockIndex,
+                                     verbosity);
+    if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT) {
+        assert(CheckTxsHavePrevout(blockuv));
+    }
 
     BENCHMARK_LOOP {
-        (void)blockToJSON(GetConfig(), block, &blockindex, &blockindex, TxVerbosity::SHOW_DETAILS);
+        (void)blockToJSON(GetConfig(), blockData.block, &blockData.blockIndex, &blockData.blockIndex,
+                          TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
     }
 }
 
 static void RPCBlockVerbose_1MB(benchmark::State &state) {
-    RPCBlockVerbose(benchmark::data::Get_block413567(), state);
+    RPCBlockVerbose(413567, state, TxVerbosity::SHOW_DETAILS);
 }
 static void RPCBlockVerbose_32MB(benchmark::State &state) {
-    RPCBlockVerbose(benchmark::data::Get_block556034(), state);
+    RPCBlockVerbose(556034, state, TxVerbosity::SHOW_DETAILS);
+}static void RPCBlockVeryVerbose_1MB(benchmark::State &state) {
+    RPCBlockVerbose(413567, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void RPCBlockVeryVerbose_32MB(benchmark::State &state) {
+    RPCBlockVerbose(556034, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
 }
 
 BENCHMARK(RPCBlockVerbose_1MB, 23);
 BENCHMARK(RPCBlockVerbose_32MB, 1);
+BENCHMARK(RPCBlockVeryVerbose_1MB, 23);
+BENCHMARK(RPCBlockVeryVerbose_32MB, 1);

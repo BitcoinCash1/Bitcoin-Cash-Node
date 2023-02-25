@@ -26,6 +26,7 @@ add_executable(bench_bitcoin
 	bench.cpp
 	bench_bitcoin.cpp
 	block_assemble.cpp
+	blockdata.cpp
 	cashaddr.cpp
 	ccoins_caching.cpp
 	chained_tx.cpp
@@ -41,6 +42,8 @@ add_executable(bench_bitcoin
 	duplicate_inputs.cpp
 	examples.cpp
 	gcs_filter.cpp
+	json.cpp
+	json_util.cpp
 	lockedpool.cpp
 	mempool_eviction.cpp
 	merkle_root.cpp
@@ -49,7 +52,6 @@ add_executable(bench_bitcoin
 	rollingbloom.cpp
 	rpc_blockchain.cpp
 	rpc_mempool.cpp
-	json.cpp
 	util_string.cpp
 	util_time.cpp
 	verify_script.cpp
