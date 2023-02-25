@@ -4,34 +4,27 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <bench/bench.h>
-#include <bench/data.h>
-
+#include <bench/blockdata.h>
+#include <bench/json_util.h>
 #include <chain.h>
 #include <chainparams.h>
 #include <config.h>
-#include <validation.h>
-#include <streams.h>
 #include <consensus/validation.h>
 #include <rpc/blockchain.h>
 #include <rpc/protocol.h>
 
 #include <univalue.h>
 
-static void JSONReadWriteBlock(const std::vector<uint8_t> &data, unsigned int pretty, bool write, benchmark::State &state) {
+static void JSONReadWriteBlock(int blockHeight, unsigned int pretty, bool write, benchmark::State &state,
+                               TxVerbosity verbosity) {
     SelectParams(CBaseChainParams::MAIN);
+    BlockData blockData(blockHeight);
 
-    CDataStream stream(data, SER_NETWORK, PROTOCOL_VERSION);
-    char a = '\0';
-    stream.write(&a, 1); // Prevent compaction
-
-    CBlock block;
-    stream >> block;
-
-    CBlockIndex blockindex;
-    const auto blockHash = block.GetHash();
-    blockindex.phashBlock = &blockHash;
-    blockindex.nBits = block.nBits;
-    const auto blockuv = blockToJSON(GetConfig(), block, &blockindex, &blockindex, TxVerbosity::SHOW_DETAILS);
+    const auto blockuv = blockToJSON(GetConfig(), blockData.block, &blockData.blockIndex, &blockData.blockIndex,
+                                     verbosity);
+    if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT) {
+        assert(CheckTxsHavePrevout(blockuv));
+    }
 
     if (write) {
         BENCHMARK_LOOP {
@@ -47,23 +40,43 @@ static void JSONReadWriteBlock(const std::vector<uint8_t> &data, unsigned int pr
     }
 }
 
+
+
 static void JSONReadBlock_1MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block413567(), 0, false, state);
+    JSONReadWriteBlock(413567, 0, false, state, TxVerbosity::SHOW_DETAILS);
 }
 static void JSONReadBlock_32MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block556034(), 0, false, state);
+    JSONReadWriteBlock(556034, 0, false, state, TxVerbosity::SHOW_DETAILS);
 }
 static void JSONWriteBlock_1MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block413567(), 0, true, state);
+    JSONReadWriteBlock(413567, 0, true, state, TxVerbosity::SHOW_DETAILS);
 }
 static void JSONWriteBlock_32MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block556034(), 0, true, state);
+    JSONReadWriteBlock(556034, 0, true, state, TxVerbosity::SHOW_DETAILS);
 }
 static void JSONWritePrettyBlock_1MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block413567(), 4, true, state);
+    JSONReadWriteBlock(413567, 4, true, state, TxVerbosity::SHOW_DETAILS);
 }
 static void JSONWritePrettyBlock_32MB(benchmark::State &state) {
-    JSONReadWriteBlock(benchmark::data::Get_block556034(), 4, true, state);
+    JSONReadWriteBlock(556034, 4, true, state, TxVerbosity::SHOW_DETAILS);
+}
+static void JSONReadVeryVerboseBlock_1MB(benchmark::State &state) {
+    JSONReadWriteBlock(413567, 0, false, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void JSONReadVeryVerboseBlock_32MB(benchmark::State &state) {
+    JSONReadWriteBlock(556034, 0, false, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void JSONWriteVeryVerboseBlock_1MB(benchmark::State &state) {
+    JSONReadWriteBlock(413567, 0, true, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void JSONWriteVeryVerboseBlock_32MB(benchmark::State &state) {
+    JSONReadWriteBlock(556034, 0, true, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void JSONWriteVeryVerbosePrettyBlock_1MB(benchmark::State &state) {
+    JSONReadWriteBlock(413567, 4, true, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
+}
+static void JSONWriteVeryVerbosePrettyBlock_32MB(benchmark::State &state) {
+    JSONReadWriteBlock(556034, 4, true, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
 }
 
 BENCHMARK(JSONReadBlock_1MB, 18);
@@ -72,3 +85,9 @@ BENCHMARK(JSONWriteBlock_1MB, 52);
 BENCHMARK(JSONWriteBlock_32MB, 1);
 BENCHMARK(JSONWritePrettyBlock_1MB, 47);
 BENCHMARK(JSONWritePrettyBlock_32MB, 1);
+BENCHMARK(JSONReadVeryVerboseBlock_1MB, 18);
+BENCHMARK(JSONReadVeryVerboseBlock_32MB, 1);
+BENCHMARK(JSONWriteVeryVerboseBlock_1MB, 52);
+BENCHMARK(JSONWriteVeryVerboseBlock_32MB, 1);
+BENCHMARK(JSONWriteVeryVerbosePrettyBlock_1MB, 47);
+BENCHMARK(JSONWriteVeryVerbosePrettyBlock_32MB, 1);
