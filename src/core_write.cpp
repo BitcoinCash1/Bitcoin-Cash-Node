@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -184,8 +184,8 @@ std::string ScriptToAsmStr(const CScript &script, bool fAttemptSighashDecode) {
     return str;
 }
 
-std::string EncodeHexTx(const CTransaction &tx, const int serializeFlags) {
-    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION | serializeFlags);
+std::string EncodeHexTx(const CTransaction &tx) {
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << tx;
     return HexStr(ssTx);
 }
@@ -250,7 +250,7 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
 }
 
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex,
-                          int serialize_flags, const CTxUndo* txundo, TxVerbosity verbosity) {
+                          const CTxUndo* txundo, TxVerbosity verbosity) {
     bool include_blockhash = !hashBlock.IsNull();
     // If available, use Undo data to calculate the fee. Note that txundo == nullptr
     // for coinbase transactions and for transactions where undo data is unavailable.
@@ -347,7 +347,7 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
     if (include_hex) {
         // The hex-encoded transaction. Used the name "hex" to be consistent
         // with the verbose output of "getrawtransaction".
-        entry.emplace_back("hex", EncodeHexTx(tx, serialize_flags));
+        entry.emplace_back("hex", EncodeHexTx(tx));
     }
 
     return entry;

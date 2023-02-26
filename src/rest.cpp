@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -244,8 +244,7 @@ static bool rest_block(const Config &config, HTTPRequest *req,
 
     switch (rf) {
         case RetFormat::BINARY: {
-            CDataStream ssBlock(SER_NETWORK,
-                                PROTOCOL_VERSION | RPCSerializationFlags());
+            CDataStream ssBlock(SER_NETWORK, PROTOCOL_VERSION);
             ssBlock << block;
             std::string binaryBlock = ssBlock.str();
             req->WriteHeader("Content-Type", "application/octet-stream");
@@ -254,8 +253,7 @@ static bool rest_block(const Config &config, HTTPRequest *req,
         }
 
         case RetFormat::HEX: {
-            CDataStream ssBlock(SER_NETWORK,
-                                PROTOCOL_VERSION | RPCSerializationFlags());
+            CDataStream ssBlock(SER_NETWORK, PROTOCOL_VERSION);
             ssBlock << block;
             std::string strHex = HexStr(ssBlock) + "\n";
             req->WriteHeader("Content-Type", "text/plain");
@@ -396,7 +394,7 @@ static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
     switch (rf) {
         case RetFormat::BINARY: {
             CDataStream ssTx(SER_NETWORK,
-                             PROTOCOL_VERSION | RPCSerializationFlags());
+                             PROTOCOL_VERSION);
             ssTx << tx;
 
             std::string binaryTx = ssTx.str();
@@ -407,7 +405,7 @@ static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
 
         case RetFormat::HEX: {
             CDataStream ssTx(SER_NETWORK,
-                             PROTOCOL_VERSION | RPCSerializationFlags());
+                             PROTOCOL_VERSION);
             ssTx << tx;
 
             std::string strHex = HexStr(ssTx) + "\n";
@@ -417,7 +415,7 @@ static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
         }
 
         case RetFormat::JSON: {
-            UniValue::Object objTx = TxToUniv(config, *tx, hashBlock, true, RPCSerializationFlags());
+            UniValue::Object objTx = TxToUniv(config, *tx, hashBlock, true);
             std::string strJSON = UniValue::stringify(objTx) + "\n";
             req->WriteHeader("Content-Type", "application/json");
             req->WriteReply(HTTP_OK, strJSON);

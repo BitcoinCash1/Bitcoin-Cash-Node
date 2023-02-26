@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The Bitcoin Core developers
-// Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2021-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,6 @@
 #include <config.h>
 #include <primitives/blockhash.h>
 #include <primitives/txid.h>
-#include <rpc/server.h>
 #include <streams.h>
 #include <util/system.h>
 #include <validation.h>
@@ -182,7 +181,7 @@ bool CZMQPublishRawBlockNotifier::NotifyBlock(const CBlockIndex *pindex) {
              pindex->GetBlockHash().GetHex());
 
     const Config &config = GetConfig();
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION | RPCSerializationFlags());
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     {
         LOCK(cs_main);
         CBlock block;
@@ -202,7 +201,7 @@ bool CZMQPublishRawTransactionNotifier::NotifyTransaction(
     const CTransaction &transaction) {
     TxId txid = transaction.GetId();
     LogPrint(BCLog::ZMQ, "zmq: Publish rawtx %s\n", txid.GetHex());
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION | RPCSerializationFlags());
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << transaction;
     return SendZmqMessage(MSG_RAWTX, &(*ss.begin()), ss.size());
 }
@@ -217,7 +216,7 @@ bool CZMQPublishHashDoubleSpendNotifier::NotifyDoubleSpend(const CTransaction &t
 
 bool CZMQPublishRawDoubleSpendNotifier::NotifyDoubleSpend(const CTransaction &transaction) {
     LogPrint(BCLog::ZMQ, "zmq: Publish rawds %s\n", transaction.GetId().GetHex());
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION | RPCSerializationFlags());
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << transaction;
     return SendZmqMessage(MSG_RAWDS, &*ss.begin(), ss.size());
 }

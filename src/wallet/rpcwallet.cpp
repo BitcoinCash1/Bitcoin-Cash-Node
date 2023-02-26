@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -2074,7 +2074,7 @@ static UniValue gettransaction(const Config &config,
                      nullptr /* filter_label */);
     entry.emplace_back("details", std::move(details));
 
-    entry.emplace_back("hex", EncodeHexTx(*wtx.tx, RPCSerializationFlags()));
+    entry.emplace_back("hex", EncodeHexTx(*wtx.tx));
 
     return entry;
 }

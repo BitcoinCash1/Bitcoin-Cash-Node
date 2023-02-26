@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -146,8 +146,7 @@ UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CB
             const CTransactionRef& tx = block.vtx[i];
             // coinbase transaction (i.e. i == 0) doesn't have undo data
             const CTxUndo* txundo = (have_undo && i > 0u) ? &blockUndo.vtxundo.at(i - 1u) : nullptr;
-            txs.push_back(TxToUniv(config, *tx, /*block_hash=*/uint256(), /*include_hex=*/true, RPCSerializationFlags(),
-                                   txundo, verbosity));
+            txs.push_back(TxToUniv(config, *tx, /*block_hash=*/uint256(), /*include_hex=*/true, txundo, verbosity));
         }
         break;
 
@@ -904,7 +903,7 @@ static std::vector<uint8_t> ReadRawBlockUnchecked(const Config &config, const CB
     std::vector<uint8_t> rawBlock;
     GenericReadBlockHelper([&]{
         return ReadRawBlockFromDisk(rawBlock, pblockindex, config.GetChainParams(), SER_NETWORK,
-                                    PROTOCOL_VERSION | RPCSerializationFlags());
+                                    PROTOCOL_VERSION);
     });
     return rawBlock;
 }
