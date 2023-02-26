@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -77,14 +77,13 @@ SigHashType ParseSighashString(const UniValue &sighash);
 // core_write.cpp
 UniValue ValueFromAmount(const Amount &amount);
 std::string FormatScript(const CScript &script);
-std::string EncodeHexTx(const CTransaction &tx, const int serializeFlags = 0);
+std::string EncodeHexTx(const CTransaction &tx);
 std::string SighashToStr(uint8_t sighash_type);
 UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptPubKey, bool fIncludeHex,
                                     bool fIncludeP2SH = false);
 UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address);
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex = true,
-                          int serialize_flags = 0, const CTxUndo* txundo = nullptr,
-                          TxVerbosity verbosity = TxVerbosity::SHOW_DETAILS);
+                          const CTxUndo* txundo = nullptr, TxVerbosity verbosity = TxVerbosity::SHOW_DETAILS);
 UniValue::Object TokenDataToUniv(const token::OutputData &token);
 
 /// Returns a UniValue::VSTR (string) for any token amount.  We are forced to unconditionally wrap token amounts

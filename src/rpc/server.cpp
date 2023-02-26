@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
-// Copyright (c) 2018-2022 The Bitcoin developers
+// Copyright (c) 2018-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -652,10 +652,6 @@ void RPCRunLater(const std::string &name, std::function<void()> func,
     deadlineTimers.emplace(
         name, std::unique_ptr<RPCTimerBase>(
                   timerInterface->NewTimer(func, nSeconds * 1000)));
-}
-
-int RPCSerializationFlags() {
-    return 0;
 }
 
 CRPCTable tableRPC;

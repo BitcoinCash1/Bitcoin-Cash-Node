@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -22,8 +22,6 @@
 #include <string>
 
 #include <univalue.h>
-
-static const unsigned int DEFAULT_RPC_SERIALIZE_VERSION = 1;
 
 class ContextFreeRPCCommand;
 
@@ -280,8 +278,3 @@ void StartRPC();
 void InterruptRPC();
 void StopRPC();
 std::string JSONRPCExecBatch(Config& config, RPCServer& rpcServer, const JSONRPCRequest& req, UniValue::Array&& vReq);
-
-/**
- * Retrieves any serialization flags requested in command line argument
- */
-int RPCSerializationFlags();

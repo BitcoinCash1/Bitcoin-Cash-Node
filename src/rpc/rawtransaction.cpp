@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -48,7 +48,7 @@ static UniValue::Object TxToJSON(const Config &config, const CTransaction &tx, c
     // Blockchain contextual information (confirmations and blocktime) is not
     // available to code in bitcoin-common, so we query them here and push the
     // data into the returned UniValue.
-    UniValue::Object entry = TxToUniv(config, tx, uint256(), true, RPCSerializationFlags());
+    UniValue::Object entry = TxToUniv(config, tx, uint256(), true);
 
     if (!hashBlock.IsNull()) {
         LOCK(cs_main);
@@ -372,7 +372,7 @@ static UniValue getrawtransaction(const Config &config,
     }
 
     if (!fVerbose) {
-        return EncodeHexTx(*tx, RPCSerializationFlags());
+        return EncodeHexTx(*tx);
     }
 
     UniValue::Object result = TxToJSON(config, *tx, hash_block);
@@ -869,7 +869,7 @@ static UniValue decoderawtransaction(const Config &config,
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
     }
 
-    return TxToUniv(config, CTransaction(std::move(mtx)), uint256(), false, RPCSerializationFlags());
+    return TxToUniv(config, CTransaction(std::move(mtx)), uint256(), false);
 }
 
 static UniValue decodescript(const Config &config,
@@ -1611,7 +1611,7 @@ static UniValue decodepsbt(const Config &config,
     UniValue::Object result;
 
     // Add the decoded tx
-    result.emplace_back("tx", TxToUniv(config, CTransaction(*psbtx.tx), uint256(), false, RPCSerializationFlags()));
+    result.emplace_back("tx", TxToUniv(config, CTransaction(*psbtx.tx), uint256(), false));
 
     // Unknown data
     if (!psbtx.unknown.empty()) {
