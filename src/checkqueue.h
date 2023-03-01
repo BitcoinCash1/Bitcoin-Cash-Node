@@ -10,6 +10,7 @@
 #include <util/threadnames.h>
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 template <typename T> class CCheckQueueControl;
@@ -17,7 +18,8 @@ template <typename T> class CCheckQueueControl;
 /**
  * Queue for verifications that have to be performed.
  * The verifications are represented by a type T, which must provide an
- * operator(), returning a bool.
+ * operator(), returning a bool. For optimal performance, T should be
+ * efficiently move-constructible and move-assignable.
  *
  * One thread (the master) is assumed to push batches of verifications onto the
  * queue, where they are processed by N-1 worker threads. When the master is
@@ -114,12 +116,11 @@ private:
                 nNow = std::max(
                     1U, std::min(nBatchSize, (unsigned int)queue.size() /
                                                  (nTotal + nIdle + 1)));
-                vChecks.resize(nNow);
                 for (unsigned int i = 0; i < nNow; i++) {
                     // We want the lock on the mutex to be as short as possible,
-                    // so swap jobs from the global queue to the local batch
-                    // vector instead of copying.
-                    vChecks[i].swap(queue.back());
+                    // move jobs from the global queue to the local batch
+                    // vector.  Assumption: moving is fast.
+                    vChecks.push_back(std::move(queue.back()));
                     queue.pop_back();
                 }
                 // Check whether we need to do work at all
@@ -169,8 +170,7 @@ public:
     void Add(std::vector<T> &vChecks) {
         LOCK(m_mutex);
         for (T &check : vChecks) {
-            queue.push_back(T());
-            check.swap(queue.back());
+            queue.push_back(std::move(check));
         }
         nTodo += vChecks.size();
         if (vChecks.size() == 1) {

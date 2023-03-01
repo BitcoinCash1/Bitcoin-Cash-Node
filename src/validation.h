@@ -606,7 +606,8 @@ bool CheckSequenceLocks(const CTxMemPool &pool, const CTransaction &tx,
  * scripts have failed.
  */
 class CScriptCheck {
-private:
+    /* Note: For maximum performance, please be sure that all the below types are efficiently move-constructible and
+       move-assignable. */
     ScriptExecutionContextOpt context;
     uint32_t nFlags{};
     bool cacheStore{};
@@ -630,17 +631,6 @@ public:
           pBlockLimitSigChecks(pBlockLimitSigChecksIn) {}
 
     bool operator()();
-
-    void swap(CScriptCheck &check) {
-        context.swap(check.context);
-        std::swap(nFlags, check.nFlags);
-        std::swap(cacheStore, check.cacheStore);
-        std::swap(error, check.error);
-        std::swap(metrics, check.metrics);
-        std::swap(txdata, check.txdata);
-        std::swap(pTxLimitSigChecks, check.pTxLimitSigChecks);
-        std::swap(pBlockLimitSigChecks, check.pBlockLimitSigChecks);
-    }
 
     ScriptError GetScriptError() const { return error; }
 
