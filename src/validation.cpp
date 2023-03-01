@@ -1425,9 +1425,14 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
 
         // Verify signature
         CScriptCheck check(contextVec[i], flags, sigCacheStore, txdata, &txLimitSigChecks, pBlockLimitSigChecks);
+
+        // If pvChecks is not null, defer the check execution to the caller.
         if (pvChecks) {
             pvChecks->push_back(std::move(check));
-        } else if (!check()) {
+            continue;
+        }
+
+        if (!check()) {
             ScriptError scriptError = check.GetScriptError();
             // Compute flags without the optional standardness flags.
             // This differs from MANDATORY_SCRIPT_VERIFY_FLAGS as it contains
