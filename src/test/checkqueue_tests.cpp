@@ -27,7 +27,6 @@ static const int SCRIPT_CHECK_THREADS = 3;
 
 struct FakeCheck {
     bool operator()() { return true; }
-    void swap(FakeCheck &x){};
 };
 
 struct FakeCheckCheckCompletion {
@@ -36,7 +35,6 @@ struct FakeCheckCheckCompletion {
         n_calls.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
-    void swap(FakeCheckCheckCompletion &x){};
 };
 
 struct FailingCheck {
@@ -44,7 +42,6 @@ struct FailingCheck {
     FailingCheck(bool _fails) : fails(_fails){};
     FailingCheck() : fails(true){};
     bool operator()() { return !fails; }
-    void swap(FailingCheck &x) { std::swap(fails, x.fails); };
 };
 
 struct UniqueCheck {
@@ -58,7 +55,6 @@ struct UniqueCheck {
         results.insert(check_id);
         return true;
     }
-    void swap(UniqueCheck &x) { std::swap(x.check_id, check_id); };
 };
 
 struct MemoryCheck {
@@ -72,14 +68,17 @@ struct MemoryCheck {
         // Really, copy constructor should be deletable, but CCheckQueue breaks
         // if it is deleted because of internal push_back.
         fake_allocated_memory.fetch_add(b, std::memory_order_relaxed);
-    };
+    }
+    MemoryCheck(MemoryCheck &&x) {
+        b = x.b;
+        x.b = false;
+    }
     MemoryCheck(bool b_) : b(b_) {
         fake_allocated_memory.fetch_add(b, std::memory_order_relaxed);
     };
     ~MemoryCheck() {
         fake_allocated_memory.fetch_sub(b, std::memory_order_relaxed);
     };
-    void swap(MemoryCheck &x) { std::swap(b, x.b); };
 };
 
 struct FrozenCleanupCheck {
@@ -100,9 +99,11 @@ struct FrozenCleanupCheck {
                 l, [] { return nFrozen.load(std::memory_order_relaxed) == 0; });
         }
     }
-    void swap(FrozenCleanupCheck &x) {
-        std::swap(should_freeze, x.should_freeze);
-    };
+    FrozenCleanupCheck(const FrozenCleanupCheck &) = default;
+    FrozenCleanupCheck(FrozenCleanupCheck &&x) {
+        should_freeze = x.should_freeze;
+        x.should_freeze = false;
+    }
 };
 
 // Static Allocations

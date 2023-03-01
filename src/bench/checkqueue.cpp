@@ -39,7 +39,6 @@ static void CCheckQueueSpeedPrevectorJob(benchmark::State &state) {
             p.resize(insecure_rand.randrange(PREVECTOR_SIZE * 2));
         }
         bool operator()() { return true; }
-        void swap(PrevectorJob &x) { p.swap(x.p); };
     };
     CCheckQueue<PrevectorJob> queue{QUEUE_BATCH_SIZE};
     queue.StartWorkerThreads(std::max(MIN_CORES, GetNumCores()) - 1);
