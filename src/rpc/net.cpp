@@ -118,6 +118,8 @@ static UniValue getpeerinfo(const Config &config,
                 "       n,                           (numeric) The heights of blocks we're currently asking from this peer\n"
                 "       ...\n"
                 "    ],\n"
+                "    \"addr_processed\": n,            (numeric) The total number of addresses processed, excluding those dropped due to rate limiting\n"
+                "    \"addr_rate_limited\": n,         (numeric) The total number of addresses dropped due to rate limiting\n"
                 "    \"whitelisted\": true|false,      (boolean) Whether the peer is whitelisted\n"
                 "    \"minfeefilter\": n,              (numeric) The minimum fee rate for transactions this peer accepts\n"
                 "    \"bytessent_per_msg\": {\n"
@@ -205,6 +207,8 @@ static UniValue getpeerinfo(const Config &config,
             }
             obj.emplace_back("inflight", std::move(heights));
         }
+        obj.emplace_back("addr_processed", stats.m_addr_processed);
+        obj.emplace_back("addr_rate_limited", stats.m_addr_rate_limited);
         obj.emplace_back("whitelisted", stats.m_legacyWhitelisted);
         auto permissionStrings = NetPermissions::ToStrings(stats.m_permissionFlags);
         UniValue::Array permissions;
