@@ -1321,6 +1321,15 @@ fs::path GetSpecialFolderPath(int nFolder, bool fCreate) {
 }
 #endif
 
+#ifndef WIN32
+std::string ShellEscape(const std::string &arg)
+{
+    std::string escaped = arg;
+    ReplaceAll(escaped, "'", R"('"'"')");  // replace: ' -> '"'"'
+    return "'" + escaped + "'";
+}
+#endif
+
 void runCommand(const std::string &strCommand) {
     if (strCommand.empty()) {
         return;

@@ -88,6 +88,9 @@ fs::path GetConfigFile(const std::string &confPath);
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
+#ifndef WIN32
+std::string ShellEscape(const std::string &arg);
+#endif
 void runCommand(const std::string &strCommand);
 
 [[nodiscard]] bool ParseKeyValue(std::string &key, std::string &val);
