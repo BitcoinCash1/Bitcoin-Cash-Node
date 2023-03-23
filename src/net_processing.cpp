@@ -1189,9 +1189,9 @@ static bool BlockRequestAllowed(const CBlockIndex *pindex,
 
 PeerLogicValidation::PeerLogicValidation(CConnman *connmanIn, BanMan *banman,
                                          CScheduler &scheduler,
-                                         bool enable_bip61)
+                                         bool enable_bip61, bool enable_feefilter)
     : connman(connmanIn), m_banman(banman), deleted(std::make_shared<std::atomic_bool>(false)),
-      m_stale_tip_check_time(0), m_enable_bip61(enable_bip61) {
+      m_stale_tip_check_time(0), m_enable_bip61(enable_bip61), m_enable_feefilter(enable_feefilter) {
     // Initialize global variables that cannot be constructed at startup.
     recentRejects.reset(new CRollingBloomFilter(120000, 0.000001));
 
@@ -5022,9 +5022,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     //
     // We don't want white listed peers to filter txs to us if we have
     // -whitelistforcerelay
-    if (pto->nVersion >= FEEFILTER_VERSION &&
-        gArgs.GetBoolArg("-feefilter", DEFAULT_FEEFILTER) &&
-        !pto->HasPermission(PF_FORCERELAY)) {
+    if (pto->nVersion >= FEEFILTER_VERSION && m_enable_feefilter && !pto->HasPermission(PF_FORCERELAY)) {
         Amount currentFilter = g_mempool.GetMinFee(config.GetMaxMemPoolSize()).GetFeePerK();
         int64_t timeNow = GetTimeMicros();
         if (timeNow > pto->nextSendTimeFeeFilter) {
