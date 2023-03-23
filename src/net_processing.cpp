@@ -4355,6 +4355,10 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     // can't change.
     const CNetMsgMaker msgMaker(pto->GetSendVersion());
 
+    const int64_t nNow = GetTimeMicros(); // non-mockable time
+    const auto current_time = GetTime<std::chrono::microseconds>(); // mockable time
+    const int64_t current_time_secs = std::chrono::duration_cast<std::chrono::seconds>(current_time).count();
+
     //
     // Message: ping
     //
@@ -4364,7 +4368,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
         pingSend = true;
     }
     if (pto->nPingNonceSent == 0 &&
-        pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros()) {
+        pto->nPingUsecStart + PING_INTERVAL * 1000000 < nNow) {
         // Ping automatically sent as a latency probe & keepalive.
         pingSend = true;
     }
@@ -4374,7 +4378,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
             GetRandBytes((uint8_t *)&nonce, sizeof(nonce));
         }
         pto->fPingQueued = false;
-        pto->nPingUsecStart = GetTimeMicros();
+        pto->nPingUsecStart = nNow;
         if (pto->nVersion > BIP0031_VERSION) {
             pto->nPingNonceSent = nonce;
             connman->PushMessage(pto, msgMaker.Make(NetMsgType::PING, nonce));
@@ -4398,8 +4402,6 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     CNodeState &state = *State(pto->GetId());
 
     // Address refresh broadcast
-    int64_t nNow = GetTimeMicros();
-    auto current_time = GetTime<std::chrono::microseconds>();
     if (!IsInitialBlockDownload() && pto->m_next_local_addr_send < current_time) {
         AdvertiseLocal(pto);
         pto->m_next_local_addr_send = PoissonNextSend(current_time, AVG_LOCAL_ADDRESS_BROADCAST_INTERVAL);
@@ -4463,7 +4465,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
                 GetAdjustedTime() - 24 * 60 * 60) {
             state.fSyncStarted = true;
             state.nHeadersSyncTimeout =
-                GetTimeMicros() + HEADERS_DOWNLOAD_TIMEOUT_BASE +
+                nNow + HEADERS_DOWNLOAD_TIMEOUT_BASE +
                 HEADERS_DOWNLOAD_TIMEOUT_PER_HEADER *
                     (GetAdjustedTime() - pindexBestHeader->GetBlockTime()) /
                     (consensusParams.nPowTargetSpacing);
@@ -4751,7 +4753,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
                     vInv.clear();
                 }
             }
-            pto->timeLastMempoolReq = GetTime();
+            pto->timeLastMempoolReq = current_time_secs;
         }
 
         // Determine transactions to relay
@@ -4839,7 +4841,6 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     }
 
     // Detect whether we're stalling
-    nNow = GetTimeMicros();
     if (state.nStallingSince &&
         state.nStallingSince < nNow - 1000000 * BLOCK_STALLING_TIMEOUT) {
         // Stalling only triggers when the block download window cannot move.
@@ -4915,9 +4916,10 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
         }
     }
 
-    // Check that outbound peers have reasonable chains GetTime() is used by
-    // this anti-DoS logic so we can test this using mocktime.
-    ConsiderEviction(pto, GetTime());
+    // Check that outbound peers have reasonable chains. `current_time_secs`
+    // (which comes from GetTime()) is used by this anti-DoS logic so we can
+    // test this using mocktime.
+    ConsiderEviction(pto, current_time_secs);
 
     //
     // Message: getdata (blocks)
@@ -5026,8 +5028,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
         gArgs.GetBoolArg("-feefilter", DEFAULT_FEEFILTER) &&
         !pto->HasPermission(PF_FORCERELAY)) {
         Amount currentFilter = g_mempool.GetMinFee(config.GetMaxMemPoolSize()).GetFeePerK();
-        int64_t timeNow = GetTimeMicros();
-        if (timeNow > pto->nextSendTimeFeeFilter) {
+        if (nNow > pto->nextSendTimeFeeFilter) {
             static CFeeRate default_feerate =
                 CFeeRate(DEFAULT_MIN_RELAY_TX_FEE_PER_KB);
             static FeeFilterRounder filterRounder(default_feerate);
@@ -5040,17 +5041,17 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
                 pto->lastSentFeeFilter = filterToSend;
             }
             pto->nextSendTimeFeeFilter =
-                PoissonNextSend(timeNow, AVG_FEEFILTER_BROADCAST_INTERVAL);
+                PoissonNextSend(nNow, AVG_FEEFILTER_BROADCAST_INTERVAL);
         }
         // If the fee filter has changed substantially and it's still more than
         // MAX_FEEFILTER_CHANGE_DELAY until scheduled broadcast, then move the
         // broadcast to within MAX_FEEFILTER_CHANGE_DELAY.
-        else if (timeNow + MAX_FEEFILTER_CHANGE_DELAY * 1000000 <
+        else if (nNow + MAX_FEEFILTER_CHANGE_DELAY * 1000000 <
                      pto->nextSendTimeFeeFilter &&
                  (currentFilter < 3 * pto->lastSentFeeFilter / 4 ||
                   currentFilter > 4 * pto->lastSentFeeFilter / 3)) {
             pto->nextSendTimeFeeFilter =
-                timeNow + GetRandInt(MAX_FEEFILTER_CHANGE_DELAY) * 1000000;
+                nNow + GetRandInt(MAX_FEEFILTER_CHANGE_DELAY) * 1000000;
         }
     }
     return true;
