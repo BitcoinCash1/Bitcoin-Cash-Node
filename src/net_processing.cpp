@@ -4494,7 +4494,12 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     // Resend wallet transactions that haven't gotten in a block yet
     // Except during reindex, importing and IBD, when old wallet transactions
     // become unconfirmed and spams other nodes.
-    if (!fReindex && !fImporting && !IsInitialBlockDownload()) {
+    //
+    // Additionally, we rate limit this signal to at most once per second,
+    // since spamming this signal too often can waste cycles, and the wallet
+    // doesn't need this to fire more frequently than once per second anyway.
+    if (std::abs(nNow - m_last_bcast_sig_time) >= 1'000'000 && !fReindex && !fImporting && !IsInitialBlockDownload()) {
+        m_last_bcast_sig_time = nNow;
         GetMainSignals().Broadcast(nTimeBestReceived, connman);
     }
 
