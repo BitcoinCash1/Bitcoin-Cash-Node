@@ -2135,7 +2135,12 @@ void CConnman::ThreadMessageHandler() {
                 m_msgproc->SendMessages(*config, pnode, flagInterruptMsgProc);
             }
 
-            nSleepUntil = std::min(pnode->nNextInvSend, nSleepUntil);
+            // Calculate next wakeup time as the closest time in the future we plan on sending an Inv messgae.
+            // We ignore disconnected nodes or nodes that are still doing a handshake for this calculation.
+            if (pnode->nNextInvSend > std::chrono::microseconds{0} && NodeFullyConnected(pnode)) {
+                nSleepUntil = std::min(pnode->nNextInvSend, nSleepUntil);
+            }
+
             if (flagInterruptMsgProc) {
                 return;
             }
