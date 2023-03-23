@@ -2308,7 +2308,7 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
 
     peerLogic.reset(new PeerLogicValidation(
         g_connman.get(), g_banman.get(), scheduler,
-        gArgs.GetBoolArg("-enablebip61", DEFAULT_ENABLE_BIP61)));
+        gArgs.GetBoolArg("-enablebip61", DEFAULT_ENABLE_BIP61), gArgs.GetBoolArg("-feefilter", DEFAULT_FEEFILTER)));
     RegisterValidationInterface(peerLogic.get());
 
     // sanitize comments per BIP-0014, format user agent and check total size

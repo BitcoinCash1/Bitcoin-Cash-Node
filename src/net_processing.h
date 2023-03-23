@@ -59,7 +59,7 @@ private:
 
 public:
     PeerLogicValidation(CConnman *connman, BanMan *banman,
-                        CScheduler &scheduler, bool enable_bip61);
+                        CScheduler &scheduler, bool enable_bip61, bool enable_feefilter);
 
     ~PeerLogicValidation();
 
@@ -149,6 +149,9 @@ private:
 
     /** Enable BIP61 (sending reject messages) */
     const bool m_enable_bip61;
+
+    /** Enable sending feefilter messages to peers. */
+    const bool m_enable_feefilter;
 };
 
 struct CNodeStateStats {
