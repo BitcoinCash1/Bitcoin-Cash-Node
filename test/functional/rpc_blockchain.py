@@ -30,6 +30,7 @@ from io import BytesIO
 from test_framework.test_framework import BitcoinTestFramework, get_datadir_path
 from test_framework.util import (
     assert_equal,
+    assert_fee_amount,
     assert_greater_than,
     assert_greater_than_or_equal,
     assert_raises,
@@ -458,7 +459,7 @@ class BlockchainTest(BitcoinTestFramework):
             block = node.getblock(blockhash, verbosity)
             tx = block['tx'][1]
             assert 'fee' in tx
-            assert_equal(tx['fee'] * COIN, tx['size'] * fee_per_byte)
+            assert_fee_amount(tx['fee'], tx['size'], fee_per_byte * 1000 / COIN)
 
         def assert_vin_contains_prevout(verbosity):
             block = node.getblock(blockhash, verbosity)
