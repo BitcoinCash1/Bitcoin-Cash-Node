@@ -228,9 +228,11 @@ template <typename T> bool TimingResistantEqual(const T &a, const T &b) {
 /**
  * Parse number as fixed point according to JSON number syntax.
  * See http://json.org/number.gif
- * @returns true on success, false on error.
- * @note The result must be in the range (-10^18,10^18), otherwise an overflow
- * error will trigger.
+ * @returns     true on success, false on error.
+ * @param[in]   val A string representation of a number to be parsed.
+ * @param[in]   decimals The number of decimal places from \p val to be considered.
+ * @param[out]  amount_out The parsed integer number, equivalent to \p val multiplied by \p decimal.
+ * @note        The result must be in the range (-10^18,10^18), otherwise an overflow error will trigger.
  */
 [[nodiscard]] bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out);
 
