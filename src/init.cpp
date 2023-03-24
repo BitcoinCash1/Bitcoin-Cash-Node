@@ -557,7 +557,7 @@ void SetupServerArgs() {
         "-par=<n>",
         strprintf("Set the number of script verification threads (up to %d, 0 "
                   "= auto, <0 = leave that many cores free, default: %d)",
-                  MAX_SCRIPTCHECK_THREADS,
+                  MAX_ADDITIONAL_SCRIPTCHECK_THREADS + 1,
                   DEFAULT_SCRIPTCHECK_THREADS),
         ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-parkdeepreorg",
@@ -2172,8 +2172,13 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
     // Subtract 1 because the main thread counts towards the par threads
     script_threads = std::max(script_threads - 1, 0);
 
-    // Number of script-checking threads <= MAX_SCRIPTCHECK_THREADS
-    script_threads = std::min(script_threads, MAX_SCRIPTCHECK_THREADS);
+    if(gArgs.IsArgSet("-par")) {
+        // Number of additional script-checking threads <= MAX_ADDITIONAL_SCRIPTCHECK_THREADS
+        script_threads = std::min(script_threads, MAX_ADDITIONAL_SCRIPTCHECK_THREADS);
+    } else {
+        // preserve legacy functionality for users that don't set -par
+        script_threads = std::min(script_threads, LEGACY_MAX_ADDITIONAL_SCRIPTCHECK_THREADS);
+    }
 
     LogPrintf("Script verification uses %d additional threads\n", script_threads);
     if (script_threads >= 1) {

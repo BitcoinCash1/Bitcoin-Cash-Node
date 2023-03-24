@@ -92,7 +92,10 @@ static constexpr unsigned int BLOCKFILE_CHUNK_SIZE = 0x1000000; // 16 MiB
 static constexpr unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
 
 /** Maximum number of dedicated script-checking threads allowed */
-static constexpr int MAX_SCRIPTCHECK_THREADS = 15;
+static constexpr int MAX_ADDITIONAL_SCRIPTCHECK_THREADS = 255;
+/** For legacy users we set the maximum to this if the user
+ *  doesn't set -par */
+static constexpr int LEGACY_MAX_ADDITIONAL_SCRIPTCHECK_THREADS = 15;
 /** -par default (number of script-checking threads, 0 = auto) */
 static constexpr int DEFAULT_SCRIPTCHECK_THREADS = 0;
 /**
