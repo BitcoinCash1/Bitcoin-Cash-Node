@@ -147,6 +147,9 @@ private:
     //! Next time to check for stale tip
     int64_t m_stale_tip_check_time;
 
+    //! Last time we spammed the "Broadcast" app-wide signal (in non-mockable microseconds)
+    int64_t m_last_bcast_sig_time GUARDED_BY(cs_main) = 0;
+
     /** Enable BIP61 (sending reject messages) */
     const bool m_enable_bip61;
 
