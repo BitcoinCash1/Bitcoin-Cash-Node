@@ -16,7 +16,7 @@
 #include <qt/guiutil.h>
 #include <qt/optionsmodel.h>
 #include <txdb.h>       // for -dbcache defaults
-#include <validation.h> // for DEFAULT_SCRIPTCHECK_THREADS and MAX_SCRIPTCHECK_THREADS
+#include <validation.h> // for MIN_DISK_SPACE_FOR_BLOCK_FILES
 
 #include <QDataWidgetMapper>
 #include <QDir>
@@ -42,7 +42,7 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet)
             : 0;
     ui->pruneSize->setMinimum(nMinDiskSpace);
     ui->threadsScriptVerif->setMinimum(-GetNumCores());
-    ui->threadsScriptVerif->setMaximum(MAX_SCRIPTCHECK_THREADS);
+    ui->threadsScriptVerif->setMaximum(GetNumCores());
     ui->pruneWarning->setVisible(false);
     ui->pruneWarning->setStyleSheet("QLabel { color: red; }");
 
