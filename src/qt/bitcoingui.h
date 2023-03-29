@@ -309,7 +309,10 @@ public Q_SLOTS:
     /** called by a timer to check if ShutdownRequested() has been set **/
     void detectShutdown();
 
-    /** Show progress dialog e.g. for verifychain */
+    /** Show progress dialog e.g. for verifychain
+     *  Calling this method for values <100 will create a new dialog if it
+     *  doesn't exist, or update the existing dialog if it does.
+     *  When nProgress >= 100 any existing dialog is closed & deleted. */
     void showProgress(const QString &title, int nProgress);
 
     /** When hideTrayIcon setting is changed in OptionsModel hide or show the

@@ -39,6 +39,7 @@
 #include <ui_interface.h>
 #include <util/system.h>
 
+#include <algorithm>
 #include <memory>
 
 #include <QAction>
@@ -1411,20 +1412,20 @@ void BitcoinGUI::detectShutdown() {
 }
 
 void BitcoinGUI::showProgress(const QString &title, int nProgress) {
-    if (nProgress == 0) {
-        progressDialog = new QProgressDialog(title, "", 0, 100);
-        progressDialog->setWindowModality(Qt::ApplicationModal);
-        progressDialog->setMinimumDuration(0);
-        progressDialog->setCancelButton(nullptr);
-        progressDialog->setAutoClose(false);
-        progressDialog->setValue(0);
-    } else if (progressDialog) {
-        if (nProgress == 100) {
-            progressDialog->close();
-            progressDialog->deleteLater();
-        } else {
-            progressDialog->setValue(nProgress);
+    nProgress = std::clamp(nProgress, 0, 100); // ensure valid range
+    if (nProgress < 100) { // creation & normal usage for any value <100
+        if (!progressDialog) {
+            progressDialog = new QProgressDialog(title, "", 0, 100);
+            progressDialog->setWindowModality(Qt::ApplicationModal);
+            progressDialog->setMinimumDuration(0);
+            progressDialog->setCancelButton(nullptr);
+            progressDialog->setAutoClose(false);
         }
+        progressDialog->setValue(nProgress);
+    } else if (progressDialog) { // nProgress >= 100, delete progressDialog
+        progressDialog->close();
+        progressDialog->deleteLater();
+        progressDialog = nullptr;
     }
 }
 
