@@ -10,7 +10,7 @@ from decimal import Decimal
 from test_framework.address import base58_to_byte
 from test_framework.blocktools import create_raw_transaction, create_tx_with_script
 from test_framework.key import ECKey
-from test_framework.messages import CTransaction, FromHex, ToHex, COIN
+from test_framework.messages import CTransaction, FromHex, ToHex, COIN, msg_mempool
 from test_framework.p2p import P2PInterface, p2p_lock
 from test_framework.script import CScript, OP_TRUE, OP_FALSE, SignatureHashForkIdFromValues
 from test_framework.test_framework import BitcoinTestFramework
@@ -60,9 +60,22 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         return privkey.get_pubkey()
 
     def run_test(self):
+        class P2PInterfaceRequestsMempoolOnConnect(P2PInterface):
+            mempool_sent = False
+
+            def on_verack(self, message):
+                super().on_verack(message)
+                if not self.mempool_sent:
+                    # We send the mempool message initially because we want to catch a regression.
+                    # See issue #481: https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/issues/481
+                    self.mempool_sent = True
+                    self.send_message(msg_mempool())
+
         # create a p2p receiver
         dspReceiver = P2PInterface()
+        dspReceiver2 = P2PInterfaceRequestsMempoolOnConnect()
         self.nodes[0].add_p2p_connection(dspReceiver)
+        self.nodes[0].add_p2p_connection(dspReceiver2)
         # workaround - nodes think they're in IBD unless one block is mined
         self.generate(self.nodes[0], 1)
         self.sync_all()
@@ -89,7 +102,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         firstDSTxId = self.nodes[0].sendrawtransaction(firstDSTx)
         self.nodes[1].call_rpc('sendrawtransaction', secondDSTx, ignore_error='txn-mempool-conflict')
         wait_until(
-            lambda: dspReceiver.message_count["dsproof-beta"] == 1,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 1 and dspReceiver2.message_count["dsproof-beta"] == 1,
             lock=p2p_lock,
             timeout=25
         )
@@ -97,6 +110,8 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         # 1. The DSP message is well-formed and contains all fields
         # If the message arrived and was deserialized successfully, then 1. is satisfied
         dsp = dspReceiver.last_message["dsproof-beta"].dsproof
+        dsp_other = dspReceiver2.last_message["dsproof-beta"].dsproof
+        assert_equal(dsp.serialize().hex(), dsp_other.serialize().hex())
         dsps = set()
         dsps.add(dsp.serialize())
 
@@ -164,7 +179,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         assert_raises(
             AssertionError,
             wait_until,
-            lambda: dspReceiver.message_count["dsproof-beta"] == 2,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 2 and dspReceiver2.message_count["dsproof-beta"] == 2,
             lock=p2p_lock,
             timeout=5
         )
@@ -181,7 +196,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         self.nodes[1].call_rpc('sendrawtransaction', secondDSTx, ignore_error='txn-mempool-conflict')
 
         wait_until(
-            lambda: dspReceiver.message_count["dsproof-beta"] == 2,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 2 and dspReceiver2.message_count["dsproof-beta"] == 2,
             lock=p2p_lock,
             timeout=5
         )
@@ -222,7 +237,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         # We still get a dsproof, showing that not all ancestors have
         # to be P2PKH.
         wait_until(
-            lambda: dspReceiver.message_count["dsproof-beta"] == 3,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 3 and dspReceiver2.message_count["dsproof-beta"] == 3,
             lock=p2p_lock,
             timeout=5
         )
@@ -261,7 +276,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         self.nodes[1].call_rpc('sendrawtransaction', secondDSTx, ignore_error='txn-mempool-conflict')
         # We get a dsproof.
         wait_until(
-            lambda: dspReceiver.message_count["dsproof-beta"] == 4,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 4 and dspReceiver2.message_count["dsproof-beta"] == 4,
             lock=p2p_lock,
             timeout=5
         )
@@ -287,7 +302,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         assert_raises(
             AssertionError,
             wait_until,
-            lambda: dspReceiver.message_count["dsproof-beta"] == 5,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 5 and dspReceiver2.message_count["dsproof-beta"] == 5,
             lock=p2p_lock,
             timeout=5
         )
@@ -318,7 +333,7 @@ class DoubleSpendProofTest(BitcoinTestFramework):
             secondDSTx
         )
         wait_until(
-            lambda: dspReceiver.message_count["dsproof-beta"] == 5,
+            lambda: dspReceiver.message_count["dsproof-beta"] == 5 and dspReceiver2.message_count["dsproof-beta"] == 5,
             lock=p2p_lock,
             timeout=5
         )
