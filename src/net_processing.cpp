@@ -1692,6 +1692,16 @@ static void ProcessGetBlockData(const Config &config, CNode *pfrom,
     }
 }
 
+/**
+ * Service GETDATA requests from peers.
+ *
+ * Will process as many items of type TX and DSP in vRecvGetData as possible
+ * and at most one item of type BLOCK/FILTERED_BLOCK/CMPCT_BLOCK.
+ * If an item is of an unknown type, it will be discarded.
+ *
+ * If the send buffer is not full, at least one item is erased from
+ * the peer's vRecvGetData per call to this function.
+*/
 static void ProcessGetData(const Config &config, CNode *pfrom,
                            CConnman *connman,
                            const std::atomic<bool> &interruptMsgProc)
@@ -1705,17 +1715,14 @@ static void ProcessGetData(const Config &config, CNode *pfrom,
         LOCK(cs_main);
 
         while (it != pfrom->vRecvGetData.end() &&
-               (it->type == MSG_TX || it->type == MSG_DOUBLESPENDPROOF)) {
+               (it->type == MSG_TX || it->type == MSG_DOUBLESPENDPROOF) &&
+               !pfrom->fPauseSend) {
+
             if (interruptMsgProc) {
                 return;
             }
-            // Don't bother if send buffer is too full to respond anyway.
-            if (pfrom->fPauseSend) {
-                break;
-            }
 
             const CInv &inv = *it;
-            it++;
 
             // Send stream from relay memory
             bool push = false;
@@ -1747,20 +1754,24 @@ static void ProcessGetData(const Config &config, CNode *pfrom,
             if (!push) {
                 vNotFound.push_back(inv);
             }
+
+            it = pfrom->vRecvGetData.erase(it);
         }
-    } // release cs_main
+    } // release cs_main, it may not be held when calling ProcessGetBlockData
 
     if (it != pfrom->vRecvGetData.end() && !pfrom->fPauseSend) {
-        const CInv &inv = *it++;
+        const CInv &inv = *it;
+        // if there is still at least one item in the queue, and it is of type
+        // BLOCK/FILTERED_BLOCK/CMPCT_BLOCK, then process it as such
         if (inv.type == MSG_BLOCK || inv.type == MSG_FILTERED_BLOCK ||
             inv.type == MSG_CMPCT_BLOCK) {
             ProcessGetBlockData(config, pfrom, inv, connman, interruptMsgProc);
         }
-        // else: If the first item on the queue is an unknown type, we erase it
-        // and continue processing the queue on the next call.
+        // else, if the first item on the queue is an unknown type, we ignore it.
+        // In either case we erase this item and continue processing the queue on
+        // the next call.
+        it = pfrom->vRecvGetData.erase(it);
     }
-
-    pfrom->vRecvGetData.erase(pfrom->vRecvGetData.begin(), it);
 
     if (!vNotFound.empty()) {
         // Let the peer know that we didn't find what it asked for, so it
