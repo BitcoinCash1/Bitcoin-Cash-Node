@@ -712,8 +712,10 @@ void SendCoinsDialog::updateMinFeeLabel() {
 
 void SendCoinsDialog::updateCoinControlState(CCoinControl &ctrl) {
     if (ui->radioCustomFee->isChecked()) {
+        ctrl.fOverrideFeeRate = true;
         ctrl.m_feerate = CFeeRate(ui->customFee->value());
     } else {
+        ctrl.fOverrideFeeRate = false;
         ctrl.m_feerate.reset();
     }
 }
@@ -726,6 +728,7 @@ void SendCoinsDialog::updateSmartFeeLabel() {
     CCoinControl coin_control;
     updateCoinControlState(coin_control);
     // Explicitly use only fee estimation rate for smart fee labels
+    coin_control.fOverrideFeeRate = false;
     coin_control.m_feerate.reset();
     CFeeRate feeRate(model->wallet().getMinimumFee(1000, coin_control));
 
