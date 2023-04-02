@@ -648,15 +648,14 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
 
         // show progress dialog in GUI
         uiInterface.ShowProgress(
-            strprintf("%s " + _("Importing..."), pwallet->GetDisplayName()), 0,
+            strprintf("%s " + _("Scanning..."), pwallet->GetDisplayName()), 0,
             false);
         std::vector<std::tuple<CKey, int64_t, bool, std::string>> keys;
         std::vector<std::pair<CScript, int64_t>> scripts;
         while (file.good()) {
             uiInterface.ShowProgress(
                 "",
-                std::max(1, std::min<int>(50, 100 * double(file.tellg()) /
-                                                  double(nFilesize))),
+                100 * double(file.tellg()) / double(nFilesize),
                 false);
             std::string line;
             std::getline(file, line);
@@ -699,6 +698,11 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
             }
         }
         file.close();
+        uiInterface.ShowProgress("", 100, false); // close the dialog for file scan
+        // open a new progress bar dialog for the actual insertion phase
+        uiInterface.ShowProgress(
+            strprintf("%s " + _("Importing..."), pwallet->GetDisplayName()), 0,
+            false);
         // We now know whether we are importing private keys, so we can error if
         // private keys are disabled
         if (keys.size() > 0 &&
@@ -709,12 +713,14 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
                 RPC_WALLET_ERROR,
                 "Importing wallets is disabled when private keys are disabled");
         }
-        double total = double(keys.size() + scripts.size());
+        double nKeys = double(keys.size());
+        double nScripts = double(scripts.size());
+        double total = nKeys + nScripts;
         double progress = 0;
         for (const auto &key_tuple : keys) {
             uiInterface.ShowProgress(
                 "",
-                std::max(50, std::min<int>(75, 100 * progress / total) + 50),
+                int(100 * progress / total),
                 false);
             const CKey &key = std::get<0>(key_tuple);
             int64_t time = std::get<1>(key_tuple);
@@ -732,6 +738,7 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
             }
             pwallet->WalletLogPrintf("Importing %s...\n",
                                      EncodeDestination(keyid, config));
+
             if (!pwallet->AddKeyPubKey(key, pubkey)) {
                 fGood = false;
                 continue;
@@ -740,13 +747,14 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
             if (has_label) {
                 pwallet->SetAddressBook(keyid, label, "receive");
             }
+
             nTimeBegin = std::min(nTimeBegin, time);
             progress++;
         }
         for (const auto &script_pair : scripts) {
             uiInterface.ShowProgress(
                 "",
-                std::max(50, std::min<int>(75, 100 * progress / total) + 50),
+                int(100 * progress / total),
                 false);
             const CScript &script = script_pair.first;
             int64_t time = script_pair.second;
@@ -763,18 +771,18 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
                 fGood = false;
                 continue;
             }
+            pwallet->WalletLogPrintf("Imported script %s\n", HexStr(script));
             if (time > 0) {
                 pwallet->m_script_metadata[id].nCreateTime = time;
                 nTimeBegin = std::min(nTimeBegin, time);
             }
             progress++;
         }
-        // hide progress dialog in GUI
+        // force closure of progress dialog in GUI, even if 100% progress was
+        // not achieved (possible if some keys were already present and skipped)
         uiInterface.ShowProgress("", 100, false);
         pwallet->UpdateTimeFirstKey(nTimeBegin);
     }
-    // hide progress dialog in GUI
-    uiInterface.ShowProgress("", 100, false);
     RescanWallet(*pwallet, reserver, nTimeBegin, false /* update */);
     pwallet->MarkDirty();
 
