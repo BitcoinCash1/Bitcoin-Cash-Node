@@ -8,6 +8,7 @@
 #include <chain.h>
 #include <chainparams.h>
 #include <clientversion.h>
+#include <node/blockstorage.h>
 #include <primitives/block.h>
 #include <primitives/blockhash.h>
 #include <streams.h>

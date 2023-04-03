@@ -1,11 +1,12 @@
 // Copyright (c) 2017-2018 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <index/txindex.h>
 
 #include <chain.h>
+#include <node/blockstorage.h>
 #include <shutdown.h>
 #include <ui_interface.h>
 #include <util/system.h>
