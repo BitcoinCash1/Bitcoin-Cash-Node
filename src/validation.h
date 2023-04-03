@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -84,12 +84,6 @@ static constexpr unsigned int DEFAULT_MEMPOOL_EXPIRY = 336;
  *  this often (in hours).
  */
 static constexpr int64_t DEFAULT_MEMPOOL_EXPIRY_TASK_PERIOD = 24;
-/** The maximum size of a blk?????.dat file (since 0.8) */
-static constexpr unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
-/** The pre-allocation chunk size for blk?????.dat files (since 0.8) */
-static constexpr unsigned int BLOCKFILE_CHUNK_SIZE = 0x1000000; // 16 MiB
-/** The pre-allocation chunk size for rev?????.dat files (since 0.8) */
-static constexpr unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
 
 /** Maximum number of dedicated script-checking threads allowed */
 static constexpr int MAX_ADDITIONAL_SCRIPTCHECK_THREADS = 255;
@@ -202,12 +196,9 @@ extern const std::string strMessageMagic;
 extern Mutex g_best_block_mutex;
 extern std::condition_variable g_best_block_cv;
 extern uint256 g_best_block;
-extern std::atomic_bool fImporting;
-extern std::atomic_bool fReindex;
 extern bool fIsBareMultisigStd;
 extern bool fRequireStandard;
 extern bool fCheckBlockIndex;
-extern bool fCheckBlockReads;
 extern bool fCheckpointsEnabled;
 extern size_t nCoinCacheUsage;
 
@@ -243,13 +234,6 @@ extern arith_uint256 nMinimumChainWork;
  */
 extern CBlockIndex *pindexBestHeader;
 
-/** Pruning-related variables and constants */
-/** True if any block files have ever been pruned. */
-extern bool fHavePruned;
-/** True if we're running in -prune mode. */
-extern bool fPruneMode;
-/** Number of MiB of block files that we're trying to stay below. */
-extern uint64_t nPruneTarget;
 /**
  * Block files containing a block-height within MIN_BLOCKS_TO_KEEP of
  * ::ChainActive().Tip() will not be pruned.
@@ -356,16 +340,6 @@ bool ProcessNewBlockHeaders(const Config &config,
     LOCKS_EXCLUDED(cs_main);
 
 /**
- * Open a block file (blk?????.dat).
- */
-FILE *OpenBlockFile(const FlatFilePos &pos, bool fReadOnly = false);
-
-/**
- * Translation to a filesystem path.
- */
-fs::path GetBlockPosFilename(const FlatFilePos &pos);
-
-/**
  * Import blocks from an external file.
  */
 void LoadExternalBlockFile(const Config &config, FILE *fileIn,
@@ -431,19 +405,9 @@ double GuessVerificationProgress(const ChainTxData &data,
                                  const CBlockIndex *pindex);
 
 /**
- * Calculate the amount of disk space the block & undo files currently use.
- */
-uint64_t CalculateCurrentUsage();
-
-/**
  * Mark one block file as pruned.
  */
 void PruneOneBlockFile(const int fileNumber) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-
-/**
- * Actually unlink the specified files
- */
-void UnlinkPrunedFiles(const std::set<int> &setFilesToPrune);
 
 /** Flush all state, indexes and buffers to disk. */
 void FlushStateToDisk();
@@ -640,20 +604,6 @@ public:
     ScriptExecutionMetrics GetScriptExecutionMetrics() const { return metrics; }
 };
 
-/** Functions for disk access for blocks */
-bool ReadBlockFromDisk(CBlock &block, const FlatFilePos &pos,
-                       const Consensus::Params &params);
-bool ReadBlockFromDisk(CBlock &block, const CBlockIndex *pindex,
-                       const Consensus::Params &params);
-/**
- * Read raw block bytes from disk. Faster than the above, because this function just returns the raw block data without
- * any unserialization. Intended to be used by the net code for low-overhead serving of block data.
- * `nType` and `nVersion` parameters are used for `-checkblockreads` sanity checking of the serialized data. */
-bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pindex, const CChainParams &chainParams,
-                          int nType, int nVersion);
-
-bool UndoReadFromDisk(CBlockUndo &blockundo, const CBlockIndex *pindex);
-
 /** Functions for validating blocks and updating the block tree */
 
 /**
@@ -798,9 +748,6 @@ static const unsigned int REJECT_HIGHFEE = 0x100;
 /** Block conflicts with a transaction already known */
 static const unsigned int REJECT_AGAINST_FINALIZED = 0x103;
 
-/** Get block file info entry for one block file */
-CBlockFileInfo *GetBlockFileInfo(size_t n);
-
 /** Dump the mempool to disk. */
 bool DumpMempool(const CTxMemPool &pool);
 
@@ -812,9 +759,6 @@ bool DumpDSProofs(const CTxMemPool &pool);
 
 /** Load dsproofs from disk. */
 bool LoadDSProofs(CTxMemPool &pool);
-
-//! Check whether the block associated with this index entry is pruned or not.
-bool IsBlockPruned(const CBlockIndex *pblockindex);
 
 /// This class manages tracking exactly at what block a particular upgrade activated, relative to a block index it is
 /// given.  Works correcly even if there is a reorg and/or if the active chain is not being considered.  It was written

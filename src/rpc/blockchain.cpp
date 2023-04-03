@@ -17,6 +17,7 @@
 #include <hash.h>
 #include <index/txindex.h>
 #include <key_io.h>
+#include <node/blockstorage.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <rpc/server.h>

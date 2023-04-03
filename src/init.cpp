@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,7 +18,6 @@
 #include <checkpoints.h>
 #include <compat/sanity.h>
 #include <config.h>
-#include <consensus/validation.h>
 #include <dsproof/dsproof.h>
 #include <dsproof/storage.h>
 #include <extversion.h>
@@ -36,6 +35,7 @@
 #include <net_permissions.h>
 #include <net_processing.h>
 #include <netbase.h>
+#include <node/blockstorage.h>
 #include <policy/mempool.h>
 #include <policy/policy.h>
 #include <rpc/blockchain.h>
@@ -88,8 +88,6 @@
 static constexpr bool DEFAULT_PROXYRANDOMIZE = true;
 /** Default for -rest */
 static constexpr bool DEFAULT_REST_ENABLE = false;
-/** Default for -stopafterblockimport */
-static constexpr bool DEFAULT_STOPAFTERBLOCKIMPORT = false;
 
 // Dump addresses to banlist.dat every 15 minutes (900s)
 static constexpr int DUMP_BANS_INTERVAL = 60 * 15;
@@ -1265,149 +1263,6 @@ static void BlockNotifyGenesisWait(bool, const CBlockIndex *pBlockIndex) {
         }
         g_genesis_wait_cv.notify_all();
     }
-}
-
-struct CImportingNow {
-    CImportingNow() {
-        assert(fImporting == false);
-        fImporting = true;
-    }
-
-    ~CImportingNow() {
-        assert(fImporting == true);
-        fImporting = false;
-    }
-};
-
-// If we're using -prune with -reindex, then delete block files that will be
-// ignored by the reindex.  Since reindexing works by starting at block file 0
-// and looping until a blockfile is missing, do the same here to delete any
-// later block files after a gap. Also delete all rev files since they'll be
-// rewritten by the reindex anyway. This ensures that vinfoBlockFile is in sync
-// with what's actually on disk by the time we start downloading, so that
-// pruning works correctly.
-static void CleanupBlockRevFiles() {
-    std::map<std::string, fs::path> mapBlockFiles;
-
-    // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
-    // Remove the rev files immediately and insert the blk file paths into an
-    // ordered map keyed by block file index.
-    LogPrintf("Removing unusable blk?????.dat and rev?????.dat files for "
-              "-reindex with -prune\n");
-    const auto directoryIterator = fs::directory_iterator{GetBlocksDir()};
-    for (const auto &file : directoryIterator) {
-        const auto fileName = file.path().filename().string();
-        if (fs::is_regular_file(file) && fileName.length() == 12 &&
-            fileName.substr(8, 4) == ".dat") {
-            if (fileName.substr(0, 3) == "blk") {
-                mapBlockFiles[fileName.substr(3, 5)] = file.path();
-            } else if (fileName.substr(0, 3) == "rev") {
-                remove(file.path());
-            }
-        }
-    }
-
-    // Remove all block files that aren't part of a contiguous set starting at
-    // zero by walking the ordered map (keys are block file indices) by keeping
-    // a separate counter. Once we hit a gap (or if 0 doesn't exist) start
-    // removing block files.
-    int contiguousCounter = 0;
-    for (const auto &item : mapBlockFiles) {
-        if (atoi(item.first) == contiguousCounter) {
-            contiguousCounter++;
-            continue;
-        }
-        remove(item.second);
-    }
-}
-
-static void ThreadImport(const Config &config,
-                         std::vector<fs::path> vImportFiles) {
-    util::ThreadRename("loadblk");
-    ScheduleBatchPriority();
-
-    {
-        CImportingNow imp;
-
-        // -reindex
-        if (fReindex) {
-            int nFile = 0;
-            while (true) {
-                FlatFilePos pos(nFile, 0);
-                if (!fs::exists(GetBlockPosFilename(pos))) {
-                    // No block files left to reindex
-                    break;
-                }
-                FILE *file = OpenBlockFile(pos, true);
-                if (!file) {
-                    // This error is logged in OpenBlockFile
-                    break;
-                }
-                LogPrintf("Reindexing block file blk%05u.dat...\n",
-                          (unsigned int)nFile);
-                LoadExternalBlockFile(config, file, &pos);
-                nFile++;
-            }
-            pblocktree->WriteReindexing(false);
-            fReindex = false;
-            LogPrintf("Reindexing finished\n");
-            // To avoid ending up in a situation without genesis block, re-try
-            // initializing (no-op if reindexing worked):
-            LoadGenesisBlock(config.GetChainParams());
-        }
-
-        // hardcoded $DATADIR/bootstrap.dat
-        fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-        if (fs::exists(pathBootstrap)) {
-            FILE *file = fsbridge::fopen(pathBootstrap, "rb");
-            if (file) {
-                fs::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
-                LogPrintf("Importing bootstrap.dat...\n");
-                LoadExternalBlockFile(config, file);
-                RenameOver(pathBootstrap, pathBootstrapOld);
-            } else {
-                LogPrintf("Warning: Could not open bootstrap file %s\n",
-                          pathBootstrap.string());
-            }
-        }
-
-        // -loadblock=
-        for (const fs::path &path : vImportFiles) {
-            FILE *file = fsbridge::fopen(path, "rb");
-            if (file) {
-                LogPrintf("Importing blocks file %s...\n", path.string());
-                LoadExternalBlockFile(config, file);
-            } else {
-                LogPrintf("Warning: Could not open blocks file %s\n",
-                          path.string());
-            }
-        }
-
-        // scan for better chains in the block chain database, that are not yet
-        // connected in the active best chain
-        CValidationState state;
-        if (!ActivateBestChain(config, state)) {
-            LogPrintf("Failed to connect best block (%s)\n",
-                      FormatStateMessage(state));
-            StartShutdown();
-            return;
-        }
-
-        if (gArgs.GetBoolArg("-stopafterblockimport",
-                             DEFAULT_STOPAFTERBLOCKIMPORT)) {
-            LogPrintf("Stopping after block import\n");
-            StartShutdown();
-            return;
-        }
-    } // End scope of CImportingNow
-
-    if (gArgs.GetArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
-        if (DoubleSpendProof::IsEnabled()) {
-            LoadDSProofs(::g_mempool);
-        }
-        LoadMempool(config, ::g_mempool);
-    }
-    ::g_mempool.SetIsLoaded(!ShutdownRequested());
 }
 
 /** Sanity checks

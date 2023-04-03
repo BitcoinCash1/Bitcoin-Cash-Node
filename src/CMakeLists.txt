@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Bitcoin developers
+# Copyright (c) 2017-2023 The Bitcoin developers
 
 project(bitcoind)
 
@@ -550,6 +550,7 @@ add_library(server
   miner.cpp
   net.cpp
   net_processing.cpp
+  node/blockstorage.cpp
   node/transaction.cpp
   noui.cpp
   outputtype.cpp

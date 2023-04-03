@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,6 +25,7 @@
 #include <net.h>
 #include <netbase.h>
 #include <netmessagemaker.h>
+#include <node/blockstorage.h>
 #include <policy/fees.h>
 #include <policy/policy.h>
 #include <primitives/block.h>

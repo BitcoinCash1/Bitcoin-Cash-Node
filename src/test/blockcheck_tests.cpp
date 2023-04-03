@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2015 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +8,7 @@
 #include <config.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
+#include <node/blockstorage.h>
 #include <span.h>
 #include <streams.h>
 #include <util/defer.h>

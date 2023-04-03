@@ -17,6 +17,7 @@
 #include <key_io.h>
 #include <keystore.h>
 #include <merkleblock.h>
+#include <node/blockstorage.h>
 #include <node/transaction.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>

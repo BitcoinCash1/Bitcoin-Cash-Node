@@ -1,0 +1,100 @@
+// Copyright (c) 2011-2021 The Bitcoin Core developers
+// Copyright (c) 2023 The Bitcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#pragma once
+
+#include <fs.h>
+#include <sync.h>
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <set>
+#include <vector>
+
+class CBlock;
+class CBlockFileInfo;
+class CBlockIndex;
+class CBlockUndo;
+class CValidationState;
+class CChainParams;
+class Config;
+struct FlatFilePos;
+namespace Consensus {
+struct Params;
+}
+
+/** Default for -stopafterblockimport */
+static constexpr bool DEFAULT_STOPAFTERBLOCKIMPORT = false;
+
+/** The pre-allocation chunk size for blk?????.dat files (since 0.8) */
+static constexpr unsigned int BLOCKFILE_CHUNK_SIZE = 0x1000000; // 16 MiB
+/** The pre-allocation chunk size for rev?????.dat files (since 0.8) */
+static constexpr unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
+/** The maximum size of a blk?????.dat file (since 0.8) */
+static constexpr unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
+
+extern std::atomic_bool fImporting;
+extern std::atomic_bool fReindex;
+/** Pruning-related variables and constants */
+/** True if any block files have ever been pruned. */
+extern bool fHavePruned;
+/** True if we're running in -prune mode. */
+extern bool fPruneMode;
+/** Number of MiB of block files that we're trying to stay below. */
+extern uint64_t nPruneTarget;
+extern bool fCheckBlockReads;
+extern RecursiveMutex cs_LastBlockFile;
+extern std::vector<CBlockFileInfo> vinfoBlockFile;
+extern int nLastBlockFile;
+extern bool fCheckForPruning;
+extern std::set<const CBlockIndex*> setDirtyBlockIndex;
+extern std::set<int> setDirtyFileInfo;
+
+//! Check whether the block associated with this index entry is pruned or not.
+bool IsBlockPruned(const CBlockIndex *pblockindex);
+
+void CleanupBlockRevFiles();
+
+/**
+ * Open a block file (blk?????.dat).
+ */
+FILE *OpenBlockFile(const FlatFilePos &pos, bool fReadOnly = false);
+
+/** Get block file info entry for one block file */
+CBlockFileInfo *GetBlockFileInfo(size_t n);
+
+/**
+ * Calculate the amount of disk space the block & undo files currently use.
+ */
+uint64_t CalculateCurrentUsage();
+
+/**
+ * Actually unlink the specified files
+ */
+void UnlinkPrunedFiles(const std::set<int> &setFilesToPrune);
+
+/** Functions for disk access for blocks */
+bool ReadBlockFromDisk(CBlock &block, const FlatFilePos &pos,
+                       const Consensus::Params &params);
+bool ReadBlockFromDisk(CBlock &block, const CBlockIndex *pindex,
+                       const Consensus::Params &params);
+/**
+ * Read raw block bytes from disk. Faster than the above, because this function just returns the raw block data without
+ * any unserialization. Intended to be used by the net code for low-overhead serving of block data.
+ * `nType` and `nVersion` parameters are used for `-checkblockreads` sanity checking of the serialized data. */
+bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pindex, const CChainParams &chainParams,
+                          int nType, int nVersion);
+
+bool UndoReadFromDisk(CBlockUndo &blockundo, const CBlockIndex *pindex);
+bool WriteUndoDataForBlock(const CBlockUndo &blockundo, CValidationState &state, CBlockIndex *pindex,
+                           const CChainParams &chainparams);
+/**
+ * Store block on disk. If dbp is non-nullptr, the file is known to already
+ * reside on disk.
+ */
+FlatFilePos SaveBlockToDisk(const CBlock &block, int nHeight, const CChainParams &chainparams, const FlatFilePos *dbp);
+
+void ThreadImport(const Config &config, std::vector<fs::path> vImportFiles);
