@@ -718,15 +718,12 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
         double nScripts = double(scripts.size());
         double total = nKeys + nScripts;
         double progress = 0;
-        for (const auto &key_tuple : keys) {
+        WalletBatch batch(pwallet->GetDBHandle());
+        for (const auto & [key, time, has_label, label] : keys) {
             uiInterface.ShowProgress(
                 "",
                 int(100 * progress / total),
                 false);
-            const CKey &key = std::get<0>(key_tuple);
-            int64_t time = std::get<1>(key_tuple);
-            bool has_label = std::get<2>(key_tuple);
-            std::string label = std::get<3>(key_tuple);
 
             CPubKey pubkey = key.GetPubKey();
             assert(key.VerifyPubKey(pubkey));
@@ -740,13 +737,13 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
             pwallet->WalletLogPrintf("Importing %s...\n",
                                      EncodeDestination(keyid, config));
 
-            if (!pwallet->AddKeyPubKey(key, pubkey)) {
+            if (!pwallet->AddKeyPubKeyWithBatch(batch, key, pubkey)) {
                 fGood = false;
                 continue;
             }
             pwallet->mapKeyMetadata[keyid].nCreateTime = time;
             if (has_label) {
-                pwallet->SetAddressBook(keyid, label, "receive");
+                pwallet->SetAddressBook(keyid, label, "receive", &batch);
             }
 
             nTimeBegin = std::min(nTimeBegin, time);
@@ -766,7 +763,7 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
                     HexStr(script));
                 continue;
             }
-            if (!pwallet->AddCScript(script, false /* no p2sh_32 in wallet */)) {
+            if (!pwallet->AddCScriptWithBatch(batch, script, false /* no p2sh_32 in wallet */)) {
                 pwallet->WalletLogPrintf("Error importing script %s\n",
                                          HexStr(script));
                 fGood = false;
