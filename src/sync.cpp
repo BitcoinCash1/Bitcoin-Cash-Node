@@ -171,7 +171,7 @@ potential_deadlock_cycle_detected(const CLockLocation &cur, void *l1, void *l2, 
     LogPrintf("Current locking location: %s\n", cur.ToString());
     if (g_debug_lockorder_abort) {
         fprintf(stderr,
-                "Assertion failed: detected a potentially deadlicking lock cycle at %s:%i [%s], "
+                "Assertion failed: detected a potentially deadlocking lock cycle at %s:%i [%s], "
                 "details in debug log.\n",
                 __FILE__, __LINE__, cur.ToString().c_str());
         abort();
