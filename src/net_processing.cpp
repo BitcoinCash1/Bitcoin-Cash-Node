@@ -1724,35 +1724,41 @@ static void ProcessGetData(const Config &config, CNode *pfrom,
             }
 
             const CInv &inv = *it;
+            bool found = false;
+            constexpr int nSendFlags = 0;
 
-            // Send stream from relay memory
-            bool push = false;
-            auto mi = mapRelay.find(inv.hash);
-            int nSendFlags = 0;
-            if (mi != mapRelay.end()) {
-                connman->PushMessage(
-                    pfrom,
-                    msgMaker.Make(nSendFlags, NetMsgType::TX, *mi->second));
-                push = true;
-            } else if (pfrom->timeLastMempoolReq) {
-                auto txinfo = g_mempool.info(TxId(inv.hash));
-                // To protect privacy, do not answer getdata using the mempool
-                // when that TX couldn't have been INVed in reply to a MEMPOOL
-                // request.
-                if (txinfo.tx && txinfo.nTime <= pfrom->timeLastMempoolReq) {
-                    connman->PushMessage(
-                        pfrom,
-                        msgMaker.Make(nSendFlags, NetMsgType::TX, *txinfo.tx));
-                    push = true;
-                }
-            } else if (inv.type == MSG_DOUBLESPENDPROOF && DoubleSpendProof::IsEnabled()) {
-                DoubleSpendProof dsp = g_mempool.doubleSpendProofStorage()->lookup(inv.hash);
-                if (!dsp.isEmpty()) {
-                    connman->PushMessage(pfrom, msgMaker.Make(nSendFlags, NetMsgType::DSPROOF, dsp));
-                    push = true;
-                }
+            switch (inv.type) {
+                case MSG_TX:
+                    // Send stream from relay memory
+                    if (auto mi = mapRelay.find(inv.hash); mi != mapRelay.end()) {
+                        connman->PushMessage(pfrom, msgMaker.Make(nSendFlags, NetMsgType::TX, *mi->second));
+                        found = true;
+                    } else if (pfrom->timeLastMempoolReq) {
+                        auto txinfo = g_mempool.info(TxId(inv.hash));
+                        // To protect privacy, do not answer getdata using the mempool
+                        // when that TX couldn't have been INVed in reply to a MEMPOOL
+                        // request.
+                        if (txinfo.tx && txinfo.nTime <= pfrom->timeLastMempoolReq) {
+                            connman->PushMessage(pfrom, msgMaker.Make(nSendFlags, NetMsgType::TX, *txinfo.tx));
+                            found = true;
+                        }
+                    }
+                    break;
+                case MSG_DOUBLESPENDPROOF:
+                    if (DoubleSpendProof::IsEnabled()) {
+                        DoubleSpendProof dsp = g_mempool.doubleSpendProofStorage()->lookup(inv.hash);
+                        if (!dsp.isEmpty()) {
+                            connman->PushMessage(pfrom, msgMaker.Make(nSendFlags, NetMsgType::DSPROOF, dsp));
+                            found = true;
+                        }
+                    }
+                    break;
+                default:
+                    // Not reached. Here to prevent compile-time warnings.
+                    break;
             }
-            if (!push) {
+
+            if (!found) {
                 vNotFound.push_back(inv);
             }
 
