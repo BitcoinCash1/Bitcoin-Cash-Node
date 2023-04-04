@@ -238,7 +238,7 @@ CPubKey CWallet::GenerateNewKey(WalletBatch &batch, bool internal) {
     mapKeyMetadata[pubkey.GetID()] = metadata;
     UpdateTimeFirstKey(nCreationTime);
 
-    if (!AddKeyPubKeyWithDB(batch, secret, pubkey)) {
+    if (!AddKeyPubKeyWithBatch(batch, secret, pubkey)) {
         throw std::runtime_error(std::string(__func__) + ": AddKey failed");
     }
 
@@ -307,8 +307,7 @@ void CWallet::DeriveNewChildKey(WalletBatch &batch, CKeyMetadata &metadata,
     }
 }
 
-bool CWallet::AddKeyPubKeyWithDB(WalletBatch &batch, const CKey &secret,
-                                 const CPubKey &pubkey) {
+bool CWallet::AddKeyPubKeyWithBatch(WalletBatch &batch, const CKey &secret, const CPubKey &pubkey) {
     // mapKeyMetadata
     AssertLockHeld(cs_wallet);
 
@@ -350,13 +349,14 @@ bool CWallet::AddKeyPubKeyWithDB(WalletBatch &batch, const CKey &secret,
                               mapKeyMetadata[pubkey.GetID()]);
     }
 
-    UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET);
+    UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET, &batch);
+
     return true;
 }
 
 bool CWallet::AddKeyPubKey(const CKey &secret, const CPubKey &pubkey) {
     WalletBatch batch(*database);
-    return CWallet::AddKeyPubKeyWithDB(batch, secret, pubkey);
+    return CWallet::AddKeyPubKeyWithBatch(batch, secret, pubkey);
 }
 
 bool CWallet::AddCryptedKey(const CPubKey &vchPubKey,
@@ -410,7 +410,7 @@ void CWallet::UpdateTimeFirstKey(int64_t nCreateTime) {
     }
 }
 
-bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32) {
+bool CWallet::AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32) {
     if (is_p2sh_32) {
         // Warn of internal invalid usage
         WalletLogPrintf("WARNING: p2sh_32 is not currently supported in wallet in %s\n", __func__);
@@ -419,11 +419,16 @@ bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32) {
     if (!CCryptoKeyStore::AddCScript(redeemScript, is_p2sh_32)) {
         return false;
     }
-    if (WalletBatch(*database).WriteCScript(Hash160(redeemScript), redeemScript)) {
-        UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET);
+    if (batch.WriteCScript(Hash160(redeemScript), redeemScript)) {
+        UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET, &batch);
         return true;
     }
     return false;
+}
+
+bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32) {
+    WalletBatch batch(*database);
+    return AddCScriptWithBatch(batch, redeemScript, is_p2sh_32);
 }
 
 bool CWallet::LoadCScript(const CScript &redeemScript) {
@@ -454,8 +459,8 @@ bool CWallet::AddWatchOnly(const CScript &dest) {
     const CKeyMetadata &meta = m_script_metadata[ScriptID(dest, false /* no p2sh_32 in wallet */)];
     UpdateTimeFirstKey(meta.nCreateTime);
     NotifyWatchonlyChanged(true);
-    if (WalletBatch(*database).WriteWatchOnly(dest, meta)) {
-        UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET);
+    if (WalletBatch batch(*database); batch.WriteWatchOnly(dest, meta)) {
+        UnsetWalletFlag(WALLET_FLAG_BLANK_WALLET, &batch);
         return true;
     }
     return false;
@@ -1631,10 +1636,15 @@ void CWallet::SetWalletFlag(uint64_t flags) {
     }
 }
 
-void CWallet::UnsetWalletFlag(uint64_t flag) {
+void CWallet::UnsetWalletFlag(uint64_t flag, WalletBatch *batch) {
+    std::optional<WalletBatch> optBatch;
+    if (!batch) {
+        optBatch.emplace(*database);
+        batch = &*optBatch;
+    }
     LOCK(cs_wallet);
     m_wallet_flags &= ~flag;
-    if (!WalletBatch(*database).WriteWalletFlags(m_wallet_flags)) {
+    if (!batch->WriteWalletFlags(m_wallet_flags)) {
         throw std::runtime_error(std::string(__func__) +
                                  ": writing wallet flags failed");
     }
@@ -3598,7 +3608,8 @@ DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx> &vWtx) {
 
 bool CWallet::SetAddressBook(const CTxDestination &address,
                              const std::string &strName,
-                             const std::string &strPurpose) {
+                             const std::string &strPurpose,
+                             WalletBatch *batch) {
     bool fUpdated = false;
     {
         // mapAddressBook
@@ -3616,11 +3627,15 @@ bool CWallet::SetAddressBook(const CTxDestination &address,
     NotifyAddressBookChanged(this, address, strName,
                              ::IsMine(*this, address) != ISMINE_NO, strPurpose,
                              (fUpdated ? CT_UPDATED : CT_NEW));
-    if (!strPurpose.empty() &&
-        !WalletBatch(*database).WritePurpose(address, strPurpose)) {
+    std::optional<WalletBatch> optBatch;
+    if (!batch) {
+        optBatch.emplace(*database);
+        batch = &*optBatch;
+    }
+    if (!strPurpose.empty() && !batch->WritePurpose(address, strPurpose)) {
         return false;
     }
-    return WalletBatch(*database).WriteName(address, strName);
+    return batch->WriteName(address, strName);
 }
 
 bool CWallet::DelAddressBook(const CTxDestination &address) {

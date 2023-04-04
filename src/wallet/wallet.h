@@ -983,8 +983,7 @@ public:
     //! Adds a key to the store, and saves it to disk.
     bool AddKeyPubKey(const CKey &key, const CPubKey &pubkey) override
         EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
-    bool AddKeyPubKeyWithDB(WalletBatch &batch, const CKey &key,
-                            const CPubKey &pubkey)
+    bool AddKeyPubKeyWithBatch(WalletBatch &batch, const CKey &key, const CPubKey &pubkey)
         EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     //! Adds a key to the store, without saving it to disk (used by LoadWallet)
     bool LoadKey(const CKey &key, const CPubKey &pubkey) {
@@ -1015,6 +1014,7 @@ public:
     bool LoadCryptedKey(const CPubKey &vchPubKey,
                         const std::vector<uint8_t> &vchCryptedSecret);
     bool AddCScript(const CScript &redeemScript, bool is_p2sh_32) override;
+    bool AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32);
     bool LoadCScript(const CScript &redeemScript);
 
     //! Adds a destination data tuple to the store, and saves it to disk
@@ -1248,7 +1248,7 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     bool SetAddressBook(const CTxDestination &address,
-                        const std::string &strName, const std::string &purpose);
+                        const std::string &strName, const std::string &purpose, WalletBatch *batch = nullptr);
 
     bool DelAddressBook(const CTxDestination &address);
 
@@ -1423,7 +1423,7 @@ public:
     /**
      * Unsets a single wallet flag.
      */
-    void UnsetWalletFlag(uint64_t flag);
+    void UnsetWalletFlag(uint64_t flag, WalletBatch *batch = nullptr);
 
     /**
      * Check if a certain wallet flag is set.
