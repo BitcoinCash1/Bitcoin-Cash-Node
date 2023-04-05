@@ -7,6 +7,7 @@
 
 #include <random.h>
 #include <reverselock.h>
+#include <util/defer.h>
 
 #include <cassert>
 #include <utility>
@@ -38,14 +39,10 @@ void CScheduler::serviceQueue() {
 
             // Wait until either there is a new task, or until the time of the
             // first item on the queue.
-            // Some boost versions have a conflicting overload of wait_until
-            // that returns void. Explicitly use a template here to avoid
-            // hitting that overload.
             while (!shouldStop() && !taskQueue.empty()) {
-                std::chrono::system_clock::time_point timeToWaitFor =
-                    taskQueue.begin()->first;
-                if (newTaskScheduled.wait_until<>(lock, timeToWaitFor) ==
-                    std::cv_status::timeout) {
+                std::chrono::system_clock::time_point timeToWaitFor = taskQueue.begin()->first;
+
+                if (newTaskScheduled.wait_until(lock, timeToWaitFor) == std::cv_status::timeout) {
                     // Exit loop after timeout, it means we reached the
                     // time of the event
                     break;
@@ -58,8 +55,9 @@ void CScheduler::serviceQueue() {
                 continue;
             }
 
-            Function f = taskQueue.begin()->second;
-            taskQueue.erase(taskQueue.begin());
+            // Extract the node from the front of the taskeQueue using this zero-copy technique
+            const auto node_handle = taskQueue.extract(taskQueue.begin());
+            Function &f = node_handle.mapped();
 
             {
                 // Unlock before calling f, so it can reschedule itself or
@@ -88,35 +86,32 @@ void CScheduler::stop(bool drain) {
     newTaskScheduled.notify_all();
 }
 
-void CScheduler::schedule(CScheduler::Function f,
-                          std::chrono::system_clock::time_point t) {
+void CScheduler::schedule(Function f, std::chrono::system_clock::time_point t) {
     {
         std::unique_lock lock(newTaskMutex);
-        taskQueue.insert(std::make_pair(t, f));
+        taskQueue.emplace(t, std::move(f));
     }
     newTaskScheduled.notify_one();
 }
 
-void CScheduler::scheduleFromNow(CScheduler::Function f,
-                                 int64_t deltaMilliSeconds) {
-    schedule(f, std::chrono::system_clock::now() + std::chrono::milliseconds(deltaMilliSeconds));
+void CScheduler::scheduleFromNow(Function f, int64_t deltaMilliSeconds) {
+    schedule(std::move(f), std::chrono::system_clock::now() + std::chrono::milliseconds(deltaMilliSeconds));
 }
 
 void CScheduler::MockForward(std::chrono::seconds delta_seconds) {
-    assert(delta_seconds.count() > 0 &&
-           delta_seconds < std::chrono::hours{1});
+    assert(delta_seconds.count() > 0 && delta_seconds < std::chrono::hours{1});
 
     {
         std::unique_lock lock(newTaskMutex);
 
         // use temp_queue to maintain updated schedule
-        std::multimap<std::chrono::system_clock::time_point, Function>
-            temp_queue;
+        decltype(taskQueue) temp_queue;
 
-        for (const auto &element : taskQueue) {
-            temp_queue.emplace_hint(temp_queue.cend(),
-                                    element.first - delta_seconds,
-                                    element.second);
+        while (!taskQueue.empty()) {
+            // zero-copy extraction, modify the key, and splice the node into temp_queue in order
+            auto node_handle = taskQueue.extract(taskQueue.begin());
+            node_handle.key() -= delta_seconds;
+            temp_queue.insert(temp_queue.cend(), std::move(node_handle));
         }
 
         // point taskQueue to temp_queue
@@ -127,17 +122,11 @@ void CScheduler::MockForward(std::chrono::seconds delta_seconds) {
     newTaskScheduled.notify_one();
 }
 
-static void Repeat(CScheduler *s, CScheduler::Predicate p,
-                   int64_t deltaMilliSeconds) {
-    if (p()) {
-        s->scheduleFromNow(std::bind(&Repeat, s, p, deltaMilliSeconds),
-                           deltaMilliSeconds);
-    }
-}
 
-void CScheduler::scheduleEvery(CScheduler::Predicate p,
-                               int64_t deltaMilliSeconds) {
-    scheduleFromNow(std::bind(&Repeat, this, p, deltaMilliSeconds),
+void CScheduler::scheduleEvery(Predicate p, int64_t deltaMilliSeconds) {
+    scheduleFromNow([this, p2 = std::move(p), deltaMilliSeconds] {
+                        if (p2()) scheduleEvery(std::move(p2), deltaMilliSeconds);
+                    },
                     deltaMilliSeconds);
 }
 
@@ -171,12 +160,12 @@ void SingleThreadedSchedulerClient::MaybeScheduleProcessQueue() {
             return;
         }
     }
-    m_pscheduler->schedule(
-        std::bind(&SingleThreadedSchedulerClient::ProcessQueue, this));
+    m_pscheduler->schedule([this] { ProcessQueue(); });
 }
 
 void SingleThreadedSchedulerClient::ProcessQueue() {
-    std::function<void()> callback;
+    CScheduler::Function callback;
+
     {
         LOCK(m_cs_callbacks_pending);
         if (m_are_callbacks_running) {
@@ -191,32 +180,25 @@ void SingleThreadedSchedulerClient::ProcessQueue() {
         m_callbacks_pending.pop_front();
     }
 
-    // RAII the setting of fCallbacksRunning and calling
-    // MaybeScheduleProcessQueue to ensure both happen safely even if callback()
-    // throws.
-    struct RAIICallbacksRunning {
-        SingleThreadedSchedulerClient *instance;
-        explicit RAIICallbacksRunning(SingleThreadedSchedulerClient *_instance)
-            : instance(_instance) {}
-        ~RAIICallbacksRunning() {
-            {
-                LOCK(instance->m_cs_callbacks_pending);
-                instance->m_are_callbacks_running = false;
-            }
-            instance->MaybeScheduleProcessQueue();
+    // RAII the setting of fCallbacksRunning and calling MaybeScheduleProcessQueue to ensure both happen safely even
+    // if callback() throws.
+    Defer d([this]{
+        {
+            LOCK(m_cs_callbacks_pending);
+            m_are_callbacks_running = false;
         }
-    } raiicallbacksrunning(this);
+        MaybeScheduleProcessQueue();
+    });
 
     callback();
 }
 
-void SingleThreadedSchedulerClient::AddToProcessQueue(
-    std::function<void()> func) {
+void SingleThreadedSchedulerClient::AddToProcessQueue(CScheduler::Function func) {
     assert(m_pscheduler);
 
     {
         LOCK(m_cs_callbacks_pending);
-        m_callbacks_pending.emplace_back(std::move(func));
+        m_callbacks_pending.push_back(std::move(func));
     }
     MaybeScheduleProcessQueue();
 }

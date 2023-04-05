@@ -19,8 +19,9 @@
 // Usage:
 //
 // CScheduler* s = new CScheduler();
-// s->scheduleFromNow(doSomething, 11); // Assuming a: void doSomething() { }
+// s->scheduleFromNow(doSomething, 11); // Assuming a: void doSomething(int) { }
 // s->scheduleFromNow(std::bind(Class::func, this, argument), 3);
+// s->scheduleFromNow([this](int argument) { this->func(argument); }, 3);
 // std::thread t = std::thread(CScheduler::serviceQueue, s);
 //
 // ... then at program shutdown, clean up the thread running serviceQueue:
@@ -32,8 +33,8 @@ public:
     CScheduler();
     ~CScheduler();
 
-    typedef std::function<void()> Function;
-    typedef std::function<bool()> Predicate;
+    using Function = std::function<void()>;
+    using Predicate = std::function<bool()>;
 
     // Call func at/after time t
     void schedule(Function f, std::chrono::system_clock::time_point t = std::chrono::system_clock::now());
@@ -100,16 +101,14 @@ private:
     CScheduler *m_pscheduler;
 
     RecursiveMutex m_cs_callbacks_pending;
-    std::list<std::function<void()>>
-        m_callbacks_pending GUARDED_BY(m_cs_callbacks_pending);
+    std::list<CScheduler::Function> m_callbacks_pending GUARDED_BY(m_cs_callbacks_pending);
     bool m_are_callbacks_running GUARDED_BY(m_cs_callbacks_pending) = false;
 
     void MaybeScheduleProcessQueue();
     void ProcessQueue();
 
 public:
-    explicit SingleThreadedSchedulerClient(CScheduler *pschedulerIn)
-        : m_pscheduler(pschedulerIn) {}
+    explicit SingleThreadedSchedulerClient(CScheduler *pschedulerIn) : m_pscheduler(pschedulerIn) {}
 
     /**
      * Add a callback to be executed. Callbacks are executed serially
@@ -117,7 +116,7 @@ public:
      * Practially, this means that callbacks can behave as if they are executed
      * in order by a single thread.
      */
-    void AddToProcessQueue(std::function<void()> func);
+    void AddToProcessQueue(CScheduler::Function func);
 
     // Processes all remaining queue members on the calling thread, blocking
     // until queue is empty. Must be called after the CScheduler has no
