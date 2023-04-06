@@ -221,7 +221,7 @@ static bool rest_block(const Config &config, HTTPRequest *req,
 
     const BlockHash hash(rawHash);
 
-    CBlock block;
+    std::vector<uint8_t> rawBlock;
     CBlockIndex *pblockindex = nullptr;
     CBlockIndex *tip = nullptr;
     {
@@ -237,32 +237,30 @@ static bool rest_block(const Config &config, HTTPRequest *req,
                            hashStr + " not available (pruned data)");
         }
 
-        if (!ReadBlockFromDisk(block, pblockindex,
-                               config.GetChainParams().GetConsensus())) {
+        if (!ReadRawBlockFromDisk(rawBlock, pblockindex,
+                                  config.GetChainParams(), SER_NETWORK, PROTOCOL_VERSION)) {
             return RESTERR(req, HTTP_NOT_FOUND, hashStr + " not found");
         }
     }
 
     switch (rf) {
         case RetFormat::BINARY: {
-            CDataStream ssBlock(SER_NETWORK, PROTOCOL_VERSION);
-            ssBlock << block;
-            std::string binaryBlock = ssBlock.str();
+            std::string binaryBlock((rawBlock.begin()), rawBlock.end());
             req->WriteHeader("Content-Type", "application/octet-stream");
             req->WriteReply(HTTP_OK, binaryBlock);
             return true;
         }
 
         case RetFormat::HEX: {
-            CDataStream ssBlock(SER_NETWORK, PROTOCOL_VERSION);
-            ssBlock << block;
-            std::string strHex = HexStr(ssBlock) + "\n";
+            std::string strHex = HexStr(rawBlock) + "\n";
             req->WriteHeader("Content-Type", "text/plain");
             req->WriteReply(HTTP_OK, strHex);
             return true;
         }
 
         case RetFormat::JSON: {
+            CBlock block;
+            VectorReader(SER_NETWORK, PROTOCOL_VERSION, rawBlock, 0) >> block;
             UniValue::Object objBlock = blockToJSON(config, block, tip, pblockindex, tx_verbosity);
             std::string strJSON = UniValue::stringify(objBlock) + "\n";
             req->WriteHeader("Content-Type", "application/json");
