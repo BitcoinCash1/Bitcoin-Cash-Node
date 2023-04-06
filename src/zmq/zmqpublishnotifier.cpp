@@ -182,20 +182,16 @@ bool CZMQPublishRawBlockNotifier::NotifyBlock(const CBlockIndex *pindex) {
              pindex->GetBlockHash().GetHex());
 
     const Config &config = GetConfig();
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    std::vector<uint8_t> rawBlock;
     {
         LOCK(cs_main);
-        CBlock block;
-        if (!ReadBlockFromDisk(block, pindex,
-                               config.GetChainParams().GetConsensus())) {
+        if (!ReadRawBlockFromDisk(rawBlock, pindex,
+                                  config.GetChainParams(), SER_NETWORK, PROTOCOL_VERSION)) {
             zmqError("Can't read block from disk");
             return false;
         }
-
-        ss << block;
     }
-
-    return SendZmqMessage(MSG_RAWBLOCK, &(*ss.begin()), ss.size());
+    return SendZmqMessage(MSG_RAWBLOCK, rawBlock.data(), rawBlock.size());
 }
 
 bool CZMQPublishRawTransactionNotifier::NotifyTransaction(
