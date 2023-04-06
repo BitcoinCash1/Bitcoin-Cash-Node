@@ -632,7 +632,7 @@ void HTTPRequest::WriteHeader(const std::string &hdr,
  * Replies must be sent in the main loop in the main http thread, this cannot be
  * done from worker threads.
  */
-void HTTPRequest::WriteReply(int nStatus, const std::string &strReply) {
+void HTTPRequest::WriteReply(int nStatus, Span<const uint8_t> reply) {
     assert(!replySent && req);
     if (ShutdownRequested()) {
         WriteHeader("Connection", "close");
@@ -654,18 +654,21 @@ void HTTPRequest::WriteReply(int nStatus, const std::string &strReply) {
             // If we are outputting binary (REST .bin mode), we will encode the data as hex first,
             // to keep log files tidy.
             content_desc = " (binary data, hex encoded)";
-            hexStrReply = HexStr(strReply);
+            hexStrReply = HexStr(reply);
         }
-        const std::string &content = isBinary ? hexStrReply : strReply;
+        const std::string_view content =
+            isBinary ? hexStrReply
+                     : std::string_view{reinterpret_cast<const std::string_view::value_type *>(reply.data()),
+                                        reply.size()};
         LogPrintf("<httptrace> Writing reply to %s, status: %d, headers: %u, content: %u bytes\n"
                   "--- HEADERS ---\n%s\n--- CONTENT%s ---\n%s\n",
-                  GetPeer().ToString(), nStatus, headersVec.size(), strReply.size(), headers, content_desc, content);
+                  GetPeer().ToString(), nStatus, headersVec.size(), reply.size(), headers, content_desc, content);
     }
 
     // Send event to main http thread to send reply message
     struct evbuffer *evb = evhttp_request_get_output_buffer(req);
     assert(evb);
-    evbuffer_add(evb, strReply.data(), strReply.size());
+    evbuffer_add(evb, reply.data(), reply.size());
     auto req_copy = req;
     HTTPEvent *ev = new HTTPEvent(eventBase, true, [req_copy, nStatus] {
         evhttp_send_reply(req_copy, nStatus, nullptr, nullptr);
