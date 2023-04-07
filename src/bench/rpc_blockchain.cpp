@@ -1,5 +1,5 @@
 // Copyright (c) 2016-2019 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,7 +16,6 @@
 #include <rpc/blockchain.h>
 
 #include <univalue.h>
-
 
 static void RPCBlockVerbose(int blockHeight, benchmark::State &state, TxVerbosity verbosity) {
     SelectParams(CBaseChainParams::MAIN);
@@ -39,7 +38,8 @@ static void RPCBlockVerbose_1MB(benchmark::State &state) {
 }
 static void RPCBlockVerbose_32MB(benchmark::State &state) {
     RPCBlockVerbose(556034, state, TxVerbosity::SHOW_DETAILS);
-}static void RPCBlockVeryVerbose_1MB(benchmark::State &state) {
+}
+static void RPCBlockVeryVerbose_1MB(benchmark::State &state) {
     RPCBlockVerbose(413567, state, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
 }
 static void RPCBlockVeryVerbose_32MB(benchmark::State &state) {
