@@ -10,6 +10,7 @@
 #include <fs.h>
 #include <serialize.h>
 #include <streams.h>
+#include <support/cleanse.h>
 #include <sync.h>
 #include <util/system.h>
 #include <version.h>
