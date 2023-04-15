@@ -11,6 +11,7 @@ extern const std::vector<uint8_t> &Get_block413567();
 extern const std::vector<uint8_t> &Get_block556034();
 extern const std::vector<uint8_t> &Get_coins_spent_413567();
 extern const std::vector<uint8_t> &Get_coins_spent_556034();
+extern const std::vector<uint8_t> &Get_recv_messages();
 
 } // namespace data
 } // namespace benchmark
