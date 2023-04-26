@@ -101,6 +101,7 @@ static bool test_generic_vector_reader() {
     reader >> a;
     BOOST_CHECK_EQUAL(a, 1);
     BOOST_CHECK_EQUAL(reader.size(), 5);
+    BOOST_CHECK_EQUAL(reader.GetPos(), 1);
     BOOST_CHECK(!reader.empty());
 
     // Read a single byte as a (signed) int8_t.
@@ -108,6 +109,7 @@ static bool test_generic_vector_reader() {
     reader >> b;
     BOOST_CHECK_EQUAL(b, -1);
     BOOST_CHECK_EQUAL(reader.size(), 4);
+    BOOST_CHECK_EQUAL(reader.GetPos(), 2);
     BOOST_CHECK(!reader.empty());
 
     // Read a 4 bytes as an unsigned uint32_t.
@@ -116,6 +118,7 @@ static bool test_generic_vector_reader() {
     // 100992003 = 3,4,5,6 in little-endian base-256
     BOOST_CHECK_EQUAL(c, 100992003);
     BOOST_CHECK_EQUAL(reader.size(), 0);
+    BOOST_CHECK_EQUAL(reader.GetPos(), 6);
     BOOST_CHECK(reader.empty());
 
     // Reading after end of byte vector throws an error.
@@ -128,11 +131,28 @@ static bool test_generic_vector_reader() {
     // 67370753 = 1,255,3,4 in little-endian base-256
     BOOST_CHECK_EQUAL(d, 67370753);
     BOOST_CHECK_EQUAL(new_reader.size(), 2);
+    BOOST_CHECK_EQUAL(new_reader.GetPos(), 4);
     BOOST_CHECK(!new_reader.empty());
 
     // Reading after end of byte vector throws an error even if the reader is
     // not totally empty.
     BOOST_CHECK_THROW(new_reader >> d, std::ios_base::failure);
+
+    // Read a 4 bytes as a (signed) int32_t from offset 1 of the buffer.
+    GenericVectorReader new_reader2(SER_NETWORK, INIT_PROTO_VERSION, vch, 1);
+    BOOST_CHECK_EQUAL(new_reader2.size(), 5);
+    BOOST_CHECK_EQUAL(new_reader2.GetPos(), 1);
+    new_reader2 >> d;
+    // 84149247 = 255,3,4,5 in little-endian base-256
+    BOOST_CHECK_EQUAL(d, 84149247);
+    BOOST_CHECK_EQUAL(new_reader2.size(), 1);
+    BOOST_CHECK_EQUAL(new_reader2.GetPos(), 5);
+    BOOST_CHECK(!new_reader2.empty());
+    new_reader2 >> a;
+    BOOST_CHECK_EQUAL(a, 0x06u);
+    BOOST_CHECK_EQUAL(new_reader2.size(), 0);
+    BOOST_CHECK_EQUAL(new_reader2.GetPos(), 6);
+    BOOST_CHECK(new_reader2.empty());
 
     return true;
 }

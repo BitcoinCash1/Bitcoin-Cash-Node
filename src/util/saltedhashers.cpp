@@ -11,6 +11,6 @@ SaltedHasherBase::SaltedHasherBase() noexcept
     : m_k0(GetRand64()), m_k1(GetRand64())
 {}
 
-size_t ByteVectorHash::operator()(const std::vector<uint8_t> &input) const noexcept {
+size_t ByteVectorHash::operator()(Span<const uint8_t> input) const noexcept {
     return static_cast<size_t>(CSipHasher(k0(), k1()).Write(input.data(), input.size()).Finalize());
 }

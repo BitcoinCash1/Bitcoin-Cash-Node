@@ -178,6 +178,8 @@ public:
     int GetType() const { return m_type; }
     void SetType(int type) { m_type = type; }
 
+    size_t GetPos() const { return m_pos; }
+
     size_t size() const { return m_data.size() - m_pos; }
     bool empty() const { return m_data.size() == m_pos; }
 
