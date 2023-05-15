@@ -608,7 +608,22 @@ BOOST_FIXTURE_TEST_CASE(dummy_input_size_test, TestChain100Setup) {
     BOOST_CHECK_EQUAL(CalculateP2PKHInputSize(true), DUMMY_P2PKH_INPUT_SIZE);
 }
 
-BOOST_FIXTURE_TEST_CASE(wallet_bip69, ListCoinsTestingSetup) {
+struct Upgrade9NotActivatedTestingSetup : ListCoinsTestingSetup {
+    Upgrade9NotActivatedTestingSetup() : ListCoinsTestingSetup() {
+        gArgs.ForceSetArg("-upgrade9activationtime", "9223372036854775807"); // force activation always off for this test fixture
+        LOCK(cs_main);
+        // Ensure upgrade 9 (tokens) is not active for next block and mempool
+        BOOST_CHECK(!IsUpgrade9Enabled(::GetConfig().GetChainParams().GetConsensus(), ::ChainActive().Tip()));
+    }
+    ~Upgrade9NotActivatedTestingSetup() {
+        gArgs.ClearArg("-upgrade9activationtime");
+    }
+};
+
+BOOST_FIXTURE_TEST_CASE(wallet_bip69, Upgrade9NotActivatedTestingSetup) {
+    // Note: The entire point of this test is to *just* test tx sorting with/without bip69 enabled when token data is
+    // present/absent, and as such we didn't bother creating consensus-respecting CashToken txns for this test (which
+    // is why this test requires upgrade9 be disabled).
     Defer d([]{
         // undo forceSetArg
         gArgs.ClearArg("-usebip69");
