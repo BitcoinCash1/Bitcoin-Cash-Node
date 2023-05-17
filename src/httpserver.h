@@ -5,10 +5,13 @@
 
 #pragma once
 
+#include <span.h>
+
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -136,14 +139,15 @@ public:
     /**
      * Write HTTP reply.
      * nStatus is the HTTP status code to send.
-     * strReply is the body of the reply. Keep it empty to send a standard
+     * reply is the body of the reply. Keep it empty to send a standard
      * message.
      *
      * @note Can be called only once. As this will give the request back to the
      * main thread, do not call any other HTTPRequest methods after calling
      * this.
      */
-    void WriteReply(int nStatus, const std::string &strReply = "");
+    void WriteReply(int nStatus, Span<const uint8_t> reply = {});
+    void WriteReply(int nStatus, std::string_view reply) { WriteReply(nStatus, MakeUInt8Span(reply)); }
 
 private:
     std::vector<NameValuePair> GetAllHeaders(bool input) const;

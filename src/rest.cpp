@@ -170,9 +170,8 @@ static bool rest_headers(const std::any& context, Config &config, HTTPRequest *r
                 ssHeader << pindex->GetBlockHeader();
             }
 
-            std::string binaryHeader = ssHeader.str();
             req->WriteHeader("Content-Type", "application/octet-stream");
-            req->WriteReply(HTTP_OK, binaryHeader);
+            req->WriteReply(HTTP_OK, MakeUInt8Span(ssHeader));
             return true;
         }
 
@@ -245,9 +244,8 @@ static bool rest_block(const Config &config, HTTPRequest *req,
 
     switch (rf) {
         case RetFormat::BINARY: {
-            std::string binaryBlock((rawBlock.begin()), rawBlock.end());
             req->WriteHeader("Content-Type", "application/octet-stream");
-            req->WriteReply(HTTP_OK, binaryBlock);
+            req->WriteReply(HTTP_OK, rawBlock);
             return true;
         }
 
@@ -396,9 +394,8 @@ static bool rest_tx(const std::any& context, Config &config, HTTPRequest *req,
                              PROTOCOL_VERSION);
             ssTx << tx;
 
-            std::string binaryTx = ssTx.str();
             req->WriteHeader("Content-Type", "application/octet-stream");
-            req->WriteReply(HTTP_OK, binaryTx);
+            req->WriteReply(HTTP_OK, MakeUInt8Span(ssTx));
             return true;
         }
 
@@ -593,10 +590,9 @@ static bool rest_getutxos(const std::any& context, Config &config, HTTPRequest *
                                   << ::ChainActive().Tip()->GetBlockHash() << bitmap
                                   << outs;
             }
-            std::string ssGetUTXOResponseString = ssGetUTXOResponse.str();
 
             req->WriteHeader("Content-Type", "application/octet-stream");
-            req->WriteReply(HTTP_OK, ssGetUTXOResponseString);
+            req->WriteReply(HTTP_OK, MakeUInt8Span(ssGetUTXOResponse));
             return true;
         }
 
