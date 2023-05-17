@@ -8,6 +8,7 @@ add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/data/block556034.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_413567.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_556034.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/recv_messages.cpp
   COMMAND
     ${CMAKE_CURRENT_SOURCE_DIR}/data/convert-raw-files.py ${CMAKE_CURRENT_SOURCE_DIR}/data ${CMAKE_CURRENT_BINARY_DIR}/data
   DEPENDS
@@ -15,6 +16,7 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/data/block556034.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/coins_spent_413567.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/coins_spent_556034.raw.bz2
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/recv_messages.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/convert-raw-files.py
 )
 
@@ -38,6 +40,7 @@ add_executable(bench_bitcoin
 	${CMAKE_CURRENT_BINARY_DIR}/data/block556034.cpp
 	${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_413567.cpp
 	${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_556034.cpp
+	${CMAKE_CURRENT_BINARY_DIR}/data/recv_messages.cpp
 	dsproof.cpp
 	duplicate_inputs.cpp
 	examples.cpp
@@ -47,6 +50,7 @@ add_executable(bench_bitcoin
 	lockedpool.cpp
 	mempool_eviction.cpp
 	merkle_root.cpp
+	net_messages.cpp
 	prevector.cpp
 	removeforblock.cpp
 	rollingbloom.cpp
