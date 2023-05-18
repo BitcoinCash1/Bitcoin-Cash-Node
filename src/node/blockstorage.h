@@ -36,25 +36,28 @@ static constexpr unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
 /** The maximum size of a blk?????.dat file (since 0.8) */
 static constexpr unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
 
+/** External lock; lives in validation.cpp; used for some of the variables and functions below. */
+extern RecursiveMutex cs_main;
+
 extern std::atomic_bool fImporting;
 extern std::atomic_bool fReindex;
 /** Pruning-related variables and constants */
 /** True if any block files have ever been pruned. */
-extern bool fHavePruned;
+extern bool fHavePruned GUARDED_BY(cs_main);
 /** True if we're running in -prune mode. */
 extern bool fPruneMode;
 /** Number of MiB of block files that we're trying to stay below. */
 extern uint64_t nPruneTarget;
 extern bool fCheckBlockReads;
 extern RecursiveMutex cs_LastBlockFile;
-extern std::vector<CBlockFileInfo> vinfoBlockFile;
-extern int nLastBlockFile;
-extern bool fCheckForPruning;
-extern std::set<const CBlockIndex*> setDirtyBlockIndex;
-extern std::set<int> setDirtyFileInfo;
+extern std::vector<CBlockFileInfo> vinfoBlockFile GUARDED_BY(cs_LastBlockFile);
+extern int nLastBlockFile GUARDED_BY(cs_LastBlockFile);
+extern bool fCheckForPruning GUARDED_BY(cs_LastBlockFile);
+extern std::set<const CBlockIndex*> setDirtyBlockIndex GUARDED_BY(cs_main);
+extern std::set<int> setDirtyFileInfo GUARDED_BY(cs_LastBlockFile);
 
 //! Check whether the block associated with this index entry is pruned or not.
-bool IsBlockPruned(const CBlockIndex *pblockindex);
+bool IsBlockPruned(const CBlockIndex *pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 void CleanupBlockRevFiles();
 
@@ -90,11 +93,12 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
 
 bool UndoReadFromDisk(CBlockUndo &blockundo, const CBlockIndex *pindex);
 bool WriteUndoDataForBlock(const CBlockUndo &blockundo, CValidationState &state, CBlockIndex *pindex,
-                           const CChainParams &chainparams);
+                           const CChainParams &chainparams) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 /**
  * Store block on disk. If dbp is non-nullptr, the file is known to already
  * reside on disk.
  */
-FlatFilePos SaveBlockToDisk(const CBlock &block, int nHeight, const CChainParams &chainparams, const FlatFilePos *dbp);
+FlatFilePos SaveBlockToDisk(const CBlock &block, int nHeight, const CChainParams &chainparams, const FlatFilePos *dbp)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 void ThreadImport(const Config &config, std::vector<fs::path> vImportFiles);

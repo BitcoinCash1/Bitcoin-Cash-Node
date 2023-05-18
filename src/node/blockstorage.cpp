@@ -24,32 +24,32 @@
 
 std::atomic_bool fImporting(false);
 std::atomic_bool fReindex(false);
-bool fHavePruned = false;
+bool fHavePruned GUARDED_BY(cs_main) = false;
 bool fPruneMode = false;
 uint64_t nPruneTarget = 0;
 bool fCheckBlockReads = false;
 
 RecursiveMutex cs_LastBlockFile;
-std::vector<CBlockFileInfo> vinfoBlockFile;
-int nLastBlockFile = 0;
+std::vector<CBlockFileInfo> vinfoBlockFile GUARDED_BY(cs_LastBlockFile);
+int nLastBlockFile GUARDED_BY(cs_LastBlockFile) = 0;
 /**
  * Global flag to indicate we should check to see if there are block/undo files
  * that should be deleted. Set on startup or if we allocate more file space when
  * we're in prune mode.
  */
-bool fCheckForPruning = false;
+bool fCheckForPruning GUARDED_BY(cs_LastBlockFile) = false;
 
 /** Dirty block index entries. */
-std::set<const CBlockIndex *> setDirtyBlockIndex;
+std::set<const CBlockIndex *> setDirtyBlockIndex GUARDED_BY(cs_main);
 
 /** Dirty block file entries. */
-std::set<int> setDirtyFileInfo;
+std::set<int> setDirtyFileInfo GUARDED_BY(cs_LastBlockFile);
 
 static FILE *OpenUndoFile(const FlatFilePos &pos, bool fReadOnly = false);
 static FlatFileSeq BlockFileSeq();
 static FlatFileSeq UndoFileSeq();
 
-bool IsBlockPruned(const CBlockIndex *pblockindex) {
+bool IsBlockPruned(const CBlockIndex *pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     return fHavePruned && !pblockindex->nStatus.hasData() && pblockindex->nTx > 0;
 }
 
@@ -110,7 +110,7 @@ CBlockFileInfo *GetBlockFileInfo(size_t n) {
 
 static bool UndoWriteToDisk(const CBlockUndo &blockundo, FlatFilePos &pos,
                             const BlockHash &hashBlock,
-                            const CMessageHeader::MessageMagic &messageStart) {
+                            const CMessageHeader::MessageMagic &messageStart) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     // Open history file to append
     CAutoFile fileout(OpenUndoFile(pos), SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull()) {
@@ -228,7 +228,8 @@ static fs::path GetBlockPosFilename(const FlatFilePos &pos) {
     return BlockFileSeq().FileName(pos);
 }
 
-bool FindBlockPos(FlatFilePos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime, bool fKnown = false) {
+static bool FindBlockPos(FlatFilePos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime,
+                         bool fKnown = false) {
     LOCK(cs_LastBlockFile);
 
     unsigned int nFile = fKnown ? pos.nFile : nLastBlockFile;
@@ -307,7 +308,7 @@ static bool FindUndoPos(CValidationState &state, int nFile, FlatFilePos &pos,
 }
 
 static bool WriteBlockToDisk(const CBlock &block, FlatFilePos &pos,
-                             const CMessageHeader::MessageMagic &messageStart) {
+                             const CMessageHeader::MessageMagic &messageStart) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     // Open history file to append
     CAutoFile fileout(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull()) {
@@ -331,7 +332,7 @@ static bool WriteBlockToDisk(const CBlock &block, FlatFilePos &pos,
 }
 
 bool WriteUndoDataForBlock(const CBlockUndo &blockundo, CValidationState &state, CBlockIndex *pindex,
-                           const CChainParams &chainparams) {
+                           const CChainParams &chainparams) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     // Write undo information to disk
     if (pindex->GetUndoPos().IsNull()) {
         FlatFilePos _pos;
@@ -482,7 +483,8 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
     return true;
 }
 
-FlatFilePos SaveBlockToDisk(const CBlock &block, int nHeight, const CChainParams &chainparams, const FlatFilePos *dbp) {
+FlatFilePos SaveBlockToDisk(const CBlock &block, int nHeight, const CChainParams &chainparams, const FlatFilePos *dbp)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     unsigned int nBlockSize = ::GetSerializeSize(block, CLIENT_VERSION);
     FlatFilePos blockPos;
     if (dbp != nullptr) {

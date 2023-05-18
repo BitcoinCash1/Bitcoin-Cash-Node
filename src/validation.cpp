@@ -258,8 +258,8 @@ CChain &ChainActive() {
  */
 RecursiveMutex cs_main;
 
-BlockMap &mapBlockIndex = g_chainstate.mapBlockIndex;
-CBlockIndex *pindexBestHeader = nullptr;
+BlockMap &mapBlockIndex GUARDED_BY(cs_main) = g_chainstate.mapBlockIndex;
+CBlockIndex *pindexBestHeader GUARDED_BY(cs_main) = nullptr;
 Mutex g_best_block_mutex;
 std::condition_variable g_best_block_cv;
 uint256 g_best_block;
@@ -2063,7 +2063,7 @@ void FlushStateToDisk() {
 
 void PruneAndFlush() {
     CValidationState state;
-    fCheckForPruning = true;
+    WITH_LOCK(cs_LastBlockFile, fCheckForPruning = true);
     const CChainParams &chainparams = Params();
     if (!FlushStateToDisk(chainparams, state, FlushStateMode::NONE)) {
         LogPrintf("%s: failed to flush state (%s)\n", __func__,
@@ -3174,7 +3174,7 @@ bool ParkBlock(const Config &config, CValidationState &state,
 
 template <typename F>
 bool CChainState::UpdateFlagsForBlock(CBlockIndex *pindexBase,
-                                      CBlockIndex *pindex, F f) {
+                                      CBlockIndex *pindex, F f) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     BlockStatus newStatus = f(pindex->nStatus);
     if (pindex->nStatus != newStatus &&
         (!pindexBase ||
@@ -4417,22 +4417,25 @@ static bool LoadBlockIndexDB(const Config &config)
     }
 
     // Load block file info
-    pblocktree->ReadLastBlockFile(nLastBlockFile);
-    vinfoBlockFile.resize(nLastBlockFile + 1);
-    LogPrintf("%s: last block file = %i\n", __func__, nLastBlockFile);
-    for (int nFile = 0; nFile <= nLastBlockFile; nFile++) {
-        pblocktree->ReadBlockFileInfo(nFile, vinfoBlockFile[nFile]);
-    }
+    {
+        LOCK(cs_LastBlockFile);
+        pblocktree->ReadLastBlockFile(nLastBlockFile);
+        vinfoBlockFile.resize(nLastBlockFile + 1);
+        LogPrintf("%s: last block file = %i\n", __func__, nLastBlockFile);
+        for (int nFile = 0; nFile <= nLastBlockFile; nFile++) {
+            pblocktree->ReadBlockFileInfo(nFile, vinfoBlockFile[nFile]);
+        }
 
-    LogPrintf("%s: last block file info: %s\n", __func__,
-              vinfoBlockFile[nLastBlockFile].ToString());
+        LogPrintf("%s: last block file info: %s\n", __func__,
+                  vinfoBlockFile[nLastBlockFile].ToString());
 
-    for (int nFile = nLastBlockFile + 1; true; nFile++) {
-        CBlockFileInfo info;
-        if (pblocktree->ReadBlockFileInfo(nFile, info)) {
-            vinfoBlockFile.push_back(info);
-        } else {
-            break;
+        for (int nFile = nLastBlockFile + 1; true; nFile++) {
+            CBlockFileInfo info;
+            if (pblocktree->ReadBlockFileInfo(nFile, info)) {
+                vinfoBlockFile.push_back(info);
+            } else {
+                break;
+            }
         }
     }
 
@@ -4823,10 +4826,13 @@ void UnloadBlockIndex() {
     g_upgrade9_block_tracker.ResetActivationBlockCache();
     g_mempool.clear();
     mapBlocksUnlinked.clear();
-    vinfoBlockFile.clear();
-    nLastBlockFile = 0;
+    {
+        LOCK(cs_LastBlockFile);
+        vinfoBlockFile.clear();
+        nLastBlockFile = 0;
+        setDirtyFileInfo.clear();
+    }
     setDirtyBlockIndex.clear();
-    setDirtyFileInfo.clear();
 
     for (const BlockMap::value_type &entry : mapBlockIndex) {
         delete entry.second;
