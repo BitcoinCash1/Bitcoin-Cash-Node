@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(insert_delete) {
     BOOST_CHECK_EQUAL(ss[3], (char)0xff);
 
     // Make sure GetAndClear does the right thing:
-    CSerializeData d;
+    CDataStream::vector_type d;
     ss.GetAndClear(d);
     BOOST_CHECK_EQUAL(ss.size(), 0U);
 }
