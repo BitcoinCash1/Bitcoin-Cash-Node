@@ -6,6 +6,7 @@
 
 #include <crypto/siphash.h>
 #include <primitives/transaction.h>
+#include <span.h>
 #include <uint256.h>
 
 #include <cstdint>
@@ -66,5 +67,5 @@ public:
  */
 struct ByteVectorHash : SaltedHasherBase {
     ByteVectorHash() noexcept {} // circumvent some libstdc++-11 bugs on Debian unstable
-    size_t operator()(const std::vector<uint8_t> &input) const noexcept;
+    size_t operator()(Span<const uint8_t> input) const noexcept;
 };
