@@ -472,14 +472,6 @@ WalletModel::UnlockContext::~UnlockContext() {
     }
 }
 
-void WalletModel::UnlockContext::CopyFrom(UnlockContext&& rhs) {
-    // Transfer context; old object no longer relocks wallet
-    if (this != &rhs) {
-        *this = rhs;
-        rhs.relock = false;
-    }
-}
-
 void WalletModel::loadReceiveRequests(
     std::vector<std::string> &vReceiveRequests) {
     // receive request
