@@ -113,6 +113,7 @@ Overview Table for BCHN-supported Test Networks
 | Nov 15 2020 HF height        |  1421482    |  16845       |  variable (Note 2) |  16845      |
 | May 15 2021 HF height        |  1447364    |  42946       |  34071      |  42946      |
 | May 15 2022 HF height        |  1500206    |  95465       |  36060      |  95465      |
+| May 15 2023 HF height        |  1552788    |  148044      |  37624      |  121957 (Note 3)    |
 | Base58 prefix: pubkey        |  1, 111     |  1, 111      |  1, 111     |  1, 111     |
 | Base58 prefix: script        |  1, 196     |  1, 196      |  1, 196     |  1, 196     |
 | Base58 prefix: seckey        |  1, 239     |  1, 239      |  1, 239     |  1, 239     |
@@ -127,6 +128,8 @@ Note 2: scalenet is intended to be periodically reorganized down to a
         time. The height at which the Axion upgrade takes effect is thus
         variable (it is block 16869 now, but may be different once the
         network is reset).
+
+Note 3: Chipnet upgrade 9 forked 6-months ahead of others, on Nov 15, 2023
 
 Further references
 ------------------
