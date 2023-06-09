@@ -1,99 +1,52 @@
-# Release Notes for Bitcoin Cash Node version 26.1.0
+# Release Notes for Bitcoin Cash Node version 26.1.1
 
-Bitcoin Cash Node version 26.1.0 is now available from:
+Bitcoin Cash Node version 26.1.1 is now available from:
 
   <https://bitcoincashnode.org>
 
 ## Overview
 
-This release of Bitcoin Cash Node (BCHN) is a minor release.
+This release of Bitcoin Cash Node (BCHN) is a patch release.
 
-It includes mostly bug fixes and performance enhancements,
-but there are some new features too, such as new fields in
-`getpeerinfo` RPC and new syntax token for `-walletnotify`.
+...
 
 ## Usage recommendations
 
-Users who are running v25.0.0 or v26.0.0 are encouraged to upgrade
-to v26.1.0 as it includes checkpoints and updated network static seeds
-for the recently completed (15 May 2023) network upgrade.
+Users who are running v25.0.0 or v26.x.0 are encouraged to upgrade
+to v26.1.1.
 
 ## Network changes
 
-Unsolicited `ADDR` messages from network peers are now rate-limited to an
-average rate of 0.1 addresses per second, with allowance for burts of up
-to 1000 addresses.
-This change should have no noticeable deleterious effect on the peer-to-peer
-network for well-behaved peers, and was merely added as a performance
-optimization.
+TODO
 
 ## Added functionality
 
-None.
+TODO.
 
 ## Deprecated functionality
 
-None.
+TODO.
 
 ## Modified functionality
 
-- The `getpeerinfo` RPC method results now include two new additional data
-  items for each peer: `addr_processed` and `addr_rate_limited`.
-  See the `getpeerinfo` RPC help for a description of these new items.
-
-- The `-walletnotify` option now understands an additional %-token: `%w`,
-  which it will replace with the wallet name when executing the external
-  command. For additional information see the help `-hh` for `bitcoind`.
-
-- The current limit of 16 parallel script/sig verification threads,
-  controlled by the `-par` configuration option, is substantially increased,
-  to a maximum of 256 threads, with the following rules:
-
-   - For users that do not use the `-par` argument/config, current legacy
-     functionality is preserved (clamped to 16)
-   - For users that set `-par=0`, their number of cores will be used (clamped to 256)
-   - For users that set `-par=N`, with N a positive integer, the parallelism will
-     be set to N, clamped to 256; note that users can set this higher than their
-     core count, which preserves current functionality
-   - For users that set `-par=N`, with N a negative integer, the parallelism will
-     be set to leave N threads free, clamped to 256
-   - For users using the GUI, the maximum number of threads they can set is equal
-     to the number of cores, and is no longer 15 (sic!)
-   - GUI users will not be able to set this limit to a number higher than their
-     number of cores, via the slider.
-
-   An upper limit is still needed, otherwise users can create thousands of threads
-   and crash the node.
-
-   The old limit of 16 was set 10 years ago when this functionality was first introduced.
-   Since then both hardware and software have progressed vastly. Users should
-   be able to set the parallelism higher if their hardware supports it.
-   There may be diminishing returns setting it to higher than 16, but verification
-   times do improve with more cores to an extent on modern platforms.
-
-   NOTE 1: Current functionality is preserved only for users that don't use `-par`.
-
-   NOTE 2: Only headless users can set `-par` above their core count.
+TODO
 
 ## Removed functionality
 
-None.
+TODO
 
 ## New RPC methods
 
-None.
+TODO
 
 ## User interface changes
 
-- A bug in the fee rate override in the Send dialog of the GUI has been fixed.
-- The `dumpwallet` file header comment now refers to "Bitcoin Cash Node",
-- The `importwallet` progress bar behaves more sanely.
-- Importing very large wallets has been made significantly faster.
+TODO
 
 ## Regressions
 
-Bitcoin Cash Node 26.1.0 does not introduce any known regressions as compared
-to 26.0.0.
+Bitcoin Cash Node 26.1.1 does not introduce any known regressions as compared
+to 26.1.0.
 
 ## Limitations
 
@@ -202,130 +155,94 @@ of them on our GitLab repository.
 
 ---
 
-## Changes since Bitcoin Cash Node 26.0.0
+## Changes since Bitcoin Cash Node 26.1.0
 
 ### New documents
 
-None.
+TODO
 
 ### Removed documents
 
-None.
+TODO
 
 ### Notable commits grouped by functionality
 
 #### Security or consensus relevant fixes
 
-- 31ed5aa7f2c99624a6eb92e7dfc8828612ce9bd1 Fix issue with peers not receiving DSProofs if they ever use the mempool p2p message
-- 5e8b41ab20a03917a74332487f75d7feb464e6d3 Rate limit the `Broadcast` signal that gets spammed in SendMessages
-- e6615382032cba12e1c499a7fc9a5679693b61ce [net processing] ignore unknown INV types in GETDATA messages
+TODO
 
 #### Interfaces / RPC
 
-- 39f8dfc4b24d38370776afa3da415fc674d4faa6 wallet: Replace %w by wallet name in -walletnotify script
-- 53e7d8055ab9c977adc7094585cefd2f1c8d40cc RPC: Fix `dumpwallet` comment/header to say "Bitcoin Cash Node"
-- b8df87882b24a6905915d7129841ea134c6bda65 Remove limit of 16 from -par
+TODO
 
 #### Features in internal development: support for UTXO commitments
 
-- 3f8b0b02ae6b0aca4b71fb3138024c490f50e341 Two small quality of life improvements (needed for utxosync work)
+TODO
 
 ### Data directory changes
 
-None.
+TODO
 
 #### Performance optimizations
 
-- 1ae0bb2b2f8911ee242dc74bacc55b281f08b529 Performance fix: Modify logic slightly for the msghand thread sleeptime calc.
-- 2b3ce0a7b6aa457c4aa6f4c98f067ad2825e885c Optimize two block reads with raw version
-- 351daeebe0ebaf61f718a6f95008f9da92b8b4bd Batch writes to wallet for rpc `importwallet` for faster imports
-- 7ee3ad0ee65e40156803b766734f3d7f1d3464e6 Add checkpoints post-upgrade9
-- 86dd3ef3349d1a3fc7f6c54e4cfa3c37067cb235 Remove repeated calls to the slow gArgs object in perf. critical network code
-- 9645fc84c63e9ca32fa730ee5c9277214af1c7e6 Update chainparams assumevalid and minimumchainwork for 26.1.0
-- a92f06eb391f1299a54978afabe78b2c5f7aad8e Remove redundant calls to `GetTime*()` in msghand thread
-- f831cdb2ee75548f43f1eec0be484cbd512ad57d Reduce redundant copying for CCheckQueue (script check threads)
+TODO
 
 #### GUI
 
-- 59f9780fb4008b6bac8e4737746f50bef602ad29 Fix the fee rate override flag not being set when Send invoked in GUI
-- 93805bae3ba896216e7acfbe13c10dc2bb1c9dac qt: Fix potential crash due to mis-use of showProgress
-- ca155b3e783a4801966ba27117fcc1fc75bb6d2f [qt] Improve importwallet progress display
+TODO
 
 #### Code quality
 
-- 2793192d55a505be6de2ea1ec8caad96f5eb31f3 refactor: remove references to deprecated values under std::allocator
-- 3fa31054c810db69ff65d56cb7b80730d02dda63 trivial fix: Ensure HeapOptional move-constructor actually moves
-- 428963c83fadea27586694e4701012832e3f50a1 Refactor and docs for ProcessGetData
-- 572676d4be2088ceba2d7ae30868c627299ba225 nit: Use emplace_back in favor of push_back in CNode::ReceiveMsgBytes
-- 5a20c2c7d40015df2c847abb0838e96a7522d678 Modify method `HTTPReply::WriteReply` to use `Span<const uint8_t>`
-- 5bf58b243e6c2940151d40fe86187020da513055 Reduce redundant copying in the `CScheduler` class + other nits
-- 5e8ed5a78f92f001f9a6d07bd956009b638a0a41 Update copyright year to 2023
-- 7d840a66d394eec901d0f4da29aeb9234a5d2c6f Fix missing includes on GCC 13
-- af2e45243fa59ebee46b3029a0ae0d0fa3923f69 Annotate some blockstorage & validation functions & data for thread-safety
-- b549364a93258aa94c2c713bd722bce2511fb396 qa: Fixed a typo in `synch.cpp`
+TODO
 
 #### Documentation updates
 
-- 0b0a0359e80b1380a96a6e0b6d0baeb67c68555e Update release notes to talk about `-walletnotify=` and `%w`
-- c61f448d1e0456315501503cdc84ce5df4519643 [doc] Update testnet fork heights to reflect upgrade 9
-
+TODO
 
 #### Build / general
 
-- b585ff89b0bb6f7011b887caaa02f36c75dc393b [qa] Bump version to 26.1.0
+TODO
 
 #### Build / Linux
 
-- 6b75a72283fd269a3fe26e348b88f564923bc398 Fixes build errors on GCC 13
-- aca0bc94a5d525df914d1dbead30257ff6285776 Fix for build failing on latest arch
-- fcac1db37124516e7f7c56bc98fdd1dc1a8ce915 [cmake] Fix a potential version mismatch in BerkeleyDB
+TODO
 
 #### Build / Windows
 
-None.
+TODO
 
 #### Build / MacOSX
 
-None.
+TODO
 
 #### Tests / test framework
 
-- 533611f85b1d7f6f81185ac2ccb101ccef6fdd80 Fix for failing unit test
-- d9df0e56c17537f85d1bb6522f52e9e6d26811c1 test: Check wallet name in -walletnotify script
-- e016eb31b1d68382f4c98997d747729fb3245761 Fix intermittent "fee" related crash in `rpc_blockchain.py`
+TODO
 
 #### Benchmarks
 
-- 715fe8e97ca6e41a55044542827bbe6ef83501c5 Update benchmarks in response to new verbosity mode `TxVerbosity::SHOW_DETAILS_AND_PREVOUT`
-- 8b60b41e24bba2906e249764df4125b2e610be38 Add benchmark to test the speed of CNode::ReceiveMsgBytes
-- 90ee32334a0e49ffa8932b95e0f43c53184d1711 bench: Refactor blockdata class
+TODO
 
 #### Seeds / seeder software
 
-- 5bd1b9c5e458107d6ccac8ebca952fa02952baad Update regex'es in makeseeds.py after May 2023 upgrade
-- 873f6dcdd9f8450d6a941209f17ce482d7968ad4 Update static seeds for mainnet
+TODO
 
 #### Maintainer tools
 
-None.
+TODO
 
 #### Infrastructure
 
-None.
+TODO
 
 #### Cleanup
 
-- 35d3bd208e1dc680e4c191d890a9d86b24dd439b Remove unused `RPCSerializationFlags` functionality
-- 65d2acb402f35361f315043cd870067ec4ce8fd5 Remove "zero after free" allocator from codebase (used by CDataStream)
+TODO
 
 #### Continuous Integration (GitLab CI)
 
-None.
+TODO
 
 #### Backports
 
-- 0b2831161ac386048b4241ed84f7972dd6b17e94 backport: Disable unused special members functions in UnlockContext
-- 1887c10bf2eafd7c7f5b7489f2edeeec47c42fd3 [backport] Rate-limit unsolicited p2p ADDR messages
-- 398f0c0c3bdaedc18dab99fef3ad1ad2390d17ad backport: Fix potential use after move in validation.cpp
-- 8c0de7d1470cd059361909c6c8b9a07db636d313 backport: Give WalletModel::UnlockContext move semantics
-- cc520af296b1e78f507b8c5272021b73004b9915 [backport] Create blockstorage module
+TODO
