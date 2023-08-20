@@ -206,7 +206,7 @@ class MinTxSizeTest(BitcoinTestFramework):
     def create_block(self, prev_block: CBlock, *, spend: Optional[CTransaction] = None,
                      min_tx_size: int = MIN_TX_SIZE_MAGNETIC_ANOMALY,
                      min_tx_size_coinbase: int = MIN_TX_SIZE_MAGNETIC_ANOMALY,
-                     nTime: int = None) -> CBlock:
+                     nTime: Optional[int] = None) -> CBlock:
         if prev_block.sha256 is None:
             prev_block.rehash()
         assert prev_block.sha256 is not None  # Satisfy linter with this assertion

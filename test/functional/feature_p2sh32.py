@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test support for p2sh32 which activates with Upgrade9."""
 import random
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional
 
 from test_framework import address, cashaddr
 from test_framework.blocktools import create_block, create_coinbase
@@ -412,7 +412,7 @@ class P2SH32Test(BitcoinTestFramework):
         return tx
 
     @staticmethod
-    def create_block(prev_block: CBlock, height: int, *, nTime: int = None, txns=None) -> CBlock:
+    def create_block(prev_block: CBlock, height: int, *, nTime: Optional[int] = None, txns=None) -> CBlock:
         if prev_block.sha256 is None:
             prev_block.rehash()
         assert prev_block.sha256 is not None  # Satisfy linter with this assertion

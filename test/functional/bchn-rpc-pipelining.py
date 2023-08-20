@@ -7,6 +7,7 @@
 import urllib
 import socket
 import re
+from typing import Optional
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import str_to_b64str, assert_equal
@@ -15,7 +16,7 @@ from test_framework.util import str_to_b64str, assert_equal
 success_re = re.compile(r'HTTP\/1\.1 200')
 
 
-def make_request(data: str, auth: str = None) -> bytes:
+def make_request(data: str, auth: Optional[str] = None) -> bytes:
     lines = ["POST / HTTP/1.1"]
 
     if auth:
