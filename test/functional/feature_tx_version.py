@@ -216,7 +216,7 @@ class TxVersionTest(BitcoinTestFramework):
 
     def create_block(self, prev_block: CBlock, *, spend: Optional[CTransaction] = None,
                      script_pub_key=CScript([OP_TRUE]), redeem_script=None,
-                     nTime: int = None, nVersion_cb=None, nVersion_spend=None, txns=None) -> CBlock:
+                     nTime: Optional[int] = None, nVersion_cb=None, nVersion_spend=None, txns=None) -> CBlock:
         if prev_block.sha256 is None:
             prev_block.rehash()
         assert prev_block.sha256 is not None  # Satisfy linter with this assertion
