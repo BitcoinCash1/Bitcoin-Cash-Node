@@ -288,7 +288,7 @@ function(add_boost_test_runners_with_upgrade_activated SUITE EXECUTABLE)
       ${SUITE_UPGRADE_ACTIVATED}
       "${_test_name}"
       ${EXECUTABLE} -t "${_test_name}"
-      -- -upgrade9activationtime=1684152000
+      -- -upgrade10activationtime=1715774400
     )
   endforeach()
 endfunction()

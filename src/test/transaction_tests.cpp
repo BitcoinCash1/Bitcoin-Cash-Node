@@ -918,12 +918,14 @@ BOOST_AUTO_TEST_CASE(test_IsStandard) {
 }
 
 BOOST_AUTO_TEST_CASE(txsize_activation_test) {
-    const Config &config = GetConfig();
-    const Consensus::Params &params = config.GetChainParams().GetConsensus();
+    const auto pparams = CreateChainParams(CBaseChainParams::MAIN);
+    const Consensus::Params &params = pparams->GetConsensus();
     // ContextualCheckTransaction expects nHeight of next block and MTP for previous block.
     // But the hard-coded chain params are for previous block, hence why we increment the height here.
     const int32_t magneticAnomalyActivationHeight = params.magneticAnomalyHeight + 1;
-    const int64_t upgrade9MTP = params.upgrade9ActivationTime;
+    const int32_t upgrade9ActivationHeight = params.upgrade9Height + 1;
+    BOOST_CHECK_LT(magneticAnomalyActivationHeight, upgrade9ActivationHeight);
+    const int64_t unusedMTP = 0;
 
     // A minimally-sized transction.
     const auto &minTx = CTransaction::null;
@@ -931,9 +933,9 @@ BOOST_AUTO_TEST_CASE(txsize_activation_test) {
     CValidationState state;
 
     BOOST_CHECK(ContextualCheckTransaction(
-        params, minTx, state, magneticAnomalyActivationHeight - 1, 5678, upgrade9MTP - 1));
+        params, minTx, state, magneticAnomalyActivationHeight - 1, 5678, unusedMTP));
     BOOST_CHECK(!ContextualCheckTransaction(
-        params, minTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP - 1));
+        params, minTx, state, magneticAnomalyActivationHeight, 5678, unusedMTP));
     BOOST_CHECK_EQUAL(state.GetRejectCode(), REJECT_INVALID);
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-txns-undersize");
 
@@ -951,11 +953,11 @@ BOOST_AUTO_TEST_CASE(txsize_activation_test) {
     BOOST_CHECK_LT(::GetSerializeSize(smallTx), MIN_TX_SIZE_MAGNETIC_ANOMALY);
     state = CValidationState{};
     BOOST_CHECK(!ContextualCheckTransaction(
-        params, smallTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP - 1));
+        params, smallTx, state, upgrade9ActivationHeight - 1, 5678, unusedMTP));
     BOOST_CHECK_EQUAL(state.GetRejectCode(), REJECT_INVALID);
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-txns-undersize");
     BOOST_CHECK(ContextualCheckTransaction(
-        params, smallTx, state, magneticAnomalyActivationHeight, 5678, upgrade9MTP));
+        params, smallTx, state, upgrade9ActivationHeight, 5678, unusedMTP));
 }
 
 BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {

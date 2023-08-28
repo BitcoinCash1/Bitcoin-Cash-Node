@@ -1069,9 +1069,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
         scriptFlags = GetMemPoolScriptFlags(params, tip);
         chainHeight = tip->nHeight;
         if (IsUpgrade9Enabled(params, tip)) {
-            if (const auto *ablk = g_upgrade9_block_tracker.GetActivationBlock(tip, params)) {
-                upgrade9Height = ablk->nHeight + 1;
-            }
+            upgrade9Height = GetUpgrade9ActivationHeight(params) + 1;
         }
     }
 

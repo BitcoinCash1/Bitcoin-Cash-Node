@@ -60,7 +60,7 @@ class TokenCoinbaseForbiddenTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.base_extra_args = ['-acceptnonstdtxn=0', '-expire=0', '-whitelist=127.0.0.1']
-        self.extra_args = [['-upgrade9activationtime=999999999999'] + self.base_extra_args]
+        self.extra_args = [['-upgrade9activationheight=999999999'] + self.base_extra_args]
 
     def run_test(self):
 
@@ -139,10 +139,11 @@ class TokenCoinbaseForbiddenTest(BitcoinTestFramework):
 
         # --- Activate Upgrade9 ---
 
-        # 1. Set the activation MTP time a bit forward of the current tip's time
-        activation_time = node.getblockchaininfo()["mediantime"] + 1
+        # 1. Set the activation MTP height a bit forward of the current tip's height
+        activation_height = node.getblockchaininfo()["blocks"] + 1
+        self.log.info(f"ACTIVATION HEIGHT: {activation_height}")
         # 2. Restart the node, enabling upgrade9
-        self.restart_node(0, extra_args=[f"-upgrade9activationtime={activation_time}"] + self.base_extra_args)
+        self.restart_node(0, extra_args=[f"-upgrade9activationheight={activation_height}"] + self.base_extra_args)
         self.reconnect_p2p()
 
         # Mine blocks until it activates
@@ -155,12 +156,12 @@ class TokenCoinbaseForbiddenTest(BitcoinTestFramework):
             assert_equal(node.getbestblockhash(), ablock.hash)
             blockhashes.append(ablock.hash)
 
-        while node.getblockchaininfo()["mediantime"] < activation_time:
+        while node.getblockchaininfo()["blocks"] < activation_height:
             mine_a_block()
 
         # Ensure it activated exactly on this block
-        assert_greater_than_or_equal(node.getblockchaininfo()["mediantime"], activation_time)
-        assert_greater_than(activation_time, node.getblockheader(blockhashes[-2], True)["mediantime"])
+        assert_greater_than_or_equal(node.getblockchaininfo()["blocks"], activation_height)
+        assert_greater_than(activation_height, node.getblockheader(blockhashes[-2], True)["height"])
 
         # Post-activation: attempt to spend the coinbase txns that contain token data/unparseable token data via
         # mempool path

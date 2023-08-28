@@ -46,10 +46,10 @@ struct Params {
 
     /** Note: Unix time used for MTP activation of the 15 May 2021 12:00:00 UTC upgrade was 1621080000, but since
      *  it was a relay-rules-only upgrade, so we no longer track this time for blockchain consensus. */
-    /** Block height at which the May 15, 2022 rules became active (this is one less than the upgrade block itself)  */
+    /** Block height at which the May 15, 2022 rules became active (this is one less than the upgrade block itself) */
     int upgrade8Height;
-    /** Unix time used for MTP activation of 15 May 2023 12:00:00 UTC upgrade */
-    int64_t upgrade9ActivationTime;
+    /** Block height at which the May 15, 2023 rules became active (this is one less than the upgrade block itself) */
+    int upgrade9Height;
     /** Unix time used for tentative MTP activation of 15 May 2024 12:00:00 UTC upgrade */
     int64_t upgrade10ActivationTime;
 

@@ -55,7 +55,7 @@ class SighashUtxosTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.base_extra_args = ['-acceptnonstdtxn=0', '-expire=0', '-whitelist=127.0.0.1']
-        self.extra_args = [['-upgrade9activationtime=999999999999'] + self.base_extra_args]
+        self.extra_args = [['-upgrade9activationheight=999999999'] + self.base_extra_args]
 
     def run_test(self):
 
@@ -94,11 +94,11 @@ class SighashUtxosTest(BitcoinTestFramework):
         self.send_txs([tx], success=False, reject_reason="Signature hash type missing or not understood")
         assert tx.hash not in node.getrawmempool()
 
-        # Get the current MTP time
-        activation_time = node.getblockchaininfo()["mediantime"]
+        # Get the current height
+        activation_height = node.getblockchaininfo()["blocks"]
         # Restart the node, enabling upgrade9
         expected_mempool = set(node.getrawmempool())
-        self.restart_node(0, extra_args=[f"-upgrade9activationtime={activation_time}"] + self.base_extra_args)
+        self.restart_node(0, extra_args=[f"-upgrade9activationheight={activation_height}"] + self.base_extra_args)
         self.reconnect_p2p()
         # Wait for mempool to reload
         wait_until(predicate=lambda: set(node.getrawmempool()) == expected_mempool, timeout=60)

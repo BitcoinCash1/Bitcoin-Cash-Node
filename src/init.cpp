@@ -18,6 +18,7 @@
 #include <checkpoints.h>
 #include <compat/sanity.h>
 #include <config.h>
+#include <consensus/activation.h>
 #include <dsproof/dsproof.h>
 #include <dsproof/storage.h>
 #include <extversion.h>
@@ -954,11 +955,15 @@ void SetupServerArgs() {
                   defaultChainParams->GetConsensus().axionActivationTime),
         ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
-        "-upgrade9activationtime=<n>",
-        strprintf("Activation time of the May 2023 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
-                  "default: %d, chipnet: %d)",
-                  defaultChainParams->GetConsensus().upgrade9ActivationTime,
-                  chipnetChainParams->GetConsensus().upgrade9ActivationTime),
+        "-upgrade9activationheight=<n>",
+        strprintf("Activation height of the May 2023 Bitcoin Cash Network Upgrade; first block using new rules will be"
+                  " after this height (default: %d, testnet: %d, testnet4: %d, scalenet: %d, chipnet: %d, regtest: %d)",
+                  defaultChainParams->GetConsensus().upgrade9Height,
+                  testnetChainParams->GetConsensus().upgrade9Height,
+                  testnet4ChainParams->GetConsensus().upgrade9Height,
+                  scalenetChainParams->GetConsensus().upgrade9Height,
+                  chipnetChainParams->GetConsensus().upgrade9Height,
+                  regtestChainParams->GetConsensus().upgrade9Height),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-upgrade10activationtime=<n>",
@@ -1889,6 +1894,16 @@ bool AppInitParameterInteraction(Config &config) {
     // Option to enable/disable the double-spend proof subsystem (default: enabled)
     if (const bool def = DoubleSpendProof::IsEnabled(), en = gArgs.GetBoolArg("-doublespendproof", def); en != def) {
         DoubleSpendProof::SetEnabled(en);
+    }
+
+    // Process CLI/conf override for the upgrade9 activation height
+    if (gArgs.IsArgSet("-upgrade9activationheight")) {
+        const auto height = gArgs.GetArg("-upgrade9activationheight", 0);
+        if (height < 0 || height > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
+            return InitError("Invalid -upgrade9activationheight, must be a positive integer in the 32-bit range");
+        }
+        ::g_Upgrade9HeightOverride.emplace(static_cast<int32_t>(height));
+        LogPrintf("Using upgrade 9 activation height override: %d\n", height);
     }
 
     return true;

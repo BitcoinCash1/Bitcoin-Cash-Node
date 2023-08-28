@@ -702,9 +702,8 @@ AcceptToMemoryPoolWorker(const Config &config, CTxMemPool &pool,
         {
             int64_t firstTokenBlockHeight;
             if (scriptVerifyFlags & SCRIPT_ENABLE_TOKENS) { // Assumption: this can only be true if Upgrade9 activated
-                firstTokenBlockHeight = g_upgrade9_block_tracker.GetActivationBlock(::ChainActive().Tip(),
-                                                                                    consensusParams)->nHeight
-                                        + 1LL; // First block to actually use token rules is 1 + activation block
+                // First block to actually use token rules is 1 + activation block
+                firstTokenBlockHeight = 1 + GetUpgrade9ActivationHeight(consensusParams);
             } else {
                 // not activated yet -- far future
                 firstTokenBlockHeight = std::numeric_limits<int64_t>::max();
@@ -1733,8 +1732,8 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
 
     int64_t firstTokenBlockHeight;
     if (flags & SCRIPT_ENABLE_TOKENS) { // Assumption: this can only be true if Upgrade9 is activated for pindex->pprev
-        firstTokenBlockHeight = g_upgrade9_block_tracker.GetActivationBlock(pindex->pprev, consensusParams)->nHeight
-                                + 1LL; // First block to actually use token rules is 1 + GetActivationBlock()->nHeight
+        // First block to actually use token rules is 1 + activation block
+        firstTokenBlockHeight = 1 + GetUpgrade9ActivationHeight(consensusParams);
     } else {
         // not activated yet -- far future
         firstTokenBlockHeight = std::numeric_limits<int64_t>::max();
@@ -4823,7 +4822,7 @@ void UnloadBlockIndex() {
     pindexBestForkTip = nullptr;
     pindexBestForkBase = nullptr;
     ResetASERTAnchorBlockCache();
-    g_upgrade9_block_tracker.ResetActivationBlockCache();
+    g_upgrade10_block_tracker.ResetActivationBlockCache();
     g_mempool.clear();
     mapBlocksUnlinked.clear();
     {
@@ -5677,7 +5676,7 @@ public:
     }
 } instance_of_cmaincleanup;
 
-ActivationBlockTracker g_upgrade9_block_tracker(&IsUpgrade9Enabled);
+ActivationBlockTracker g_upgrade10_block_tracker(&IsUpgrade10Enabled);
 
 const CBlockIndex *
 ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Consensus::Params &params)

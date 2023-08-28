@@ -4,6 +4,7 @@
 
 #include <chainparams.h>
 #include <config.h>
+#include <consensus/activation.h>
 #include <util/system.h>
 #include <validation.h>
 
@@ -19,32 +20,29 @@
 namespace {
 
 /// Test fixture that:
-/// - tracks if we set "-upgrade9activationtime", and resets it on test end
+/// - tracks if we set the upgrade 9 activation height override, and resets it on test end
 struct TokenTransactionTestingSetup : ChipTestingSetup {
-    std::optional<std::string> upgrade9OriginalArg;
+    std::optional<int32_t> upgrade9OriginalOverride;
     bool touchedUpgrade9{};
 
     TokenTransactionTestingSetup() {
-        if (gArgs.IsArgSet("-upgrade9activationtime")) {
-            upgrade9OriginalArg = gArgs.GetArg("-upgrade9activationtime", "");
-        }
+        upgrade9OriginalOverride = g_Upgrade9HeightOverride;
     }
 
     ~TokenTransactionTestingSetup() override {
         if (touchedUpgrade9) {
-            if (upgrade9OriginalArg) gArgs.ForceSetArg("-upgrade9activationtime", *upgrade9OriginalArg);
-            else gArgs.ClearArg("-upgrade9activationtime");
+            g_Upgrade9HeightOverride = upgrade9OriginalOverride;
         }
     }
 
     /// Activates or deactivates upgrade 9 by setting the activation time in the past or future respectively
     void SetUpgrade9Active(bool active) {
-        const auto currentMTP = []{
+        const auto currentHeight = []{
             LOCK(cs_main);
-            return ::ChainActive().Tip()->GetMedianTimePast();
+            return ::ChainActive().Tip()->nHeight;
         }();
-        auto activationMtp = active ? currentMTP - 1 : currentMTP + 1;
-        gArgs.ForceSetArg("-upgrade9activationtime", strprintf("%d", activationMtp));
+        auto activationHeight = active ? currentHeight - 1 : currentHeight + 1;
+        g_Upgrade9HeightOverride = activationHeight;
         touchedUpgrade9 = true;
     }
 

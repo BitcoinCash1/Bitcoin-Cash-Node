@@ -131,8 +131,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                             help="Attach a python debugger if test fails")
         parser.add_argument("--usecli", dest="usecli", default=False, action="store_true",
                             help="use bitcoin-cli instead of RPC for all commands")
-        parser.add_argument("--with-upgrade9activation", dest="upgrade9activation", default=False, action="store_true",
-                            help="Activate May 2023 (upgrade 9) update on timestamp {}".format(TIMESTAMP_IN_THE_PAST))
         parser.add_argument("--with-upgrade10activation", dest="upgrade10activation", default=False,
                             action="store_true",
                             help="Activate May 2024 (upgrade 10) update on timestamp {}".format(TIMESTAMP_IN_THE_PAST))
@@ -352,9 +350,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 use_cli=self.options.usecli,
                 emulator=self.options.emulator,
             ))
-            if self.options.upgrade9activation:
-                self.nodes[i].extend_default_args(
-                    ["-upgrade9activationtime={}".format(TIMESTAMP_IN_THE_PAST)])
             if self.options.upgrade10activation:
                 self.nodes[i].extend_default_args(
                     ["-upgrade10activationtime={}".format(TIMESTAMP_IN_THE_PAST), "-expire=0"])
@@ -573,9 +568,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 if i > 0:
                     self.nodes[i].extend_default_args(
                         ["-connect=127.0.0.1:" + str(p2p_port(0))])
-                if self.options.upgrade9activation:
-                    self.nodes[i].extend_default_args(
-                        ["-upgrade9activationtime={}".format(TIMESTAMP_IN_THE_PAST)])
                 if self.options.upgrade10activation:
                     self.nodes[i].extend_default_args(
                         ["-upgrade10activationtime={}".format(TIMESTAMP_IN_THE_PAST), "-expire=0"])

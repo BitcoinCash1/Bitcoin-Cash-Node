@@ -140,8 +140,8 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 740237;
 
-        // May 15, 2023 12:00:00 UTC protocol upgrade
-        consensus.upgrade9ActivationTime = 1684152000;
+        // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
+        consensus.upgrade9Height = 792772;
 
         // May 15, 2024 12:00:00 UTC tentative protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
@@ -369,8 +369,8 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 1500205;
 
-        // May 15, 2023 12:00:00 UTC protocol upgrade
-        consensus.upgrade9ActivationTime = 1684152000;
+        // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
+        consensus.upgrade9Height = 1552787;
 
         // May 15, 2024 12:00:00 UTC tentative protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
@@ -559,8 +559,8 @@ public:
         // May 15, 2022 12:00:00 UTC protocol upgrade
         consensus.upgrade8Height = 95464;
 
-        // May 15, 2023 12:00:00 UTC protocol upgrade
-        consensus.upgrade9ActivationTime = 1684152000;
+        // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
+        consensus.upgrade9Height = 148043;
 
         // May 15, 2024 12:00:00 UTC tentative protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
@@ -723,7 +723,7 @@ public:
         consensus.upgrade8Height = 10'006;
 
         // May 15, 2023 12:00:00 UTC protocol upgrade
-        consensus.upgrade9ActivationTime = 1684152000;
+        consensus.upgrade9Height = 10'006;
 
         // May 15, 2024 12:00:00 UTC tentative protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
@@ -868,7 +868,7 @@ public:
         consensus.upgrade8Height = 95464;
 
         // November 15, 2022 12:00:00 UTC; protocol upgrade activates 6 months early
-        consensus.upgrade9ActivationTime = 1668513600;
+        consensus.upgrade9Height = 121956; // (one less than upgrade block)
 
         // November 15, 2023 12:00:00 UTC; tentative protocol upgrade activates 6 months early
         consensus.upgrade10ActivationTime = 1700049600;
@@ -1018,7 +1018,7 @@ public:
         consensus.upgrade8Height = 0;
 
         // May 15, 2023 12:00:00 UTC protocol upgrade
-        consensus.upgrade9ActivationTime = 1684152000;
+        consensus.upgrade9Height = 0;
 
         // May 15, 2024 12:00:00 UTC tentative protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
