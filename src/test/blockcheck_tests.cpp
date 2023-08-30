@@ -200,6 +200,11 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
     BOOST_REQUIRE(rawBlock.size() == origBlockSize);
     rawBlock.clear();
 
+    // Check that reading just the block's size works
+    auto optBlockSize = ReadBlockSizeFromDisk(pindex, chainParams);
+    BOOST_REQUIRE(optBlockSize.has_value());
+    BOOST_REQUIRE_EQUAL(*optBlockSize, origBlockSize);
+
     // Next, mess up the on-disk magic -- ReadRawBlockFromDisk() should fail
     BOOST_REQUIRE(0 == std::fseek(filep, headerPos, SEEK_SET));
     auto badMagic = origMagic;
@@ -210,6 +215,7 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
     rawBlock.clear();
     BOOST_REQUIRE(!ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
     BOOST_REQUIRE(rawBlock.empty());
+    BOOST_REQUIRE(!ReadBlockSizeFromDisk(pindex, chainParams)); // ReadBlockSizeFromDisk should also fail
     // Restore the on-disk magic
     BOOST_REQUIRE(0 == std::fseek(filep, headerPos, SEEK_SET));
     file << origMagic;
@@ -218,8 +224,11 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
     rawBlock.clear();
     BOOST_REQUIRE(ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
     BOOST_REQUIRE(rawBlock.size() == origBlockSize);
+    optBlockSize.reset();
+    BOOST_REQUIRE(optBlockSize = ReadBlockSizeFromDisk(pindex, chainParams));
+    BOOST_REQUIRE_EQUAL(*optBlockSize, origBlockSize);
 
-    // Try forbidden sizes -- ReadRawBlockFromDisk() should always guard against these
+    // Try forbidden sizes -- ReadRawBlockFromDisk() and/or ReadBlockSizeFromDisk() should always guard against these
     for (const unsigned badSize : {unsigned{BLOCK_HEADER_SIZE-1u}, unsigned{MAX_EXCESSIVE_BLOCK_SIZE+1u}}) {
         // Next, mess up the on-disk size -- ReadRawBlockFromDisk() should fail
         BOOST_REQUIRE(0 == std::fseek(filep, headerPos + sizeof(origMagic), SEEK_SET));
@@ -228,6 +237,7 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
 
         rawBlock.clear();
         BOOST_REQUIRE(!ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
+        BOOST_REQUIRE(!ReadBlockSizeFromDisk(pindex, chainParams));
         BOOST_REQUIRE(rawBlock.empty());
         // Restore the on-disk size
         BOOST_REQUIRE(0 == std::fseek(filep, headerPos + sizeof(origMagic), SEEK_SET));
@@ -237,6 +247,9 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
         rawBlock.clear();
         BOOST_REQUIRE(ReadRawBlockFromDisk(rawBlock, pindex, chainParams, SER_DISK, CLIENT_VERSION));
         BOOST_REQUIRE(rawBlock.size() == origBlockSize);
+        optBlockSize.reset();
+        BOOST_REQUIRE(optBlockSize = ReadBlockSizeFromDisk(pindex, chainParams));
+        BOOST_REQUIRE_EQUAL(*optBlockSize, origBlockSize);
         rawBlock.clear();
     }
 }
