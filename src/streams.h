@@ -595,16 +595,32 @@ public:
  * close the file early, use file.fclose() instead of fclose(file).
  */
 class CAutoFile {
-private:
-    const int nType;
-    const int nVersion;
+    int nType;
+    int nVersion;
 
     FILE *file;
+
+    void setNull() { nType = nVersion = 0; file = nullptr; }
 
 public:
     CAutoFile(FILE *filenew, int nTypeIn, int nVersionIn)
         : nType(nTypeIn), nVersion(nVersionIn) {
         file = filenew;
+    }
+
+    // Alow move-construct to transfer ownership
+    CAutoFile(CAutoFile &&o) : nType(o.nType), nVersion(o.nVersion), file(o.file) { o.setNull(); }
+
+    // Allow move-assign to transfer ownership
+    CAutoFile &operator=(CAutoFile &&o) {
+        if (this != &o) {
+            if (file != o.file) fclose(); // close our managed file if we have one and it's not same as o's
+            file = o.file;
+            nType = o.nType;
+            nVersion = o.nVersion;
+            o.setNull(); // null out moved-from object to complete the transfer
+        }
+        return *this;
     }
 
     ~CAutoFile() { fclose(); }

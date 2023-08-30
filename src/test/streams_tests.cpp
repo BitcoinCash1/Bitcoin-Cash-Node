@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <fs.h>
 #include <prevector.h>
 #include <streams.h>
 
@@ -264,6 +265,70 @@ BOOST_AUTO_TEST_CASE(streams_empty_vector) {
     const char adata[6] = {'f', 'o', 'o', 'b', 'a', 'r'};
     BOOST_CHECK_NO_THROW(ds.insert(ds.begin(), &adata[0], &adata[0]));
     BOOST_CHECK_NO_THROW(ds.insert(ds.begin(), &adata[0], &adata[6]));
+}
+
+// Test move-assign and move-construct for CAutoFile
+BOOST_AUTO_TEST_CASE(autofile_move) {
+    auto dataDir = SetDataDir("autofile_move");
+    FILE *f1 = fsbridge::fopen(dataDir / "data.bin", "wb+");
+    FILE *f2 = fsbridge::fopen(dataDir / "data2.bin", "wb+");
+    BOOST_REQUIRE(f1 && f2);
+    BOOST_REQUIRE(f1 != f2);
+    const int t1 = SER_DISK, t2 = SER_NETWORK;
+    const int v1 = INIT_PROTO_VERSION, v2 = INIT_PROTO_VERSION + 1;
+    CAutoFile af1(f1, t1, v1), af2(f2, t2, v2);
+    BOOST_REQUIRE(af1.Get() == f1 && af2.Get() == f2);
+    BOOST_REQUIRE(af1.GetType() == t1 && af1.GetVersion() == v1);
+    BOOST_REQUIRE(af2.GetType() == t2 && af2.GetVersion() == v2);
+
+    // write data to files
+    af1 << uint32_t(42);
+    af2 << uint32_t(43);
+
+    // Test contents
+    auto TestContents = [](const std::vector<CAutoFile *> &files, const std::vector<uint32_t> &vals) {
+        BOOST_REQUIRE(files.size() == vals.size());
+        for (size_t i = 0; i < files.size(); ++i) {
+            CAutoFile *paf = files[i];
+            BOOST_REQUIRE(paf != nullptr);
+            BOOST_REQUIRE(!paf->IsNull());
+            const auto tstval = vals[i];
+            std::fseek(paf->Get(), 0, SEEK_SET);
+            uint32_t v;
+            *paf >> v;
+            BOOST_REQUIRE_EQUAL(v, tstval);
+        }
+    };
+
+    TestContents({&af1, &af2}, {42, 43});
+
+    // Test move-construct
+    BOOST_REQUIRE(!af2.IsNull() && f2 == af2.Get()); // sanity check
+    CAutoFile af3(std::move(af2)); // move-construct
+    BOOST_REQUIRE(af2.IsNull() && af2.GetType() == 0 && af2.GetVersion() == 0);  // moved-from is now null and empty
+    BOOST_REQUIRE(!af3.IsNull() && f2 == af3.Get()); // moved-to is not null and is same FILE * as what af2 was
+    BOOST_REQUIRE(af3.GetType() == t2 && af3.GetVersion() == v2); // ensure inherits type and version
+    TestContents({&af1, &af3}, {42, 43});
+
+    // Test move-assign
+    af2 = std::move(af3);
+    BOOST_REQUIRE(af3.IsNull() && af3.GetType() == 0 && af3.GetVersion() == 0);  // moved-from is now null and empty
+    BOOST_REQUIRE(!af2.IsNull() && f2 == af2.Get()); // moved-to is not null and is same FILE * as what af2 was
+    BOOST_REQUIRE(af2.GetType() == t2 && af2.GetVersion() == v2); // version should be also what we expect
+    TestContents({&af1, &af2}, {42, 43});
+
+    // Swap af1 and af2 via move-assign, and test they preserve everything after swap
+    BOOST_REQUIRE(!af1.IsNull() && af1.GetType() == t1 && af1.GetVersion() == v1 && af1.Get() == f1);
+    BOOST_REQUIRE(!af2.IsNull() && af2.GetType() == t2 && af2.GetVersion() == v2 && af2.Get() == f2);
+    // do swap
+    af3 = std::move(af2);
+    af2 = std::move(af1);
+    af1 = std::move(af3);
+    // test that everything swapped and is what we expect
+    BOOST_REQUIRE(!af1.IsNull() && af1.GetType() == t2 && af1.GetVersion() == v2 && af1.Get() == f2);
+    BOOST_REQUIRE(!af2.IsNull() && af2.GetType() == t1 && af2.GetVersion() == v1 && af2.Get() == f1);
+    BOOST_REQUIRE(af3.IsNull() && af3.GetType() == 0 && af3.GetVersion() == 0);
+    TestContents({&af1, &af2}, {43, 42});
 }
 
 BOOST_AUTO_TEST_SUITE_END()
