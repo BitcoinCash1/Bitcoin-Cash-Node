@@ -16,7 +16,7 @@ GlobalConfig::GlobalConfig()
       nExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
       // NB: The generated block size is normally set in init.cpp to use chain-specific
       //     defaults which are often smaller than the DEFAULT_EXCESSIVE_BLOCK_SIZE.
-      nGeneratedBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
+      varGeneratedBlockSizeParam(DEFAULT_EXCESSIVE_BLOCK_SIZE),
       nMaxMemPoolSize(DEFAULT_EXCESSIVE_BLOCK_SIZE * DEFAULT_MAX_MEMPOOL_SIZE_PER_MB) {}
 
 bool GlobalConfig::SetExcessiveBlockSize(uint64_t blockSize) {
@@ -33,9 +33,6 @@ bool GlobalConfig::SetExcessiveBlockSize(uint64_t blockSize) {
 
     nExcessiveBlockSize = blockSize;
 
-    // Maintain invariant: ensure that nGeneratedBlockSize <= nExcessiveBlockSize
-    nGeneratedBlockSize = std::min(nExcessiveBlockSize, nGeneratedBlockSize);
-
     return true;
 }
 
@@ -43,13 +40,22 @@ uint64_t GlobalConfig::GetExcessiveBlockSize() const {
     return nExcessiveBlockSize;
 }
 
-bool GlobalConfig::SetGeneratedBlockSize(uint64_t blockSize) {
+bool GlobalConfig::SetGeneratedBlockSizeBytes(uint64_t blockSize) {
     // Do not allow generated blocks to exceed the size of blocks we accept.
     if (blockSize > GetExcessiveBlockSize()) {
         return false;
     }
 
-    nGeneratedBlockSize = blockSize;
+    varGeneratedBlockSizeParam = blockSize;
+    return true;
+}
+
+bool GlobalConfig::SetGeneratedBlockSizePercent(double percent) {
+    if (percent < 0.0 || percent > 100.0) {
+        return false;
+    }
+
+    varGeneratedBlockSizeParam = percent;
     return true;
 }
 
@@ -66,7 +72,24 @@ bool GlobalConfig::SetInvBroadcastInterval(uint64_t interval) {
 }
 
 uint64_t GlobalConfig::GetGeneratedBlockSize() const {
-    return nGeneratedBlockSize;
+    uint64_t blockSize;
+
+    struct Visitor {
+        uint64_t &blockSize;
+        const GlobalConfig &self;
+
+        void operator()(uint64_t val) { blockSize = val; }
+        void operator()(double percent) {
+            blockSize = static_cast<uint64_t>(self.nExcessiveBlockSize * (percent / 100.0));
+        }
+    };
+
+    std::visit(Visitor{blockSize, *this}, varGeneratedBlockSizeParam);
+
+    // Maintain invariant: ensure that blockSize <= nExcessiveBlockSize
+    blockSize = std::min(nExcessiveBlockSize, blockSize);
+
+    return blockSize;
 }
 
 const CChainParams &GlobalConfig::GetChainParams() const {

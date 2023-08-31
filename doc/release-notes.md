@@ -21,7 +21,10 @@ TODO
 
 ## Added functionality
 
-TODO.
+- Added configuration option `-percentblockmaxsize` which is an alternative to `-blockmaxsize`. `-percentmaxblocksize`
+  can be used to configure the node's maximum mined block size as a percentage of the maximum block size for the
+  network. So for instance the default on mainnet is `-percentblockmaxsize=25.0` (8 MB). Can be any value from 0.0
+  to 100.0.
 
 ## Deprecated functionality
 

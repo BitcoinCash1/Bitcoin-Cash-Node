@@ -20,8 +20,10 @@ from test_framework.p2p import (
     P2PDataStore,
 )
 from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_node import FailedToStartError
 from test_framework.util import (
     assert_equal,
+    assert_raises,
     assert_raises_rpc_error,
 )
 from test_framework.script import CScriptNum
@@ -39,9 +41,9 @@ def assert_template(node, block, expect, rehash=True):
 
 class MiningTest(BitcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 2
+        self.num_nodes = 3
         self.setup_clean_chain = False
-        self.extra_args=[[], ["-blockmaxsize=2123456"]]
+        self.extra_args=[[], ["-blockmaxsize=2123456"], ["-percentblockmaxsize=25.12"]]
 
     def run_test(self):
         node = self.nodes[0]
@@ -69,6 +71,9 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['miningblocksizelimit'], 8000000)
         mining_info1 = self.nodes[1].getmininginfo()
         assert_equal(mining_info1['miningblocksizelimit'], 2123456)
+        mining_info2 = self.nodes[2].getmininginfo()
+        # Node2 has `-percentblockmaxsize=25.12`, which we test: 32000000 * 0.2512 = 8038400
+        assert_equal(mining_info2['miningblocksizelimit'], 8038400)
 
         # Mine a block to leave initial block download
         self.generatetoaddress(node, 1, node.get_deterministic_priv_key().address)
@@ -293,10 +298,18 @@ class MiningTest(BitcoinTestFramework):
         # Test for RPC_CLIENT_NOT_CONNECTED error
         self.nodes[0].disconnect_p2ps()
         self.nodes[1].disconnect_p2ps()
+        self.nodes[2].disconnect_p2ps()
         self.stop_node(1)
+        self.stop_node(2)
         assert_raises_rpc_error(-9,  # RPC_CLIENT_NOT_CONNECTED
                                 "Bitcoin is not connected!",
                                 node.getblocktemplate)
+
+        # Check that combining -blockmaxsize and -percentblockmaxsize doesn't work and fails to start the node
+        assert_raises(FailedToStartError,
+                      self.restart_node, 0, ["-blockmaxsize=3232000", "-percentblockmaxsize=10.1"])
+        # Restore node before exiting test
+        self.start_node(0)
 
 
 if __name__ == '__main__':
