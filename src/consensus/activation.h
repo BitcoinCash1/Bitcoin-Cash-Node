@@ -47,3 +47,6 @@ bool IsUpgrade8Enabled(const Consensus::Params &params, const CBlockIndex *pinde
 /** Check if May 15th, 2023 protocol upgrade has activated. */
 bool IsUpgrade9Enabled(const Consensus::Params &params, const int64_t nMedianTimePast);
 bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);
+
+/** Check if May 15th, 2024 protocol upgrade has activated. */
+bool IsUpgrade10Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);

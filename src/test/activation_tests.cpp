@@ -151,6 +151,33 @@ BOOST_AUTO_TEST_CASE(isupgrade9enabled) {
     BOOST_CHECK(IsUpgrade9Enabled(params, &blocks.back()));
 }
 
+BOOST_AUTO_TEST_CASE(isupgrade10enabled) {
+    // test with no hard-coded activation height (activation based on MTP)
+    const auto pparams = CreateChainParams(CBaseChainParams::MAIN);
+    const Consensus::Params &params = pparams->GetConsensus();
+    const auto activation = gArgs.GetArg("-upgrade10activationtime", params.upgrade10ActivationTime);
+    const auto origMockTime = GetMockTime();
+    Defer d([origMockTime] { SetMockTime(origMockTime); });
+    SetMockTime(activation - 1000000);
+
+    BOOST_CHECK(!IsUpgrade10Enabled(params, nullptr));
+
+    std::array<CBlockIndex, 12> blocks;
+    for (size_t i = 1; i < blocks.size(); ++i) {
+        blocks[i].pprev = &blocks[i - 1];
+    }
+    BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks.back()));
+
+    SetMTP(blocks, activation - 1);
+    BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks.back()));
+
+    SetMTP(blocks, activation);
+    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks.back()));
+
+    SetMTP(blocks, activation + 1);
+    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks.back()));
+}
+
 // Test that the upgrade9 activation height tracker mechanism works, even if examining blocks that are not the
 // active chain.
 BOOST_AUTO_TEST_CASE(test_upgrade9_activation_block_tracking) {
