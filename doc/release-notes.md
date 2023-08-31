@@ -29,7 +29,8 @@ TODO.
 
 ## Modified functionality
 
-TODO
+- Added an additional returned data item to the `getmininginfo` RPC: "miningblocksizelimit", which is the block size
+  limit used for mining as configured for the node by e.g.: `-blockmaxsize`.
 
 ## Removed functionality
 

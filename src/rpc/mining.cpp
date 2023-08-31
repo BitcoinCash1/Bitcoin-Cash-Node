@@ -242,14 +242,15 @@ static UniValue getmininginfo(const Config &config,
             {},
             RPCResult{
                 "{\n"
-                "  \"blocks\": nnn,             (numeric) The current block\n"
-                "  \"currentblocksize\": nnn,   (numeric) The last block size\n"
-                "  \"currentblocktx\": nnn,     (numeric) The last block transaction\n"
-                "  \"difficulty\": xxx.xxxxx    (numeric) The current difficulty\n"
-                "  \"networkhashps\": nnn,      (numeric) The network hashes per second\n"
-                "  \"pooledtx\": n              (numeric) The size of the mempool\n"
-                "  \"chain\": \"xxxx\",           (string) current network name as defined in BIP70 (main, test, regtest)\n"
-                "  \"warnings\": \"...\"          (string) any network and blockchain warnings\n"
+                "  \"blocks\": nnn,               (numeric) The current block\n"
+                "  \"currentblocksize\": nnn,     (numeric) The last block size\n"
+                "  \"currentblocktx\": nnn,       (numeric) The last block transaction\n"
+                "  \"difficulty\": xxx.xxxxx      (numeric) The current difficulty\n"
+                "  \"networkhashps\": nnn,        (numeric) The network hashes per second\n"
+                "  \"miningblocksizelimit\": nnn  (numeric) The mining block size limit configured for this node\n"
+                "  \"pooledtx\": n                (numeric) The size of the mempool\n"
+                "  \"chain\": \"xxxx\",             (string) current network name as defined in BIP70 (main, test, regtest)\n"
+                "  \"warnings\": \"...\"            (string) any network and blockchain warnings\n"
                 "}\n"},
             RPCExamples{HelpExampleCli("getmininginfo", "") +
                         HelpExampleRpc("getmininginfo", "")},
@@ -264,6 +265,7 @@ static UniValue getmininginfo(const Config &config,
     obj.emplace_back("currentblocksize", nLastBlockSize);
     obj.emplace_back("currentblocktx", nLastBlockTx);
     obj.emplace_back("difficulty", GetDifficulty(::ChainActive().Tip()));
+    obj.emplace_back("miningblocksizelimit", config.GetGeneratedBlockSize());
     obj.emplace_back("networkhashps", getnetworkhashps(config, request));
     obj.emplace_back("pooledtx", g_mempool.size());
     obj.emplace_back("chain", config.GetChainParams().NetworkIDString());
