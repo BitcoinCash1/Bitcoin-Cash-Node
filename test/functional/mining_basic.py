@@ -41,6 +41,7 @@ class MiningTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.setup_clean_chain = False
+        self.extra_args=[[], ["-blockmaxsize=2123456"]]
 
     def run_test(self):
         node = self.nodes[0]
@@ -64,6 +65,10 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['networkhashps'],
                      Decimal('0.003333333333333334'))
         assert_equal(mining_info['pooledtx'], 0)
+        # Check that the "miningblocksizelimit" key from `getmininginfo` is correct (should match -blockmaxsize)
+        assert_equal(mining_info['miningblocksizelimit'], 8000000)
+        mining_info1 = self.nodes[1].getmininginfo()
+        assert_equal(mining_info1['miningblocksizelimit'], 2123456)
 
         # Mine a block to leave initial block download
         self.generatetoaddress(node, 1, node.get_deterministic_priv_key().address)
