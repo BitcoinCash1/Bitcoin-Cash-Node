@@ -37,8 +37,8 @@ static bool IsFinalTx(const CTransaction &tx, int nBlockHeight,
     return true;
 }
 
-static uint64_t GetMinimumTxSize(const Consensus::Params &params, int nHeightPrev, int64_t nMedianTimePastPrev) {
-    if (IsUpgrade9Enabled(params, nMedianTimePastPrev)) {
+static uint64_t GetMinimumTxSize(const Consensus::Params &params, int nHeightPrev) {
+    if (IsUpgrade9EnabledForHeightPrev(params, nHeightPrev)) {
         return MIN_TX_SIZE_UPGRADE9;
     }
     if (IsMagneticAnomalyEnabled(params, nHeightPrev)) {
@@ -49,13 +49,13 @@ static uint64_t GetMinimumTxSize(const Consensus::Params &params, int nHeightPre
 
 uint64_t GetMinimumTxSize(const Consensus::Params &params, const CBlockIndex *pindexPrev) {
     if (!pindexPrev) return 0;
-    return GetMinimumTxSize(params, pindexPrev->nHeight, pindexPrev->GetMedianTimePast());
+    return GetMinimumTxSize(params, pindexPrev->nHeight);
 }
 
 bool ContextualCheckTransaction(const Consensus::Params &params,
                                 const CTransaction &tx, CValidationState &state,
                                 int nHeight, int64_t nLockTimeCutoff,
-                                int64_t nMedianTimePastPrev) {
+                                int64_t nMedianTimePastPrev [[maybe_unused]]) {
     if (!IsFinalTx(tx, nHeight, nLockTimeCutoff)) {
         // While this is only one transaction, we use txns in the error to
         // ensure continuity with other clients.
@@ -66,12 +66,12 @@ bool ContextualCheckTransaction(const Consensus::Params &params,
     // Enforce minimum tx size, if any
     // Note: nHeight is height of *this* block (and nMedianTimePastPrev is MTP of *prev* block),
     // but Is*Enabled() expects nHeight and MTP of *prev* block.
-    const uint64_t minTxSize = GetMinimumTxSize(params, nHeight - 1, nMedianTimePastPrev);
+    const uint64_t minTxSize = GetMinimumTxSize(params, nHeight - 1);
     if (minTxSize && ::GetSerializeSize(tx, PROTOCOL_VERSION) < minTxSize) {
         return state.DoS(100, false, REJECT_INVALID, "bad-txns-undersize");
     }
 
-    if (IsUpgrade9Enabled(params, nMedianTimePastPrev)) {
+    if (IsUpgrade9EnabledForHeightPrev(params, nHeight - 1)) {
         // CHIP 2021-01 Restrict Transaction Version
         if (tx.nVersion > CTransaction::MAX_CONSENSUS_VERSION || tx.nVersion < CTransaction::MIN_CONSENSUS_VERSION) {
             return state.DoS(100, false, REJECT_INVALID, "bad-txns-version");

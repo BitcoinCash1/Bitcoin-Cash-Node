@@ -41,20 +41,15 @@ struct EnsureClearedMempoolMixin {
 
 // Mixin to ensure tokens are enabled for this test
 struct Upgrade9ActivatedMixin {
-    std::optional<std::string> optOrigUpgrade9ActivationTime;
+    std::optional<int32_t> origUpgrade9ActivationOverride;
 
     Upgrade9ActivatedMixin() {
-        if (gArgs.IsArgSet("-upgrade9activationtime")) {
-            optOrigUpgrade9ActivationTime = gArgs.GetArg("-upgrade9activationtime", "");
-        }
-        gArgs.ForceSetArg("-upgrade9activationtime", "0");
+        origUpgrade9ActivationOverride = g_Upgrade9HeightOverride;
+        g_Upgrade9HeightOverride = 0;
     }
 
     ~Upgrade9ActivatedMixin() {
-        gArgs.ClearArg("-upgrade9activationtime");
-        if (optOrigUpgrade9ActivationTime) {
-            gArgs.SoftSetArg("-upgrade9activationtime", *optOrigUpgrade9ActivationTime);
-        }
+        g_Upgrade9HeightOverride = origUpgrade9ActivationOverride;
     }
 };
 

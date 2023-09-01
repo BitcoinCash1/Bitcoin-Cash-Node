@@ -99,8 +99,14 @@ bool IsUpgrade8Enabled(const Consensus::Params &params, const CBlockIndex *pinde
     return pindexPrev->nHeight >= params.upgrade8Height;
 }
 
-bool IsUpgrade9Enabled(const Consensus::Params &params, const int64_t nMedianTimePast) {
-    return nMedianTimePast >= gArgs.GetArg("-upgrade9activationtime", params.upgrade9ActivationTime);
+std::optional<int32_t> g_Upgrade9HeightOverride;
+
+int32_t GetUpgrade9ActivationHeight(const Consensus::Params &params) {
+    return g_Upgrade9HeightOverride.value_or(params.upgrade9Height);
+}
+
+bool IsUpgrade9EnabledForHeightPrev(const Consensus::Params &params, const int32_t nHeightPrev) {
+    return nHeightPrev >= GetUpgrade9ActivationHeight(params);
 }
 
 bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev) {
@@ -108,7 +114,7 @@ bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pinde
         return false;
     }
 
-    return IsUpgrade9Enabled(params, pindexPrev->GetMedianTimePast());
+    return IsUpgrade9EnabledForHeightPrev(params, pindexPrev->nHeight);
 }
 
 static bool IsUpgrade10Enabled(const Consensus::Params &params, const int64_t nMedianTimePast) {

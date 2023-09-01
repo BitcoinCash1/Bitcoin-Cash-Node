@@ -16,7 +16,7 @@ class CashTokenRPCTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         # Both nodes have the CashTokens upgrade activated
-        self.extra_args = [["-upgrade9activationtime=0"]] * self.num_nodes
+        self.extra_args = [["-upgrade9activationheight=0"]] * self.num_nodes
         self.setup_clean_chain = True
 
     def skip_test_if_missing_module(self):

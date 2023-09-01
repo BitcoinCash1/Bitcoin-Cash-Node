@@ -34,6 +34,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <set>
 #include <utility>
@@ -609,14 +610,17 @@ BOOST_FIXTURE_TEST_CASE(dummy_input_size_test, TestChain100Setup) {
 }
 
 struct Upgrade9NotActivatedTestingSetup : ListCoinsTestingSetup {
+    std::optional<int32_t> origUpgrade9Override;
+
     Upgrade9NotActivatedTestingSetup() : ListCoinsTestingSetup() {
-        gArgs.ForceSetArg("-upgrade9activationtime", "9223372036854775807"); // force activation always off for this test fixture
+        origUpgrade9Override = g_Upgrade9HeightOverride;
+        g_Upgrade9HeightOverride = std::numeric_limits<int32_t>::max();
         LOCK(cs_main);
         // Ensure upgrade 9 (tokens) is not active for next block and mempool
         BOOST_CHECK(!IsUpgrade9Enabled(::GetConfig().GetChainParams().GetConsensus(), ::ChainActive().Tip()));
     }
     ~Upgrade9NotActivatedTestingSetup() {
-        gArgs.ClearArg("-upgrade9activationtime");
+        g_Upgrade9HeightOverride = origUpgrade9Override;
     }
 };
 
@@ -842,14 +846,16 @@ BOOST_FIXTURE_TEST_CASE(wallet_bip69, Upgrade9NotActivatedTestingSetup) {
 }
 
 struct Upgrade9ActivatedTestingSetup : ListCoinsTestingSetup {
+    std::optional<int32_t> origUpgrade9Override;
     Upgrade9ActivatedTestingSetup() : ListCoinsTestingSetup() {
-        gArgs.ForceSetArg("-upgrade9activationtime", "0"); // force activation always for this test fixture
+        origUpgrade9Override = g_Upgrade9HeightOverride;
+        g_Upgrade9HeightOverride = 0;
         LOCK(cs_main);
         // Ensure upgrade 9 (tokens) is active for next block and mempool
         BOOST_CHECK(IsUpgrade9Enabled(::GetConfig().GetChainParams().GetConsensus(), ::ChainActive().Tip()));
     }
     ~Upgrade9ActivatedTestingSetup() {
-        gArgs.ClearArg("-upgrade9activationtime");
+        g_Upgrade9HeightOverride = origUpgrade9Override;
     }
 };
 

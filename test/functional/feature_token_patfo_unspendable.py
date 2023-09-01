@@ -67,7 +67,7 @@ class TokenPATFOUnspendableTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.base_extra_args = ['-acceptnonstdtxn=0', '-expire=0', '-whitelist=127.0.0.1']
-        self.extra_args = [['-upgrade9activationtime=999999999999'] + self.base_extra_args]
+        self.extra_args = [['-upgrade9activationheight=999999999'] + self.base_extra_args]
 
     @staticmethod
     def create_p2sh_that_tests_outputbytecode(output_index: int, expected_bytecode: bytes) -> Tuple[CScript, CScript]:
@@ -229,14 +229,14 @@ class TokenPATFOUnspendableTest(BitcoinTestFramework):
         fork_base = None
 
         # --- Activate Upgrade9 ---
-        # 1. Set the activation MTP time a bit forward of the current tip's time
-        activation_time = nTime + 4
+        # 1. Set the activation height a bit forward of the current tip's height
+        activation_height = height
         # 2. Restart the node, enabling upgrade9
-        self.restart_node(0, extra_args=[f"-upgrade9activationtime={activation_time}"] + self.base_extra_args)
+        self.restart_node(0, extra_args=[f"-upgrade9activationheight={activation_height}"] + self.base_extra_args)
         self.reconnect_p2p()
 
         # Mine blocks until it activates
-        while node.getblockchaininfo()["mediantime"] < activation_time:
+        while node.getblockchaininfo()["blocks"] < activation_height:
             mine_a_block()
             if fork_base is None:
                 fork_base = blockhashes[-1]
@@ -244,8 +244,8 @@ class TokenPATFOUnspendableTest(BitcoinTestFramework):
         assert fork_base is not None
 
         # Ensure it activated exactly on this block
-        assert_greater_than_or_equal(node.getblockchaininfo()["mediantime"], activation_time)
-        assert_greater_than(activation_time, node.getblockheader(blockhashes[-2], True)["mediantime"])
+        assert_greater_than_or_equal(node.getblockchaininfo()["blocks"], activation_height)
+        assert_greater_than(activation_height, node.getblockheader(blockhashes[-2], True)["height"])
         activation_block_hash = node.getblockchaininfo()["bestblockhash"]
         activation_height = node.getblockchaininfo()["blocks"]
 
@@ -292,19 +292,19 @@ class TokenPATFOUnspendableTest(BitcoinTestFramework):
         nTime = FromHex(CBlock(), node.getblock(blockhashes[-1], 0)).nTime + 6
 
         # Ensure we are no longer activated
-        assert_greater_than(activation_time, node.getblockheader(blockhashes[-2], True)["mediantime"])
+        assert_greater_than(activation_height, node.getblockheader(blockhashes[-2], True)["height"])
         # Keep mining until upgrade9 activates again on the alternate chain
-        while node.getblockchaininfo()["mediantime"] < activation_time:
+        while node.getblockchaininfo()["blocks"] < activation_height:
             mine_a_block()
 
         # Ensure it activated exactly on this block
-        assert_greater_than_or_equal(node.getblockchaininfo()["mediantime"], activation_time)
-        assert_greater_than(activation_time, node.getblockheader(blockhashes[-2], True)["mediantime"])
+        assert_greater_than_or_equal(node.getblockchaininfo()["blocks"], activation_height)
+        assert_greater_than(activation_height, node.getblockheader(blockhashes[-2], True)["height"])
         activation_block_hash2 = node.getblockchaininfo()["bestblockhash"]
         activation_height2 = node.getblockchaininfo()["blocks"]
         assert_not_equal(activation_block_hash, activation_block_hash2)
-        # Ensure the activation height is different now on this new chain
-        assert_greater_than(activation_height, activation_height2)
+        # Ensure the activation height is same now on this new chain (height based activation)
+        assert_equal(activation_height, activation_height2)
 
         # Now, the PATFO test should fail again on this new chain as well just the same
         for i in range(2):
@@ -314,7 +314,7 @@ class TokenPATFOUnspendableTest(BitcoinTestFramework):
                 mine_a_block()
 
         # Re-activate Upgrade9 wayyy in the past
-        self.restart_node(0, extra_args=[f"-upgrade9activationtime=0"] + self.base_extra_args)
+        self.restart_node(0, extra_args=[f"-upgrade9activationheight=0"] + self.base_extra_args)
         self.reconnect_p2p()
 
         # Now, since we retroactively re-set the Upgrade9 time to way in the past, the PATFO send should succeed

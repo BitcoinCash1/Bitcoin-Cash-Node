@@ -1083,20 +1083,19 @@ static CBlock MakeBlock(const CChainParams &params, bool replaceCoinbase = true,
     return std::move(block);
 }
 
-/// Activates or deactivates upgrade 9 by setting the activation time in the past or future respectively
+/// Activates or deactivates upgrade 9 by setting the activation height for a past or future block
 [[nodiscard]]
 static Defer<std::function<void()>> SetUpgrade9Active(bool active) {
-    const std::string prevVal = gArgs.GetArg("-upgrade9activationtime", "");
-    const auto currentMTP = []{
+    const auto prevVal = g_Upgrade9HeightOverride;
+    const auto currentHeight = []{
         LOCK(cs_main);
-        return ::ChainActive().Tip()->GetMedianTimePast();
+        return ::ChainActive().Tip()->nHeight;
     }();
-    const auto activationMtp = active ? currentMTP - 1 : currentMTP + 1;
-    gArgs.ForceSetArg("-upgrade9activationtime", strprintf("%d", activationMtp));
+    const auto activationHeight = active ? currentHeight - 1 : currentHeight + 1;
+    g_Upgrade9HeightOverride = activationHeight;
     return Defer(std::function<void()>{
         [prevVal] {
-            if (prevVal.empty()) gArgs.ClearArg("-upgrade9activationtime");
-            else gArgs.ForceSetArg("-upgrade9activationtime", prevVal);
+            g_Upgrade9HeightOverride = prevVal;
         }
     });
 }
@@ -1622,11 +1621,11 @@ BOOST_FIXTURE_TEST_CASE(sighash_utxos_test, TestChain100Setup) {
     CScript const p2pk_scriptPubKey = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
 
     for (const bool isUpgrade9Active : {false, true}) {
-        auto d1 = SetUpgrade9Active(isUpgrade9Active);
-
         // Paranoia: mine 2 blocks to ensure maturity of up to 2 coinbase txns
         CreateAndProcessBlock({}, p2pk_scriptPubKey);
         CreateAndProcessBlock({}, p2pk_scriptPubKey);
+
+        auto d1 = SetUpgrade9Active(isUpgrade9Active);
 
         CMutableTransaction spend_tx;
         spend_tx.nVersion = 1;
