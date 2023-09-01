@@ -15,6 +15,10 @@
 
 #include <cstdint>
 #include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(serialize_tests, BasicTestingSetup)
 
@@ -45,7 +49,7 @@ public:
         READWRITE(obj.txval);
     }
 
-    bool operator==(const CSerializeMethodsTestSingle &rhs) {
+    bool operator==(const CSerializeMethodsTestSingle &rhs) const {
         return intval == rhs.intval && boolval == rhs.boolval &&
                stringval == rhs.stringval &&
                strcmp(charstrval, rhs.charstrval) == 0 && *txval == *rhs.txval;
@@ -434,6 +438,77 @@ BOOST_AUTO_TEST_CASE(class_methods) {
                     charstrval, txval);
     ss2 >> methodtest3;
     BOOST_CHECK(methodtest3 == methodtest4);
+}
+
+BOOST_AUTO_TEST_CASE(optional) {
+    const int intval(424242);
+    const bool boolval(true);
+    const std::string stringval("testing testing 123");
+    const char charstrval[16] = "testing charstr";
+    const auto txhex = "010000000175ecb0496f9152b9598a5cfeccfaa9f20c0cd4cb540558ea5e61fb2421ee98f10000000064417c2f08dff"
+                       "94a18e4f2394e023aa1bd08d0f75392d753d628a3c59225cd0a9ef52b80fe4447c44ba2dc61e0ad4336800745ea3f34"
+                       "5827e1d7e907ab33ccfee1a74121024eeb7a4eee3d31ae61208cb3e6a742e4dbf65ea39b2759844f076052bc1766f9f"
+                       "effffff0196939800000000001976a9142d2c8cf85c532e09a3ad0d16dd45d0fdff66025088ac76300200";
+    CMutableTransaction txval;
+    VectorReader(SER_DISK, PROTOCOL_VERSION, ParseHex(txhex), 0) >> txval;
+    CTransactionRef tx_ref{MakeTransactionRef(txval)};
+    const CSerializeMethodsTestSingle obj(intval, boolval, stringval, charstrval, tx_ref);
+    std::optional<CSerializeMethodsTestSingle> optObj, optObj2;
+
+    // Check ser/deser round-trip of an optional that has a value
+    optObj = obj;
+    BOOST_CHECK(optObj.has_value());
+    BOOST_CHECK(!optObj2.has_value());
+    (CDataStream(SER_DISK, PROTOCOL_VERSION) << optObj) >> optObj2;
+    BOOST_CHECK(optObj == optObj2);
+    BOOST_CHECK(optObj.has_value());
+    BOOST_CHECK(optObj2.has_value());
+    BOOST_CHECK(*optObj2 == obj);
+
+    // Check ser/deser round-trip of an optional without a value
+    optObj.reset();
+    BOOST_CHECK(!optObj.has_value());
+    BOOST_CHECK(optObj2.has_value());
+    (CDataStream(SER_DISK, PROTOCOL_VERSION) << optObj) >> optObj2;
+    BOOST_CHECK(optObj == optObj2);
+    BOOST_CHECK(!optObj.has_value());
+    BOOST_CHECK(!optObj2.has_value());
+
+    // Manually build the buffer, format is: 1/0 char to indicate has_value, then the embedded object
+    std::vector<uint8_t> buf;
+
+    CVectorWriter(SER_DISK, PROTOCOL_VERSION, buf, 0) << uint8_t(1) << obj;
+    BOOST_CHECK(!buf.empty());
+    BOOST_CHECK(!optObj.has_value());
+    VectorReader(SER_DISK, PROTOCOL_VERSION, buf, 0) >> optObj;
+    BOOST_CHECK(optObj.has_value());
+    BOOST_CHECK(*optObj == obj);
+
+    // Do out-of-spec non-zero >1 at beginning of buffer -- should throw
+    buf[0] = 2u;
+    optObj.reset();
+    auto isExpectedMessage = [](const auto &ex) {
+        return std::string_view{ex.what()}.find("optional encoding") != std::string_view::npos;
+    };
+    BOOST_CHECK_EXCEPTION((VectorReader(SER_DISK, PROTOCOL_VERSION, buf, 0) >> optObj),
+                          std::ios_base::failure, isExpectedMessage);
+    // On this failure mode, optObj should remain unchanged
+    BOOST_CHECK(!optObj.has_value());
+    // Do it again and verify optObj2 still has its original value even after we got the non-canonical exception
+    optObj2 = obj;
+    BOOST_CHECK_EXCEPTION((VectorReader(SER_DISK, PROTOCOL_VERSION, buf, 0) >> optObj2),
+                          std::ios_base::failure, isExpectedMessage);
+    BOOST_CHECK(optObj2.has_value());
+    BOOST_CHECK(*optObj2 == obj);
+
+    // Test that 0 at beginning of buffer yields an empty optional
+    optObj = obj;
+    BOOST_CHECK(optObj.has_value());
+    buf[0] = 0u;
+    VectorReader vr(SER_DISK, PROTOCOL_VERSION, buf, 0);
+    vr >> optObj;
+    BOOST_CHECK(!optObj.has_value());
+    BOOST_CHECK(!vr.empty()); // has bytes leftover after reading leading 0
 }
 
 BOOST_AUTO_TEST_SUITE_END()
