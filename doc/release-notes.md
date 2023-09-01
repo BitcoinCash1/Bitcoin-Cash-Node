@@ -31,6 +31,8 @@ TODO.
 
 - Added an additional returned data item to the `getmininginfo` RPC: "miningblocksizelimit", which is the block size
   limit used for mining as configured for the node by e.g.: `-blockmaxsize`.
+- The Qt GUI RPC console now is fixed to match the HTTP RPC with respect to stateful "config related" commands. Commands
+  such as `getmininginfo` and `getexcessiveblock` now match the actual node config (and the HTTP RPC).
 
 ## Removed functionality
 
