@@ -302,8 +302,9 @@ bool BlockAssembler::CheckTx(const CTransaction &tx) const {
  *                         GetTimeMicros() + delta). If this argument is > 0,
  *                         then stop looping after this time point elapses.
  *                         Otherwise if <= 0, loop until the block template
- *                         is filled to -blockmaxsize capacity (or until all
- *                         tx's in mempool are added, whichever is smaller).
+ *                         is filled to -[percent]blockmaxsize capacity (or
+ *                         until all tx's in mempool are added, whichever is
+ *                         smaller).
  */
 void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
     using EntryPtrHasher = StdHashWrapper<const CTxMemPoolEntry *>;

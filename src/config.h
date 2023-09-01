@@ -1,5 +1,5 @@
 // Copyright (c) 2017 Amaury SÉCHET
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,6 +14,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <variant>
 
 /** Default for -usecashaddr */
 static constexpr bool DEFAULT_USE_CASHADDR = true;
@@ -25,9 +26,14 @@ public:
     /** The largest block size this node will accept. */
     virtual bool SetExcessiveBlockSize(uint64_t maxBlockSize) = 0;
     virtual uint64_t GetExcessiveBlockSize() const = 0;
-    /** The largest block size this node will generate (mine).
+    /** Set the largest block size this node will generate (mine) in bytes.
         Returns false if `blockSize` exceeds GetExcessiveBlockSize(). */
-    virtual bool SetGeneratedBlockSize(uint64_t blockSize) = 0;
+    virtual bool SetGeneratedBlockSizeBytes(uint64_t blockSize) = 0;
+    /** Set the largest block size this node will generate (mine), in terms of
+        percentage of GetExcessiveBlockSize().
+        Returns false if `percent` is not in the range [0.0, 100.0]. */
+    virtual bool SetGeneratedBlockSizePercent(double percent) = 0;
+    /** Returns the maximum mined block size in bytes, which is always <= GetExcessiveBlockSize(). */
     virtual uint64_t GetGeneratedBlockSize() const = 0;
     /** The maximum amount of RAM to be used in the mempool before TrimToSize is called. */
     virtual void SetMaxMemPoolSize(uint64_t maxMemPoolSize) = 0;
@@ -59,7 +65,8 @@ public:
     //! Note: `maxBlockSize` must not be smaller than 1MB and cannot exceed 2GB
     bool SetExcessiveBlockSize(uint64_t maxBlockSize) override;
     uint64_t GetExcessiveBlockSize() const override;
-    bool SetGeneratedBlockSize(uint64_t blockSize) override;
+    bool SetGeneratedBlockSizeBytes(uint64_t blockSize) override;
+    bool SetGeneratedBlockSizePercent(double percent) override;
     uint64_t GetGeneratedBlockSize() const override;
     void SetMaxMemPoolSize(uint64_t maxMemPoolSize) override { nMaxMemPoolSize = maxMemPoolSize; }
     uint64_t GetMaxMemPoolSize() const override { return nMaxMemPoolSize; }
@@ -97,8 +104,8 @@ private:
     /** The largest block size this node will accept. */
     uint64_t nExcessiveBlockSize;
 
-    /** The largest block size this node will generate. */
-    uint64_t nGeneratedBlockSize;
+    /** The largest block size this node will generate. Stores either a size in bytes or a percentage (double). */
+    std::variant<uint64_t, double> varGeneratedBlockSizeParam;
 
     /** The maximum amount of RAM to be used in the mempool before TrimToSize is called. */
     uint64_t nMaxMemPoolSize;
@@ -114,7 +121,8 @@ public:
     DummyConfig(std::unique_ptr<CChainParams> chainParamsIn);
     bool SetExcessiveBlockSize(uint64_t) override { return false; }
     uint64_t GetExcessiveBlockSize() const override { return 0; }
-    bool SetGeneratedBlockSize(uint64_t) override { return false; }
+    bool SetGeneratedBlockSizeBytes(uint64_t) override { return false; }
+    bool SetGeneratedBlockSizePercent(double) override { return false; }
     uint64_t GetGeneratedBlockSize() const override { return 0; }
     void SetMaxMemPoolSize(uint64_t) override {}
     uint64_t GetMaxMemPoolSize() const override {return 0; }

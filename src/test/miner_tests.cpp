@@ -27,6 +27,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <memory>
+#include <optional>
 
 BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
 
@@ -166,7 +167,7 @@ static void TestPackageSelection(const CChainParams &chainparams,
     }
 }
 
-void TestCoinbaseMessageEB(uint64_t eb, const std::string &cbmsg) {
+static void TestCoinbaseMessageEB(uint64_t eb, const std::string &cbmsg) {
     GlobalConfig config;
     config.SetExcessiveBlockSize(eb);
 
@@ -614,8 +615,17 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     fCheckpointsEnabled = true;
 }
 
-void CheckBlockMaxSize(Config &config, uint64_t size, uint64_t expected) {
-    BOOST_CHECK(config.SetGeneratedBlockSize(size));
+static void CheckBlockMaxSize(Config &config, uint64_t size, uint64_t expected) {
+    BOOST_CHECK(config.SetGeneratedBlockSizeBytes(size));
+
+    BlockAssembler ba(config, g_mempool);
+    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
+}
+
+static void CheckBlockMaxSizePercent(Config &config, std::optional<double> optPercent, uint64_t expected) {
+    if (optPercent) {
+        BOOST_CHECK(config.SetGeneratedBlockSizePercent(*optPercent));
+    }
 
     BlockAssembler ba(config, g_mempool);
     BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
@@ -631,7 +641,13 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
                      badVal = config.GetExcessiveBlockSize() + 1;
         BOOST_CHECK_NE(prevVal, badVal); // ensure not equal for thoroughness
         // try and set generated block size beyond the excessive block size (should fail)
-        BOOST_CHECK(!config.SetGeneratedBlockSize(badVal));
+        BOOST_CHECK(!config.SetGeneratedBlockSizeBytes(badVal));
+        // check that the failure really did not set the value
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), prevVal);
+        // check bad percentages
+        BOOST_CHECK(!config.SetGeneratedBlockSizePercent(101.0));
+        BOOST_CHECK(!config.SetGeneratedBlockSizePercent(100.1));
+        BOOST_CHECK(!config.SetGeneratedBlockSizePercent(-0.001));
         // check that the failure really did not set the value
         BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), prevVal);
     }
@@ -651,6 +667,17 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
     CheckBlockMaxSize(config, ONE_MEGABYTE - 999, ONE_MEGABYTE - 999);
     CheckBlockMaxSize(config, ONE_MEGABYTE, ONE_MEGABYTE - 999);
 
+    // Test percent mode
+    CheckBlockMaxSizePercent(config, 100.0, ONE_MEGABYTE - 999);
+    CheckBlockMaxSizePercent(config, 50.0, ONE_MEGABYTE / 2);
+    CheckBlockMaxSizePercent(config, 10.0, ONE_MEGABYTE / 10);
+    CheckBlockMaxSizePercent(config, 1.0, ONE_MEGABYTE / 100);
+    CheckBlockMaxSizePercent(config, 0.25, ONE_MEGABYTE / 400);
+    CheckBlockMaxSizePercent(config, 25.0, ONE_MEGABYTE / 4);
+    // Modifying the excessive block size should preserve the previous percentage setting (25%)
+    config.SetExcessiveBlockSize(2 * ONE_MEGABYTE);
+    CheckBlockMaxSizePercent(config, std::nullopt, (2 * ONE_MEGABYTE) / 4);
+
     // Test around default cap
     config.SetExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE);
 
@@ -663,6 +690,17 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
                       DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
     CheckBlockMaxSize(config, DEFAULT_EXCESSIVE_BLOCK_SIZE,
                       DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
+
+    // Test percent mode
+    CheckBlockMaxSizePercent(config, 100.0, DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
+    CheckBlockMaxSizePercent(config, 50.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 2);
+    CheckBlockMaxSizePercent(config, 10.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 10);
+    CheckBlockMaxSizePercent(config, 1.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 100);
+    CheckBlockMaxSizePercent(config, 0.25, DEFAULT_EXCESSIVE_BLOCK_SIZE / 400);
+    CheckBlockMaxSizePercent(config, 25.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 4);
+    // Modifying the excessive block size should preserve the previous percentage setting (25%)
+    config.SetExcessiveBlockSize(2 * DEFAULT_EXCESSIVE_BLOCK_SIZE);
+    CheckBlockMaxSizePercent(config, std::nullopt, (2 * DEFAULT_EXCESSIVE_BLOCK_SIZE) / 4);
 
     // NB: If the generated block size parameter is not specified, the config object just defaults it to the excessive
     // block size. But in that case the BlockAssembler ends up unconditionally reserving 1000 bytes of space for the

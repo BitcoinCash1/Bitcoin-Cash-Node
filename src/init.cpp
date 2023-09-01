@@ -1073,14 +1073,26 @@ void SetupServerArgs() {
                  ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::NODE_RELAY);
 
     gArgs.AddArg("-blockmaxsize=<n>",
-                 strprintf("Set maximum block size in bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, "
-                           "chipnet: %u, regtest: %u)",
-                           defaultChainParams->GetConsensus().nDefaultGeneratedBlockSize,
-                           testnetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
-                           testnet4ChainParams->GetConsensus().nDefaultGeneratedBlockSize,
-                           scalenetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
-                           chipnetChainParams->GetConsensus().nDefaultGeneratedBlockSize,
-                           regtestChainParams->GetConsensus().nDefaultGeneratedBlockSize),
+                 strprintf("Set maximum mined block size in bytes (default: %u, testnet: %u, testnet4: %u,"
+                           " scalenet: %u, chipnet: %u, regtest: %u)",
+                           defaultChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes(),
+                           testnetChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes(),
+                           testnet4ChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes(),
+                           scalenetChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes(),
+                           chipnetChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes(),
+                           regtestChainParams->GetConsensus().GetDefaultGeneratedBlockSizeBytes()),
+                 ArgsManager::ALLOW_ANY, OptionsCategory::BLOCK_CREATION);
+    gArgs.AddArg("-percentblockmaxsize=<percent>",
+                 strprintf("Set maximum mined block size as a floating-point percentage of the excessive block size."
+                           " This is an alternative to -blockmaxsize. This option and -blockmaxsize cannot both be"
+                           " specified at the same time. (default: %.1f, testnet: %.1f, testnet4: %.1f,"
+                           " scalenet: %.3f, chipnet: %.1f, regtest: %.1f)",
+                           defaultChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent,
+                           testnetChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent,
+                           testnet4ChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent,
+                           scalenetChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent,
+                           chipnetChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent,
+                           regtestChainParams->GetConsensus().nDefaultGeneratedBlockSizePercent),
                  ArgsManager::ALLOW_ANY, OptionsCategory::BLOCK_CREATION);
 
     gArgs.AddArg("-maxgbttime=<n>",
@@ -1718,13 +1730,34 @@ bool AppInitParameterInteraction(Config &config) {
             _("Excessive block size must be > 1,000,000 bytes (1MB) and <= 2,000,000,000 bytes (2GB)."));
     }
 
-    // Check blockmaxsize does not exceed maximum accepted block size.
-    const uint64_t nProposedMaxGeneratedBlockSize =
-        gArgs.GetArg("-blockmaxsize", chainparams.GetConsensus().nDefaultGeneratedBlockSize);
-    if (!config.SetGeneratedBlockSize(nProposedMaxGeneratedBlockSize)) {
-        auto msg = _("Max generated block size (blockmaxsize) cannot exceed "
-                     "the excessive block size (excessiveblocksize)");
-        return InitError(msg);
+    // Pick one of -blockmaxsize or -percentblockmaxsize, but not both. If neither specified, default to the
+    // chain-specific default for -percentblockmaxsize.
+    {
+        const bool has_bms = gArgs.IsArgSet("-blockmaxsize"), has_pbms = gArgs.IsArgSet("-percentblockmaxsize");
+        const auto &consensus = chainparams.GetConsensus();
+        if (has_bms && has_pbms) {
+            return InitError(_("Cannot set both -blockmaxsize and -percentblockmaxsize"));
+        } else if (has_bms && !has_pbms) {
+            const int64_t nProposedMaxGeneratedBlockSize = gArgs.GetArg("-blockmaxsize", int64_t{-1});
+            if (nProposedExcessiveBlockSize < 0) {
+                return InitError(_("Invalid value specified for -blockmaxsize"));
+            }
+            // Check blockmaxsize does not exceed maximum accepted block size.
+            if (!config.SetGeneratedBlockSizeBytes(nProposedMaxGeneratedBlockSize)) {
+                return InitError(_("Max generated block size (blockmaxsize) cannot exceed "
+                                   "the excessive block size (excessiveblocksize)"));
+            }
+        } else if (has_pbms && !has_bms) {
+            const auto argStr = gArgs.GetArg("-percentblockmaxsize", "");
+            double percent{};
+            if (!ParseDouble(argStr, &percent) || !config.SetGeneratedBlockSizePercent(percent)) {
+                return InitError(_("Invalid value specified for -percentblockmaxsize"));
+            }
+        } else {
+            // neither set, just pick the chain default as a percentage
+            const bool ok = config.SetGeneratedBlockSizePercent(consensus.nDefaultGeneratedBlockSizePercent);
+            assert(ok && "Unexpected error setting the generated block size percent; this should never happen!");
+        }
     }
 
     // mempool limits

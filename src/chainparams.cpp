@@ -149,10 +149,12 @@ public:
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 8 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         // Anchor params: Note that the block after this height *must* also be checkpointed below.
         consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
@@ -378,10 +380,12 @@ public:
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 8 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         // Anchor params: Note that the block after this height *must* also be checkpointed below.
         consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
@@ -568,10 +572,12 @@ public:
         // Default limit for block size (in bytes) (testnet4 is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 2 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 100.0; // 100% of 2MB = 2MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         // Anchor params: Note that the block after this height *must* also be checkpointed below.
         consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
@@ -731,10 +737,12 @@ public:
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = 256 * ONE_MEGABYTE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 8 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 3.1250; // 3.125% of 256MB = 8MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         // ScaleNet has no hard-coded anchor block because will be expected to
         // reorg back down to height 10,000 periodically.
@@ -876,10 +884,12 @@ public:
         // Default limit for block size (in bytes) (chipnet is like testnet4 in that it is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 2 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 100.0; // 100% of 2MB = 2MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         // Anchor params: Note that the block after this height *must* also be checkpointed below.
         consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
@@ -1026,10 +1036,12 @@ public:
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
 
-        // Chain-specific default for mining block size (in bytes) (configurable with -blockmaxsize)
-        consensus.nDefaultGeneratedBlockSize = 8 * ONE_MEGABYTE;
+        // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
+        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
 
-        assert(consensus.nDefaultGeneratedBlockSize <= consensus.nDefaultExcessiveBlockSize);
+        assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
+               && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
+        assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultExcessiveBlockSize);
 
         diskMagic[0] = 0xfa;
         diskMagic[1] = 0xbf;
