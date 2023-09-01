@@ -89,7 +89,7 @@ void AppTests::appTests() {
     }
 #endif
 
-    Config &config = const_cast<Config &>(GetConfig());
+    Config &config = GetMutableConfig();
 
     m_app.parameterSetup();
     m_app.createOptionsModel(true /* reset settings */);
