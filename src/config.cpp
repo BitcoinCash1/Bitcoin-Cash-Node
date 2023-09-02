@@ -102,6 +102,10 @@ const Config &GetConfig() {
     return gConfig;
 }
 
+Config &GetMutableConfig() {
+    return gConfig;
+}
+
 void GlobalConfig::SetCashAddrEncoding(bool c) {
     useCashAddr = c;
 }

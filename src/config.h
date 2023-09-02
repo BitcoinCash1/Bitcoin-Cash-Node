@@ -158,3 +158,4 @@ private:
 
 // Temporary woraround.
 const Config &GetConfig();
+Config &GetMutableConfig();
