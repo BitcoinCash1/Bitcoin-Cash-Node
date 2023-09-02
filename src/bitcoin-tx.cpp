@@ -890,9 +890,7 @@ static int CommandLineRawTx(int argc, char *argv[], const Config &config, const 
 
 int main(int argc, char *argv[]) {
 
-    auto &config = const_cast<Config &>(GetConfig());
-    // TODO: Once GetConfig() is removed, replace the line above with the line below:
-    //GlobalConfig config;
+    auto &config = GetMutableConfig();
 
     SetupEnvironment();
 

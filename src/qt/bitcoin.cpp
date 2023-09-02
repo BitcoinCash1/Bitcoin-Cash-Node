@@ -703,7 +703,7 @@ int GuiMain(int argc, char *argv[]) {
     app.createOptionsModel(gArgs.GetBoolArg("-resetguisettings", false));
 
     // Get global config
-    Config &config = const_cast<Config &>(GetConfig());
+    Config &config = GetMutableConfig();
 
     if (gArgs.GetBoolArg("-splash", DEFAULT_SPLASHSCREEN) &&
         !gArgs.GetBoolArg("-min", DEFAULT_START_MINIMIZED)) {
