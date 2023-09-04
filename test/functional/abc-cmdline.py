@@ -20,6 +20,8 @@ from test_framework.util import assert_equal
 MAX_GENERATED_BLOCK_SIZE_ERROR = (
     'Max generated block size (blockmaxsize) cannot exceed the excessive block size (excessiveblocksize)')
 
+INVALID_GENERATED_BLOCK_SIZE_ERROR = (
+    'Invalid value specified for -blockmaxsize')
 
 class ABC_CmdLine_Test (BitcoinTestFramework):
 
@@ -78,6 +80,10 @@ class ABC_CmdLine_Test (BitcoinTestFramework):
         self.log.info("  Attempt to set below blockmaxsize (mining limit)")
         self.nodes[0].assert_start_raises_init_error(
             ['-blockmaxsize=1500000', '-excessiveblocksize=1300000'], 'Error: ' + MAX_GENERATED_BLOCK_SIZE_ERROR)
+
+        self.log.info("  Attempt to set invalid blockmaxsize (mining limit)")
+        self.nodes[0].assert_start_raises_init_error(
+            ['-blockmaxsize=-1'], 'Error: ' + INVALID_GENERATED_BLOCK_SIZE_ERROR)
 
         # Make sure we leave the test with a node running as this is what thee
         # framework expects.

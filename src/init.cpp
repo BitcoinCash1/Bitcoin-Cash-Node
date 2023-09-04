@@ -1739,7 +1739,7 @@ bool AppInitParameterInteraction(Config &config) {
             return InitError(_("Cannot set both -blockmaxsize and -percentblockmaxsize"));
         } else if (has_bms && !has_pbms) {
             const int64_t nProposedMaxGeneratedBlockSize = gArgs.GetArg("-blockmaxsize", int64_t{-1});
-            if (nProposedExcessiveBlockSize < 0) {
+            if (nProposedMaxGeneratedBlockSize < 0) {
                 return InitError(_("Invalid value specified for -blockmaxsize"));
             }
             // Check blockmaxsize does not exceed maximum accepted block size.
