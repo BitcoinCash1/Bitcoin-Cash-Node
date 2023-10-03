@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2019 The Bitcoin Core developers
-// Copyright (c) 2019-2021 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -74,9 +74,12 @@ static_assert(std::is_same<uint8_t, unsigned char>::value,
 // Assumption: We assume Two's complement representation for negative numbers.
 static_assert(static_cast<int>(0xffffffff) == -1, "Two's complement representation for negative numbers assumed");
 
+// Assumption: 64-bit or greater architecture
+static_assert(std::numeric_limits<uintptr_t>::max() >= std::numeric_limits<uint64_t>::max(),
+              "Minimum 64-bit platform is required to compile this codebase");
+
 // Some important things we are NOT assuming (non-exhaustive list):
 // * We are NOT assuming a specific value for sizeof(std::size_t).
 // * We are NOT assuming a specific value for std::endian::native.
 // * We are NOT assuming a specific value for std::locale("").name().
-// * We are NOT assuming a specific value for
-// std::numeric_limits<char>::is_signed.
+// * We are NOT assuming a specific value for std::numeric_limits<char>::is_signed.

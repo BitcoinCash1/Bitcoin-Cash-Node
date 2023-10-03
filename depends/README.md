@@ -23,27 +23,25 @@ make build-<platform>
 Where `<platform>` is one of the following:
 
 - linux64
-- linux32
-- linux-arm
 - linux-aarch64
 - osx
 - win64
 
-For example, building the dependencies for Linux on ARM:
+For example, building the dependencies for Linux on ARM64:
 
 ```sh
-make build-linux-arm
+make build-linux-aarch64
 ```
 
 To use the dependencies for building Bitcoin Cash Node, you need to set
 the platform file to be used by `cmake`.
 The platform files are located under `cmake/platforms/`.
-For example, cross-building for Linux on ARM (run from the project root):
+For example, cross-building for Linux on ARM64 (run from the project root):
 
 ```sh
-mkdir build_arm
-cd build_arm
-cmake -GNinja .. -DENABLE_MAN=OFF -DCMAKE_TOOLCHAIN_FILE=../cmake/platforms/LinuxARM.cmake
+mkdir build_arm64
+cd build_arm64
+cmake -GNinja .. -DENABLE_MAN=OFF -DCMAKE_TOOLCHAIN_FILE=../cmake/platforms/LinuxAArch64.cmake
 ninja
 ```
 
@@ -105,27 +103,6 @@ Common linux dependencies:
 
 ```sh
 sudo apt-get install gperf
-```
-
-For linux 32 bits cross compilation:
-
-First add the i386 architecture to `dpkg`:
-
-```sh
-sudo dpkg --add-architecture i386
-sudo apt-get update
-```
-
-Then install the dependencies:
-
-```sh
-sudo apt-get install lib32stdc++-8-dev libc6-dev:i386
-```
-
-For linux ARM cross compilation:
-
-```sh
-sudo apt-get install g++-arm-linux-gnueabihf
 ```
 
 For linux AARCH64 cross compilation:

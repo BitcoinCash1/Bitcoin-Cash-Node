@@ -32,7 +32,11 @@ TODO
 
 ## Removed functionality
 
-TODO
+Support for 32-bit architectures (such as armhf and linux-i686) has been completely dropped. Due to the limitations
+in available virtual memory on 32-bit, and the increasing demands of Bitcoin Cash to support large blocks, 32-bit
+architectures are no longer supported by Bitcoin Cash Node. We apologize for the inconvenience but are hopeful that
+this change in requirements will have minimal to zero impact on our users, most of whom are likely already using a
+64-bit platform.
 
 ## New RPC methods
 

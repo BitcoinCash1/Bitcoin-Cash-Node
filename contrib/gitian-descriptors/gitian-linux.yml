@@ -6,13 +6,10 @@ suites:
 - "buster"
 architectures:
 - "amd64"
-multiarch:
-- "i386"
 packages:
 - "autoconf"
 - "automake"
 - "binutils-aarch64-linux-gnu"
-- "binutils-arm-linux-gnueabihf"
 - "binutils-gold"
 - "bison"
 - "bsdmainutils"
@@ -22,14 +19,10 @@ packages:
 - "curl"
 - "faketime"
 - "g++-aarch64-linux-gnu"
-- "g++-arm-linux-gnueabihf"
 - "gcc-aarch64-linux-gnu"
-- "gcc-arm-linux-gnueabihf"
 - "git"
 - "gperf"
 - "help2man"
-- "lib32stdc++-8-dev"
-- "libc6-dev:i386"
 - "libtool"
 - "ninja-build"
 - "pkg-config"
@@ -47,21 +40,17 @@ files: []
 script: |
 
   WRAP_DIR=$HOME/wrapped
-  HOSTS="x86_64-linux-gnu i686-pc-linux-gnu arm-linux-gnueabihf aarch64-linux-gnu"
+  HOSTS="x86_64-linux-gnu aarch64-linux-gnu"
 
   # Note: code below assumes our own architecture (x64_64) is listed above as the first host.
 
   # CMake toolchain file name differ from host name
   declare -A CMAKE_TOOLCHAIN_FILE
   CMAKE_TOOLCHAIN_FILE[x86_64-linux-gnu]=Linux64.cmake
-  CMAKE_TOOLCHAIN_FILE[i686-pc-linux-gnu]=Linux32.cmake
-  CMAKE_TOOLCHAIN_FILE[arm-linux-gnueabihf]=LinuxARM.cmake
   CMAKE_TOOLCHAIN_FILE[aarch64-linux-gnu]=LinuxAArch64.cmake
 
   # Allow extra cmake option to be specified for each host
   declare -A CMAKE_EXTRA_OPTIONS
-  # ARM assembly is supported but experimental, disable it for the release
-  CMAKE_EXTRA_OPTIONS[arm-linux-gnueabihf]="-DSECP256K1_USE_ASM=OFF"
 
   INSTALL_COMPONENTS="bitcoind bitcoin-qt bitcoin-seeder"
 
