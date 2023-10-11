@@ -450,7 +450,7 @@ static std::optional<CAutoFile> ReadBlockSizeCommon(uint64_t &blockSizeOut, cons
     }
     blockSizeOut = blockSize;
 
-    return std::move(filein);
+    return filein;
 }
 
 std::optional<uint64_t> ReadBlockSizeFromDisk(const CBlockIndex *pindex, const CChainParams &chainParams) {
