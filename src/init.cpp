@@ -547,8 +547,8 @@ void SetupServerArgs() {
         "-expire",
         strprintf(
             "Limit functionality of this node after the tentative upgrade "
-            "date of May 15, 2024 (date can be set with "
-            "-upgrade10activationtime=<n>). To avoid inadvertently using the "
+            "date of May 15, 2025 (date can be set with "
+            "-upgrade11activationtime=<n>). To avoid inadvertently using the "
             "wrong chain, the RPC interface will be disabled at that time. "
             "(default: %d)", software_outdated::DEFAULT_EXPIRE),
         ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -967,10 +967,17 @@ void SetupServerArgs() {
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-upgrade10activationtime=<n>",
-        strprintf("Activation time of the tentative May 2024 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
+        strprintf("Activation time of the May 2024 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
                   "default: %d, chipnet: %d)",
                   defaultChainParams->GetConsensus().upgrade10ActivationTime,
                   chipnetChainParams->GetConsensus().upgrade10ActivationTime),
+        true, OptionsCategory::DEBUG_TEST);
+    gArgs.AddArg(
+        "-upgrade11activationtime=<n>",
+        strprintf("Activation time of the tentative May 2025 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
+                  "default: %d, chipnet: %d)",
+                  defaultChainParams->GetConsensus().upgrade11ActivationTime,
+                  chipnetChainParams->GetConsensus().upgrade11ActivationTime),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-printtoconsole",
@@ -2122,9 +2129,10 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
      * Set up the "software outdated" mechanism.
      */
     if (gArgs.GetBoolArg("-expire", software_outdated::DEFAULT_EXPIRE)) {
-        // The software outdated warning will start to happen 30 days before May 15th, 2024.
-        software_outdated::nTime = gArgs.GetArg("-upgrade10activationtime",
-                                                chainparams.GetConsensus().upgrade10ActivationTime);
+        // The software outdated warning will start to happen 30 days before May 15th, 2025;
+        // on -chipnet this date is 30 days before Nov. 15th, 2024.
+        software_outdated::nTime = gArgs.GetArg("-upgrade11activationtime",
+                                                chainparams.GetConsensus().upgrade11ActivationTime);
         if (software_outdated::nTime > 0) {
             software_outdated::fDisableRPCOnExpiry =
                     gArgs.GetBoolArg("-expirerpc", software_outdated::DEFAULT_EXPIRE_RPC);

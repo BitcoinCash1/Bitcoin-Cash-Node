@@ -143,8 +143,11 @@ public:
         // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
         consensus.upgrade9Height = 792772;
 
-        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2024 12:00:00 UTC protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
+
+        // May 15, 2025 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade11ActivationTime = 1747310400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
@@ -374,8 +377,11 @@ public:
         // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
         consensus.upgrade9Height = 1552787;
 
-        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2024 12:00:00 UTC protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
+
+        // May 15, 2025 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade11ActivationTime = 1747310400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
@@ -566,8 +572,11 @@ public:
         // May 15, 2023 12:00:00 UTC protocol upgrade (this is one less than the upgrade block itself)
         consensus.upgrade9Height = 148043;
 
-        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2024 12:00:00 UTC protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
+
+        // May 15, 2025 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade11ActivationTime = 1747310400;
 
         // Default limit for block size (in bytes) (testnet4 is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
@@ -731,8 +740,11 @@ public:
         // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9Height = 10'006;
 
-        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2024 12:00:00 UTC protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
+
+        // May 15, 2025 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade11ActivationTime = 1747310400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = 256 * ONE_MEGABYTE;
@@ -878,8 +890,11 @@ public:
         // November 15, 2022 12:00:00 UTC; protocol upgrade activates 6 months early
         consensus.upgrade9Height = 121956; // (one less than upgrade block)
 
-        // November 15, 2023 12:00:00 UTC; tentative protocol upgrade activates 6 months early
+        // November 15, 2023 12:00:00 UTC; protocol upgrade activates 6 months early
         consensus.upgrade10ActivationTime = 1700049600;
+
+        // November 15, 2024 12:00:00 UTC; tentative protocol upgrade activates 6 months early
+        consensus.upgrade11ActivationTime = 1731672000;
 
         // Default limit for block size (in bytes) (chipnet is like testnet4 in that it is smaller at 2MB)
         consensus.nDefaultExcessiveBlockSize = 2 * ONE_MEGABYTE;
@@ -1030,8 +1045,11 @@ public:
         // May 15, 2023 12:00:00 UTC protocol upgrade
         consensus.upgrade9Height = 0;
 
-        // May 15, 2024 12:00:00 UTC tentative protocol upgrade
+        // May 15, 2024 12:00:00 UTC protocol upgrade
         consensus.upgrade10ActivationTime = 1715774400;
+
+        // May 15, 2025 12:00:00 UTC tentative protocol upgrade
+        consensus.upgrade11ActivationTime = 1747310400;
 
         // Default limit for block size (in bytes)
         consensus.nDefaultExcessiveBlockSize = DEFAULT_EXCESSIVE_BLOCK_SIZE;
