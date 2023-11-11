@@ -303,17 +303,29 @@ endif()
 function(find_git_head_logs_file RESULT)
   find_package(Git)
   if(GIT_FOUND)
-    execute_process(
-      COMMAND "${GIT_EXECUTABLE}" "rev-parse" "--show-toplevel"
-      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-      OUTPUT_VARIABLE GIT_ROOT
-      RESULT_VARIABLE GIT_RESULT
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET
-    )
+    if(GIT_VERSION_STRING VERSION_GREATER_EQUAL "2.13.0")
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" "rev-parse" "--absolute-git-dir"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_ROOT
+        RESULT_VARIABLE GIT_RESULT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+    else()
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" "rev-parse" "--show-toplevel"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_TOPLEVEL
+        RESULT_VARIABLE GIT_RESULT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      set(GIT_ROOT "${GIT_TOPLEVEL}/.git")
+    endif()
 
     if(GIT_RESULT EQUAL 0)
-      set(GIT_LOGS_DIR "${GIT_ROOT}/.git/logs")
+      set(GIT_LOGS_DIR "${GIT_ROOT}/logs")
       set(GIT_HEAD_LOGS_FILE "${GIT_LOGS_DIR}/HEAD")
       # If the .git/logs/HEAD does not exist, create it
       if(NOT EXISTS "${GIT_HEAD_LOGS_FILE}")
