@@ -69,4 +69,33 @@ BOOST_AUTO_TEST_CASE(chain_params) {
     BOOST_CHECK_EQUAL(&Params(), &config.GetChainParams());
 }
 
+BOOST_AUTO_TEST_CASE(generated_block_size_percent) {
+    GlobalConfig config;
+
+    // Default constructed should be at the default consensus blocksize
+    BOOST_CHECK_EQUAL(config.GetExcessiveBlockSize(), DEFAULT_EXCESSIVE_BLOCK_SIZE);
+
+    // Default to equal the max block size.
+    BOOST_CHECK_EQUAL(config.GetExcessiveBlockSize(), config.GetGeneratedBlockSize());
+
+    // Out of range
+    BOOST_CHECK(!config.SetGeneratedBlockSizePercent(-0.01));
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetExcessiveBlockSize());
+    BOOST_CHECK(!config.SetGeneratedBlockSizePercent(100.1));
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetExcessiveBlockSize());
+
+    BOOST_CHECK(config.SetGeneratedBlockSizePercent(0.0));
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), 0);
+
+    BOOST_CHECK(config.SetGeneratedBlockSizePercent(100.0));
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetExcessiveBlockSize());
+
+    // try various percentages and they should be what we expect
+    for (double percent = 0.0; percent <= 100.0; percent += 0.1) {
+        const uint64_t expected = config.GetExcessiveBlockSize() * (percent / 100.0);
+        BOOST_CHECK(config.SetGeneratedBlockSizePercent(percent));
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), expected);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
