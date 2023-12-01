@@ -520,6 +520,10 @@ public:
         LOCK(cs);
         nCheckFrequency = static_cast<uint32_t>(dFrequency * 4294967295.0);
     }
+    double getSanityCheck() const {
+        LOCK(cs);
+        return static_cast<double>(nCheckFrequency) / 4294967295.0;
+    }
 
     // addUnchecked must update state for all parents of a given transaction,
     // updating child links as necessary.

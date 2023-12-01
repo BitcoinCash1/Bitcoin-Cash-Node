@@ -20,6 +20,7 @@
 #include <node/blockstorage.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
+#include <rpc/mining.h>
 #include <rpc/server.h>
 #include <rpc/server_util.h>
 #include <rpc/util.h>
@@ -29,6 +30,7 @@
 #include <txdb.h>
 #include <txmempool.h>
 #include <undo.h>
+#include <util/defer.h>
 #include <util/strencodings.h>
 #include <util/system.h>
 #include <validation.h>
@@ -38,6 +40,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -2692,6 +2695,194 @@ static UniValue scantxoutset(const Config &config,
     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid command");
 }
 
+static UniValue fillmempool(const Config &config, const JSONRPCRequest &request) {
+    if (request.fHelp || request.params.size() != 1) {
+        throw std::runtime_error(
+            RPCHelpMan{"fillmempool",
+                       "\nFills the mempool with the specified number of megabytes worth of anyone-can-spend txns.\n",
+                {
+                    {"megabytes", RPCArg::Type::NUM, /* opt */ false, /* default_val */ "",
+                     "The number of megabytes worth of txns to fill the mempool with.", "", {"", "numeric"}},
+                }}
+                .ToString() +
+            "\nExamples:\n"
+            + HelpExampleCli("fillmempool","10")
+            + HelpExampleRpc("fillmempool","320")
+        );
+    }
+
+    // Ensure we are on regtest
+    const auto &consensusParams = config.GetChainParams().GetConsensus();
+    if ( ! consensusParams.fPowNoRetargeting) {
+        throw JSONRPCError(RPC_METHOD_DISABLED,
+                           "fillmempool is not supported on this chain. Switch to regtest to use fillmempool.");
+    }
+
+    // Check not already running in another thread
+    static std::mutex one_at_a_time_mut;
+    std::unique_lock one_at_a_time_guard(one_at_a_time_mut, std::try_to_lock);
+    if ( ! one_at_a_time_guard.owns_lock()) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "fillmempool is already running in another RPC thread");
+    }
+
+    // Temporarily disable the regtest mempool sanity checking since it will slow the below operation down
+    const auto orig_check_freq = g_mempool.getSanityCheck();
+    Defer restore_sanity_check([&orig_check_freq]{
+        // restore the original setting on scope end
+        g_mempool.setSanityCheck(orig_check_freq);
+    });
+    g_mempool.setSanityCheck(0.0);
+
+    Tic t0;
+    const size_t target_size = ONE_MEGABYTE * [&request]{
+        if (const int arg = request.params[0].get_int(); arg <= 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "megabytes argument must be greater than 0");
+        } else {
+            return arg;
+        }
+    }();
+    if (target_size > config.GetMaxMemPoolSize()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Max mempool size is %i which is less than the requested %i",
+                                                            config.GetMaxMemPoolSize(), target_size));
+    }
+    const auto redeem_script = CScript() << OP_DROP << OP_TRUE;
+    const CTxDestination destination(ScriptID{redeem_script, /* is32 = */ false});
+    const auto destination_spk = GetScriptForDestination(destination);
+    using UTXO = std::pair<COutPoint, Amount>;
+    using UTXOList = std::list<UTXO>;
+    UTXOList utxos;
+
+    // Mine over 100 blocks to get `nCB` valid coinbases we can spend using our "anyone can spend" p2sh
+    {
+        const auto reward = GetBlockSubsidy(WITH_LOCK(cs_main, return ::ChainActive().Height() + 1), consensusParams);
+        assert( reward > Amount::zero());
+        const size_t nCB = std::max<size_t>(1, (50 * COIN) / reward); // scale nCB to block reward size
+        auto reserve_script = std::make_shared<CReserveScript>();
+        reserve_script->reserveScript = destination_spk;
+        const auto nBlocks = COINBASE_MATURITY + nCB;
+        LogPrint(BCLog::MEMPOOL, "fillmempool: Generating %i blocks, of which %i coinbases will be used ...\n",
+                 nBlocks, nCB);
+        const auto blockhashes = generateBlocks(config, reserve_script, nBlocks, ~uint64_t{}, false);
+        for (size_t i = 0; i < nCB; ++i) {
+            const BlockHash bh{ParseHashV(blockhashes.at(i), "blockhash")};
+            LOCK(cs_main);
+            const CBlockIndex *pindex = LookupBlockIndex(bh);
+            CBlock block;
+            if (!pindex || !::ChainActive().Contains(pindex) || !ReadBlockFromDisk(block, pindex, consensusParams)) {
+                throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Unable to find mined block #%i", i));
+            }
+            const auto &ptx = block.vtx.at(0);
+            const auto &txid = ptx->GetId();
+            const auto &out = ptx->vout.at(0);
+            utxos.emplace_back(COutPoint{txid, 0}, out.nValue);
+        }
+    }
+
+    const size_t op_return_size = std::max<size_t>(3u, ::nMaxDatacarrierBytes) - 3;
+    const CTxOut op_return(Amount::zero(), CScript() << OP_RETURN << std::vector<uint8_t>(op_return_size));
+
+    CFeeRate last_fee_rate;
+    size_t max_size_seen = 0u, min_size_seen = 0xffffffffu;
+
+    auto SpendToMempool = [&]
+        (const size_t tx_num, const UTXO &txoIn, const size_t fanoutSize) -> UTXOList {
+        UTXOList ret;
+        assert(fanoutSize > 0);
+        CMutableTransaction tx;
+        const CScript script_sig = CScript() << std::vector<uint8_t>(GetRandInt(MAX_SCRIPT_ELEMENT_SIZE)) // pad txn
+                                             << std::vector<uint8_t>(redeem_script.begin(), redeem_script.end());
+        tx.vin.emplace_back(txoIn.first, script_sig);
+        const auto &amt_in = txoIn.second;
+        while (tx.vout.size() < fanoutSize) {
+            tx.vout.emplace_back(int64_t((amt_in / SATOSHI) / fanoutSize) * SATOSHI, destination_spk);
+        }
+        // Now, add a full OP_RETURN to pad the txn
+        const size_t n_op_returns = 1;
+        tx.vout.push_back(op_return);
+
+        tx.SortBip69();
+
+        auto IsUnspendable = [](const CTxOut &out) {
+            return out.nValue == Amount::zero() || out.scriptPubKey.IsUnspendable();
+        };
+
+        // Adjust for fees
+        const auto tx_size = ::GetSerializeSize(tx, PROTOCOL_VERSION);
+        const auto mp_max_size = config.GetMaxMemPoolSize();
+        const auto fee_rate = std::max(WITH_LOCK(cs_main, return ::minRelayTxFee), g_mempool.GetMinFee(mp_max_size));
+        const auto fee = fee_rate.GetFee(tx_size) / SATOSHI;
+        const Amount fee_per_output = int64_t(std::ceil(fee / double(tx.vout.size() - n_op_returns))) * SATOSHI;
+        for (auto &out : tx.vout) {
+            if (IsUnspendable(out)) {
+                // skip op_return
+                continue;
+            }
+            out.nValue -= fee_per_output;
+            if (!MoneyRange(out.nValue) || IsDust(out, ::dustRelayFee)) {
+                throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Bad amount for txout: %s", out.nValue.ToString()));
+            }
+        }
+
+        // Submit the txn
+        const CTransactionRef rtx = MakeTransactionRef(tx);
+        const Amount tx_fee = amt_in - rtx->GetValueOut();
+        if (0 == tx_num % 1000 || last_fee_rate != fee_rate || tx_size > max_size_seen || tx_size < min_size_seen) {
+            // log what's happening every 1000th time, or if the fee rate changes, or if we hit a new hi/low tx size
+            last_fee_rate = fee_rate;
+            max_size_seen = std::max(tx_size, max_size_seen);
+            min_size_seen = std::min(tx_size, min_size_seen);
+            LogPrint(BCLog::MEMPOOL, "fillmempool: tx_num: %i, size: %i, fee: %i, fee_rate: %s\n",
+                     tx_num, tx_size, tx_fee / SATOSHI, fee_rate.ToString());
+        }
+        const auto &txId = rtx->GetId();
+        unsigned outN = 0;
+        {
+            LOCK(cs_main);
+            CValidationState vstate;
+            bool missingInputs{};
+            const bool ok = AcceptToMemoryPool(config, g_mempool, vstate, rtx, &missingInputs, false, Amount::zero());
+            if (!ok || !vstate.IsValid()) {
+                throw JSONRPCError(RPC_INTERNAL_ERROR,
+                                   strprintf("Unable to accept txn to mempool: %s",
+                                             missingInputs ? "missing inputs" : vstate.GetRejectReason()));
+            }
+        }
+
+        // Remember utxos
+        for (const auto &out : rtx->vout) {
+            if ( ! IsUnspendable(out)) {
+                ret.emplace_back(COutPoint{txId, outN}, out.nValue);
+            }
+            ++outN;
+        }
+        return ret;
+    };
+
+    // Generate txns to fill the mempool to the required size.
+    // Note that this is a bit fuzzy in that it may be +/- by as
+    // much as ~1.5KB dynamic size (or +/- ~500 B serialized size).
+    size_t ngen = 0, mp_dynusage = 0;
+    while ((mp_dynusage = g_mempool.DynamicMemoryUsage()) + 500 < target_size) {
+        assert(!utxos.empty());
+        const UTXO utxo = utxos.front();
+        utxos.pop_front();
+        auto new_utxos = SpendToMempool(ngen + 1, utxo, 2);
+        utxos.splice(utxos.end(), std::move(new_utxos));
+        ++ngen;
+    }
+
+    UniValue::Object ret;
+    ret.reserve(7);
+    ret.emplace_back("txns_generated", ngen);
+    ret.emplace_back("mempool_txns", g_mempool.size());
+    ret.emplace_back("mempool_bytes", g_mempool.GetTotalTxSize());
+    ret.emplace_back("mempool_dynamic_usage", mp_dynusage);
+    ret.emplace_back("elapsed_msec", t0.msec<double>());
+    ret.emplace_back("address", EncodeDestination(destination, config));
+    ret.emplace_back("redeemscript_hex", HexStr(redeem_script));
+    return ret;
+}
+
 // clang-format off
 static const ContextFreeRPCCommand commands[] = {
     //  category            name                      actor (function)        argNames
@@ -2726,6 +2917,7 @@ static const ContextFreeRPCCommand commands[] = {
     { "blockchain",         "verifychain",            verifychain,            {"checklevel","nblocks"} },
 
     /* Not shown in help */
+    { "hidden",             "fillmempool",                      fillmempool,                      {"megabytes"} },
     { "hidden",             "syncwithvalidationinterfacequeue", syncwithvalidationinterfacequeue, {} },
     { "hidden",             "waitforblock",                     waitforblock,                     {"blockhash","timeout"} },
     { "hidden",             "waitforblockheight",               waitforblockheight,               {"height","timeout"} },

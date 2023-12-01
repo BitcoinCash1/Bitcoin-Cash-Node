@@ -172,6 +172,7 @@ static const CRPCConvertParam vRPCConvertParams[] = {
     {"getnodeaddresses", 0, "count"},
     { "addpeeraddress", 1, "port"},
     {"stop", 0, "wait"},
+    {"fillmempool", 0, "megabytes"},
 };
 
 class CRPCConvertTable {
