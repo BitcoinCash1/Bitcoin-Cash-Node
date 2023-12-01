@@ -824,4 +824,20 @@ BOOST_AUTO_TEST_CASE(CompareTxMemPoolEntryByModifiedFeeRateTest) {
     BOOST_CHECK(After(entryA, entryB));
 }
 
+BOOST_AUTO_TEST_CASE(SanityCheckGetterAndSetter) {
+    // Basic unit test that ensures the [gs]etSanityCheck() getter/setter behave as expected
+    CTxMemPool pool;
+
+    const double increment = 65535.0/4294967295.0; // use this value to match resolution of CTxMemPool::nCheckFrequency
+    for (double d = 0.0; d <= 1.0; d += increment) {
+        pool.setSanityCheck(d);
+        // since comparing doubles is problematic, use 0.001 resolution for the equality check
+        BOOST_CHECK_EQUAL(int(d * 1000.0), int(pool.getSanityCheck() * 1000.0));
+    }
+
+    // check saturated value
+    pool.setSanityCheck(1.0);
+    BOOST_CHECK_EQUAL(int(pool.getSanityCheck() * 1000.0), 1000);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

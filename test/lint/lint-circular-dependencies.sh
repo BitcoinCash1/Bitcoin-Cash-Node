@@ -42,6 +42,7 @@ EXPECTED_CIRCULAR_DEPENDENCIES=(
     "config -> policy/policy -> validation -> config"
     "config -> policy/policy -> validation -> protocol -> config"
     "psbt -> script/script_execution_context -> psbt"
+    "rpc/blockchain -> rpc/mining -> rpc/blockchain"
 )
 
 EXIT_CODE=0
