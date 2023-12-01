@@ -268,7 +268,7 @@ class TestNode():
                 # If the call to getblockcount() succeeds then the RPC
                 # connection is up
 
-                wait_until(lambda: rpc.getmempoolinfo()['loaded'])
+                wait_until(lambda: rpc.getmempoolinfo()['loaded'], timeout=self.rpc_timeout)
                 # Wait for the node to finish reindex, block import, and
                 # loading the mempool. Usually importing happens fast or
                 # even "immediate" when the node is started. However, there
