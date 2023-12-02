@@ -71,9 +71,9 @@ bool GlobalConfig::SetInvBroadcastInterval(uint64_t interval) {
     return true;
 }
 
-uint64_t GlobalConfig::GetGeneratedBlockSize() const {
+uint64_t GlobalConfig::GetGeneratedBlockSize(std::optional<uint64_t> currentMaxBlockSize) const {
     uint64_t blockSize;
-    const uint64_t maxBlockSize = nConfMaxBlockSize;
+    const uint64_t maxBlockSize = currentMaxBlockSize.value_or(nConfMaxBlockSize);
 
     struct Visitor {
         uint64_t &blockSize;

@@ -34,7 +34,7 @@ public:
         Returns false if `percent` is not in the range [0.0, 100.0]. */
     virtual bool SetGeneratedBlockSizePercent(double percent) = 0;
     /** Returns the maximum mined block size in bytes, which is always <= GetConfiguredMaxBlockSize(). */
-    virtual uint64_t GetGeneratedBlockSize() const = 0;
+    virtual uint64_t GetGeneratedBlockSize(std::optional<uint64_t> currentMaxBlockSize) const = 0;
     /** The maximum amount of RAM to be used in the mempool before TrimToSize is called. */
     virtual void SetMaxMemPoolSize(uint64_t maxMemPoolSize) = 0;
     virtual uint64_t GetMaxMemPoolSize() const = 0;
@@ -67,7 +67,7 @@ public:
     uint64_t GetConfiguredMaxBlockSize() const override;
     bool SetGeneratedBlockSizeBytes(uint64_t blockSize) override;
     bool SetGeneratedBlockSizePercent(double percent) override;
-    uint64_t GetGeneratedBlockSize() const override;
+    uint64_t GetGeneratedBlockSize(std::optional<uint64_t> currentMaxBlockSize) const override;
     void SetMaxMemPoolSize(uint64_t maxMemPoolSize) override { nMaxMemPoolSize = maxMemPoolSize; }
     uint64_t GetMaxMemPoolSize() const override { return nMaxMemPoolSize; }
     //! Note: `rate` may not exceed MAX_INV_BROADCAST_RATE (1 million)
@@ -123,7 +123,7 @@ public:
     uint64_t GetConfiguredMaxBlockSize() const override { return 0; }
     bool SetGeneratedBlockSizeBytes(uint64_t) override { return false; }
     bool SetGeneratedBlockSizePercent(double) override { return false; }
-    uint64_t GetGeneratedBlockSize() const override { return 0; }
+    uint64_t GetGeneratedBlockSize(std::optional<uint64_t>) const override { return 0; }
     void SetMaxMemPoolSize(uint64_t) override {}
     uint64_t GetMaxMemPoolSize() const override { return 0; }
     bool SetInvBroadcastRate(uint64_t) override { return false; }

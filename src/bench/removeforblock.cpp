@@ -128,7 +128,7 @@ static void benchRemoveForBlock(const Config& config, benchmark::State& state,
     opts.blockMinFeeRate = CFeeRate{Amount::zero()};
     opts.nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
     opts.nMaxGeneratedBlockSize = blockMB * ONE_MEGABYTE;
-    const auto pblktemplate = BlockAssembler{config.GetChainParams(), ::g_mempool, opts}.CreateNewBlock(SCRIPT_PUB_KEY);
+    const auto pblktemplate = BlockAssembler{config, ::g_mempool, opts}.CreateNewBlock(SCRIPT_PUB_KEY);
     const auto &block = pblktemplate->block;
 
     std::list<CTxMemPool> pools;

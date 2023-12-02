@@ -76,25 +76,29 @@ BOOST_AUTO_TEST_CASE(generated_block_size_percent) {
     BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), DEFAULT_CONSENSUS_BLOCK_SIZE);
 
     // Default to equal the max block size.
-    BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), config.GetGeneratedBlockSize());
+    BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), config.GetGeneratedBlockSize(std::nullopt));
 
     // Out of range
     BOOST_CHECK(!config.SetGeneratedBlockSizePercent(-0.01));
-    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetConfiguredMaxBlockSize());
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), config.GetConfiguredMaxBlockSize());
     BOOST_CHECK(!config.SetGeneratedBlockSizePercent(100.1));
-    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetConfiguredMaxBlockSize());
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), config.GetConfiguredMaxBlockSize());
 
     BOOST_CHECK(config.SetGeneratedBlockSizePercent(0.0));
-    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), 0);
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), 0);
 
     BOOST_CHECK(config.SetGeneratedBlockSizePercent(100.0));
-    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), config.GetConfiguredMaxBlockSize());
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), config.GetConfiguredMaxBlockSize());
+    BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(64 * ONE_MEGABYTE), 64 * ONE_MEGABYTE);
 
     // try various percentages and they should be what we expect
     for (double percent = 0.0; percent <= 100.0; percent += 0.1) {
+        const uint64_t size_override = 64 * ONE_MEGABYTE;
         const uint64_t expected = config.GetConfiguredMaxBlockSize() * (percent / 100.0);
+        const uint64_t expected_override = size_override * (percent / 100.0);
         BOOST_CHECK(config.SetGeneratedBlockSizePercent(percent));
-        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), expected);
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), expected);
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(size_override), expected_override);
     }
 }
 

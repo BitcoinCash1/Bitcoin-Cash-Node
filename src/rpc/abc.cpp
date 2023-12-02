@@ -5,6 +5,7 @@
 #include <config.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
+#include <validation.h>
 
 #include <univalue.h>
 
@@ -23,7 +24,8 @@ static UniValue getexcessiveblock(const Config &config,
 
     UniValue::Object ret;
     ret.reserve(1);
-    ret.emplace_back("excessiveBlockSize", config.GetConfiguredMaxBlockSize());
+    const CBlockIndex *pindexTip = WITH_LOCK(cs_main, return ::ChainActive().Tip());
+    ret.emplace_back("excessiveBlockSize", GetNextBlockSizeLimit(config, pindexTip));
     return ret;
 }
 

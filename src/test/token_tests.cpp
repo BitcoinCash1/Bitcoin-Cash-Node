@@ -1049,8 +1049,9 @@ BOOST_AUTO_TEST_CASE(check_consensus_misc_activation) {
 static CBlock MakeBlock(const CChainParams &params, bool replaceCoinbase = true, bool includeMempool = false,
                         const CMutableTransaction &coinbaseTx = {}, const std::vector<CMutableTransaction> & txns = {}) {
     const Config &config = GetConfig();
+    const CBlockIndex *pindexMinedTip;
     auto pblocktemplate = BlockAssembler(config, g_mempool).CreateNewBlock({}, 0 /* time limit (seconds) */,
-                                                                           false /* test validity */);
+                                                                           false /* test validity */, &pindexMinedTip);
     CBlock &block = pblocktemplate->block;
 
     // Replace mempool-selected txns with just coinbase plus passed-in txns:
@@ -1069,16 +1070,17 @@ static CBlock MakeBlock(const CChainParams &params, bool replaceCoinbase = true,
     std::sort(std::begin(block.vtx) + 1, std::end(block.vtx),
               [](const auto &txa, const auto &txb) { return txa->GetId() < txb->GetId(); });
 
-    // IncrementExtraNonce creates a valid coinbase and merkleRoot
-    {
-        LOCK(cs_main);
-        unsigned int extraNonce = 0;
-        IncrementExtraNonce(&block, ::ChainActive().Tip(), config, extraNonce);
-    }
-
-    while ( ! CheckProofOfWork(block.GetHash(), block.nBits, params.GetConsensus())) {
-        if ( ! ++block.nNonce ) throw std::runtime_error("Unable to find a solution"); // wrapped around to 0
-    }
+    unsigned int extraNonce = 0;
+    do {
+        // IncrementExtraNonce creates a valid coinbase and merkleRoot
+        IncrementExtraNonce(&block, pindexMinedTip, config, extraNonce);
+        bool found;
+        while ( ! (found = CheckProofOfWork(block.GetHash(), block.nBits, params.GetConsensus()))) {
+            if ( ! ++block.nNonce ) break;
+        }
+        if (found) break;
+        if ( ! extraNonce) throw std::runtime_error("Unable to find a solution"); // wrapped around to 0
+    } while (true);
 
     return std::move(block);
 }

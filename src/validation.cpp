@@ -5735,3 +5735,7 @@ ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Cons
     assert(pwalk);
     return pwalk;
 }
+
+uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *) {
+    return config.GetConfiguredMaxBlockSize();
+}
