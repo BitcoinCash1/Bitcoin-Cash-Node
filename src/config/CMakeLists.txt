@@ -173,6 +173,16 @@ check_cxx_source_compiles("
     }
 " HAVE_FUNC_ATTRIBUTE_DLLEXPORT)
 
+check_cxx_source_compiles("
+    #include <cstdint>
+
+    int main() {
+        using u128 = unsigned __int128;
+        u128 val = 42;
+        return (val * val) / (42 * 42) - 1;
+    }
+" HAVE_INT128)
+
 #__fdelt_chk's params and return type have changed from long unsigned int to
 # long int. See which one is present here.
 include(CheckPrototypeDefinition)
