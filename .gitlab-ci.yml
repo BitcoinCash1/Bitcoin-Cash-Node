@@ -229,6 +229,8 @@ static-run-linters:
         expire_in: 30 days
         reports:
             junit: build/test/tmp/*/junit_results.xml
+        paths:
+            - build/test/tmp
 
     allow_failure: true
 
