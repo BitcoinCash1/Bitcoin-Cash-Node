@@ -11,8 +11,8 @@ from test_framework.util import (
 )
 from test_framework.cdefs import (
     BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO,
-    DEFAULT_EXCESSIVE_BLOCK_SIZE,
-    MAX_EXCESSIVE_BLOCK_SIZE,
+    DEFAULT_CONSENSUS_BLOCK_SIZE,
+    MAX_CONSENSUS_BLOCK_SIZE,
     ONE_MEGABYTE
 )
 
@@ -54,14 +54,14 @@ class GetBlockTemplateSigopsTest(BitcoinTestFramework):
         self.sync_all()
 
         # Check against the first node, which runs with default params
-        self.assert_case("when using DEFAULT_EXCESSIVE_BLOCK_SIZE", 0, DEFAULT_EXCESSIVE_BLOCK_SIZE)
+        self.assert_case("when using DEFAULT_CONSENSUS_BLOCK_SIZE", 0, DEFAULT_CONSENSUS_BLOCK_SIZE)
 
         # From now on, we will test on second node with various values for excessiveblocksize
 
         # When below default size
-        target_size = int(DEFAULT_EXCESSIVE_BLOCK_SIZE * 0.67)
+        target_size = int(DEFAULT_CONSENSUS_BLOCK_SIZE * 0.67)
         self.reinit_node(1, ["-blockmaxsize=2000000", "-excessiveblocksize=" + str(target_size)])
-        self.assert_case("when below DEFAULT_EXCESSIVE_BLOCK_SIZE", 1, target_size)
+        self.assert_case("when below DEFAULT_CONSENSUS_BLOCK_SIZE", 1, target_size)
 
         # When at lower boundary (1MB+1), but that requires blockmaxsize to be set to 1 MB as we're going below
         # the default for max generated block size (2 MB)
@@ -75,12 +75,12 @@ class GetBlockTemplateSigopsTest(BitcoinTestFramework):
         self.assert_case("when slightly above the lower boundary (1MB+114)", 1, target_size)
 
         # When above the default max block size
-        target_size = int(DEFAULT_EXCESSIVE_BLOCK_SIZE * 3.14)
+        target_size = int(DEFAULT_CONSENSUS_BLOCK_SIZE * 3.14)
         self.reinit_node(1, ["-excessiveblocksize=" + str(target_size)])
-        self.assert_case("when above the DEFAULT_EXCESSIVE_BLOCK_SIZE", 1, target_size)
+        self.assert_case("when above the DEFAULT_CONSENSUS_BLOCK_SIZE", 1, target_size)
 
         # When at the upper boundary
-        upper_boundary = MAX_EXCESSIVE_BLOCK_SIZE
+        upper_boundary = MAX_CONSENSUS_BLOCK_SIZE
         self.reinit_node(1, ["-excessiveblocksize=" + str(upper_boundary)])
         self.assert_case("when at the upper boundary", 1, upper_boundary)
 

@@ -2196,7 +2196,7 @@ static UniValue getblockstats(const Config &config,
         do_mediantxsize || loop_inputs ||
         SetHasKeys(stats, "total_size", "avgtxsize", "mintxsize", "maxtxsize");
 
-    const int64_t excessiveBlockSize = config.GetExcessiveBlockSize();
+    const int64_t thisBlockMaxBlockSize = config.GetConfiguredMaxBlockSize();
     Amount maxfee = Amount::zero();
     Amount maxfeerate = Amount::zero();
     Amount minfee = MAX_MONEY;
@@ -2205,7 +2205,7 @@ static UniValue getblockstats(const Config &config,
     Amount totalfee = Amount::zero();
     int64_t inputs = 0;
     int64_t maxtxsize = 0;
-    int64_t mintxsize = excessiveBlockSize;
+    int64_t mintxsize = thisBlockMaxBlockSize;
     int64_t outputs = 0;
     int64_t total_size = 0;
     int64_t utxo_size_inc = 0;
@@ -2323,7 +2323,7 @@ static UniValue getblockstats(const Config &config,
     ret.emplace_back("minfeerate",
                    ValueFromAmount((minfeerate == MAX_MONEY) ? Amount::zero()
                                                              : minfeerate));
-    ret.emplace_back("mintxsize", mintxsize == excessiveBlockSize ? 0 : mintxsize);
+    ret.emplace_back("mintxsize", mintxsize == thisBlockMaxBlockSize ? 0 : mintxsize);
     ret.emplace_back("outs", outputs);
     ret.emplace_back("subsidy", ValueFromAmount(GetBlockSubsidy(
                                   pindex->nHeight, Params().GetConsensus())));

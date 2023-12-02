@@ -64,15 +64,15 @@ ONE_MEGABYTE = 1000000
 LEGACY_MAX_BLOCK_SIZE = ONE_MEGABYTE
 
 # Default setting for maximum allowed size for a block, in bytes
-_excessive_size_match = re.search(
-    r'DEFAULT_EXCESSIVE_BLOCK_SIZE = (.+);',
+_consensus_block_size_match = re.search(
+    r'DEFAULT_CONSENSUS_BLOCK_SIZE = (.+);',
     _consensus_h_contents)
-if _excessive_size_match is None:
+if _consensus_block_size_match is None:
     import sys
-    print("DEFAULT_EXCESSIVE_BLOCK_SIZE not found in consensus.h")
+    print("DEFAULT_CONSENSUS_BLOCK_SIZE not found in consensus.h")
     sys.exit(1)
 else:
-    DEFAULT_EXCESSIVE_BLOCK_SIZE = eval(_excessive_size_match.group(1))
+    DEFAULT_CONSENSUS_BLOCK_SIZE = eval(_consensus_block_size_match.group(1))
 
 # The following consensus parameters should not be automatically imported.
 # They *should* cause test failures if application code is changed in ways
@@ -110,7 +110,7 @@ MIN_TX_SIZE_UPGRADE9 = 65
 MAX_TXOUT_PUBKEY_SCRIPT = 10000
 
 # From consensus/consensus.h
-MAX_EXCESSIVE_BLOCK_SIZE = 2000 * ONE_MEGABYTE
+MAX_CONSENSUS_BLOCK_SIZE = 2000 * ONE_MEGABYTE
 
 # The following are some node policy values, but also useful in tests.
 
@@ -126,15 +126,15 @@ MAX_INV_BROADCAST_RATE = 1_000_000
 MAX_INV_BROADCAST_INTERVAL = 1_000_000
 
 # Ensure sanity of these constants
-if DEFAULT_MAX_GENERATED_BLOCK_SIZE > DEFAULT_EXCESSIVE_BLOCK_SIZE:
+if DEFAULT_MAX_GENERATED_BLOCK_SIZE > DEFAULT_CONSENSUS_BLOCK_SIZE:
     import sys
     sys.exit(f"DEFAULT_MAX_GENERATED_BLOCK_SIZE ({DEFAULT_MAX_GENERATED_BLOCK_SIZE}) may not be larger than "
-             f"DEFAULT_EXCESSIVE_BLOCK_SIZE ({DEFAULT_EXCESSIVE_BLOCK_SIZE})")
+             f"DEFAULT_CONSENSUS_BLOCK_SIZE ({DEFAULT_CONSENSUS_BLOCK_SIZE})")
 
 
 if __name__ == "__main__":
     # Output values if run standalone to verify
-    print("DEFAULT_EXCESSIVE_BLOCK_SIZE = {} (bytes)".format(DEFAULT_EXCESSIVE_BLOCK_SIZE))
+    print("DEFAULT_CONSENSUS_BLOCK_SIZE = {} (bytes)".format(DEFAULT_CONSENSUS_BLOCK_SIZE))
     print("MAX_BLOCK_SIGOPS_PER_MB = {} (sigops)".format(MAX_BLOCK_SIGOPS_PER_MB))
     print("MAX_TX_SIGOPS_COUNT = {} (sigops)".format(MAX_TX_SIGOPS_COUNT))
     print("COINBASE_MATURITY = {} (blocks)".format(COINBASE_MATURITY))

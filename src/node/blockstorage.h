@@ -95,7 +95,7 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t> &rawBlock, const CBlockIndex *pin
 /**
  *  Read just the block size for a given block. This is done by examining the on-disk block file data and is a
  *  relatively quick function to call.  Note that even though the returned value is 64-bit, the actual size
- *  will be bound to MAX_EXCESSIVE_BLOCK_SIZE (2GB) until consensus, p2p msg format, and disk file format changes are
+ *  will be bound to MAX_CONSENSUS_BLOCK_SIZE (2GB) until consensus, p2p msg format, and disk file format changes are
  *  made to support 64-bit block sizes.
  *
  *  @return The block's serialized size. An empty optional is returned if the block is not found or if there is a

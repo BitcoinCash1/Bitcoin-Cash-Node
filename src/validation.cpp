@@ -305,7 +305,7 @@ std::multimap<CBlockIndex *, CBlockIndex *> &mapBlocksUnlinked =
 void FlushBlockFile(bool fFinalize = false);
 
 BlockValidationOptions::BlockValidationOptions(const Config &config)
-    : excessiveBlockSize(config.GetExcessiveBlockSize()), checkPoW(true),
+    : nMaxBlockSize(config.GetConfiguredMaxBlockSize()), checkPoW(true),
       checkMerkleRoot(true) {}
 
 CBlockIndex *FindForkInGlobalIndex(const CChain &chain,
@@ -1700,7 +1700,7 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
     // quickly after the limit is exceeded, so an adversary cannot cause us to
     // exceed the limit by much at all.
     CheckInputsLimiter nSigChecksBlockLimiter(
-        GetMaxBlockSigChecksCount(options.getExcessiveBlockSize()));
+        GetMaxBlockSigChecksCount(options.getMaxBlockSize()));
 
     std::vector<TxSigCheckLimiter> nSigChecksTxLimiters;
     nSigChecksTxLimiters.resize(block.vtx.size() - 1);
@@ -3456,7 +3456,7 @@ bool CheckBlock(const CBlock &block, CValidationState &state,
     }
 
     // Size limits.
-    auto nMaxBlockSize = validationOptions.getExcessiveBlockSize();
+    auto nMaxBlockSize = validationOptions.getMaxBlockSize();
 
     // Bail early if there is no way this block is of reasonable size.
     if ((block.vtx.size() * MIN_TRANSACTION_SIZE) > nMaxBlockSize) {

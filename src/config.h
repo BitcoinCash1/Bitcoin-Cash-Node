@@ -24,16 +24,16 @@ class CChainParams;
 class Config : public NonCopyable {
 public:
     /** The largest block size this node will accept. */
-    virtual bool SetExcessiveBlockSize(uint64_t maxBlockSize) = 0;
-    virtual uint64_t GetExcessiveBlockSize() const = 0;
+    virtual bool SetConfiguredMaxBlockSize(uint64_t maxBlockSize) = 0;
+    virtual uint64_t GetConfiguredMaxBlockSize() const = 0;
     /** Set the largest block size this node will generate (mine) in bytes.
-        Returns false if `blockSize` exceeds GetExcessiveBlockSize(). */
+        Returns false if `blockSize` exceeds GetConfiguredMaxBlockSize(). */
     virtual bool SetGeneratedBlockSizeBytes(uint64_t blockSize) = 0;
     /** Set the largest block size this node will generate (mine), in terms of
-        percentage of GetExcessiveBlockSize().
+        percentage of GetConfiguredMaxBlockSize().
         Returns false if `percent` is not in the range [0.0, 100.0]. */
     virtual bool SetGeneratedBlockSizePercent(double percent) = 0;
-    /** Returns the maximum mined block size in bytes, which is always <= GetExcessiveBlockSize(). */
+    /** Returns the maximum mined block size in bytes, which is always <= GetConfiguredMaxBlockSize(). */
     virtual uint64_t GetGeneratedBlockSize() const = 0;
     /** The maximum amount of RAM to be used in the mempool before TrimToSize is called. */
     virtual void SetMaxMemPoolSize(uint64_t maxMemPoolSize) = 0;
@@ -63,8 +63,8 @@ class GlobalConfig final : public Config {
 public:
     GlobalConfig();
     //! Note: `maxBlockSize` must not be smaller than 1MB and cannot exceed 2GB
-    bool SetExcessiveBlockSize(uint64_t maxBlockSize) override;
-    uint64_t GetExcessiveBlockSize() const override;
+    bool SetConfiguredMaxBlockSize(uint64_t maxBlockSize) override;
+    uint64_t GetConfiguredMaxBlockSize() const override;
     bool SetGeneratedBlockSizeBytes(uint64_t blockSize) override;
     bool SetGeneratedBlockSizePercent(double percent) override;
     uint64_t GetGeneratedBlockSize() const override;
@@ -102,7 +102,7 @@ private:
     uint64_t nInvBroadcastInterval;
 
     /** The largest block size this node will accept. */
-    uint64_t nExcessiveBlockSize;
+    uint64_t nConfMaxBlockSize;
 
     /** The largest block size this node will generate. Stores either a size in bytes or a percentage (double). */
     std::variant<uint64_t, double> varGeneratedBlockSizeParam;
@@ -119,13 +119,13 @@ public:
     DummyConfig();
     DummyConfig(const std::string &net);
     DummyConfig(std::unique_ptr<CChainParams> chainParamsIn);
-    bool SetExcessiveBlockSize(uint64_t) override { return false; }
-    uint64_t GetExcessiveBlockSize() const override { return 0; }
+    bool SetConfiguredMaxBlockSize(uint64_t) override { return false; }
+    uint64_t GetConfiguredMaxBlockSize() const override { return 0; }
     bool SetGeneratedBlockSizeBytes(uint64_t) override { return false; }
     bool SetGeneratedBlockSizePercent(double) override { return false; }
     uint64_t GetGeneratedBlockSize() const override { return 0; }
     void SetMaxMemPoolSize(uint64_t) override {}
-    uint64_t GetMaxMemPoolSize() const override {return 0; }
+    uint64_t GetMaxMemPoolSize() const override { return 0; }
     bool SetInvBroadcastRate(uint64_t) override { return false; }
     uint64_t GetInvBroadcastRate() const override { return 0; }
     bool SetInvBroadcastInterval(uint64_t) override { return false; }

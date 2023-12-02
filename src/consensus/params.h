@@ -54,7 +54,7 @@ struct Params {
     int64_t upgrade10ActivationTime;
 
     /** Default blocksize limit -- can be overridden with the -excessiveblocksize= command-line switch */
-    uint64_t nDefaultExcessiveBlockSize;
+    uint64_t nDefaultConsensusBlockSize;
     /**
      * Chain-specific default for -percentblockmaxsize, which controls the maximum size of blocks that the
      * mining code will create. This value is stored as a double precision percentage to support scalenet's
@@ -63,7 +63,7 @@ struct Params {
     double nDefaultGeneratedBlockSizePercent;
 
     uint64_t GetDefaultGeneratedBlockSizeBytes() const {
-        return nDefaultExcessiveBlockSize * (nDefaultGeneratedBlockSizePercent / 100.0);
+        return nDefaultConsensusBlockSize * (nDefaultGeneratedBlockSizePercent / 100.0);
     }
 
     /** Proof of work parameters */

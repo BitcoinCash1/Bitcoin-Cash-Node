@@ -20,16 +20,16 @@ inline constexpr uint64_t MIN_TX_SIZE_UPGRADE9 = 65;
 /** The maximum allowed size for a block, before the UAHF */
 inline constexpr uint64_t LEGACY_MAX_BLOCK_SIZE = ONE_MEGABYTE;
 /** Default setting for maximum allowed size for a block, in bytes */
-inline constexpr uint64_t DEFAULT_EXCESSIVE_BLOCK_SIZE = 32 * ONE_MEGABYTE;
+inline constexpr uint64_t DEFAULT_CONSENSUS_BLOCK_SIZE = 32 * ONE_MEGABYTE;
 /**
- *  Maximum excessive blocks size: 2GB. This is a temporary limit
+ *  Maximum consensus blocks size: 2GB. This is a temporary limit
  *  to prevent consensus failure between 32-bit and 64-bit platforms,
  *  until we drop 32-bit platform support altogether, at which point
  *  this constant should be raised well beyond 32-bit addressing limits.
  */
-inline constexpr uint64_t MAX_EXCESSIVE_BLOCK_SIZE = uint64_t(2000) * ONE_MEGABYTE;
-static_assert(MAX_EXCESSIVE_BLOCK_SIZE <= std::numeric_limits<unsigned int>::max(),
-              "MAX_EXCESSIVE_BLOCKSIZE must fit within an unsigned int due to current block file data format");
+inline constexpr uint64_t MAX_CONSENSUS_BLOCK_SIZE = uint64_t(2000) * ONE_MEGABYTE;
+static_assert(MAX_CONSENSUS_BLOCK_SIZE <= std::numeric_limits<unsigned int>::max(),
+              "MAX_CONSENSUS_BLOCK_SIZE must fit within an unsigned int due to current block file data format");
 
 /** Allowed number of signature check operations per transaction. */
 inline constexpr uint64_t MAX_TX_SIGCHECKS = 3000;

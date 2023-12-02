@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Tests the `fillmempool` RPC."""
 
-from test_framework.cdefs import DEFAULT_EXCESSIVE_BLOCK_SIZE, ONE_MEGABYTE
+from test_framework.cdefs import DEFAULT_CONSENSUS_BLOCK_SIZE, ONE_MEGABYTE
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
@@ -13,7 +13,7 @@ from test_framework.util import (
 )
 
 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB = 10
-MAX_MEMPOOL_MB = DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * DEFAULT_EXCESSIVE_BLOCK_SIZE // ONE_MEGABYTE
+MAX_MEMPOOL_MB = DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * DEFAULT_CONSENSUS_BLOCK_SIZE // ONE_MEGABYTE
 
 
 class FillMempoolTest(BitcoinTestFramework):

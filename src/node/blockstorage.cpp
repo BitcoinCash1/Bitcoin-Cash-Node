@@ -444,7 +444,7 @@ static std::optional<CAutoFile> ReadBlockSizeCommon(uint64_t &blockSizeOut, cons
     }
 
     // check the block size for sanity
-    if (blockSize < BLOCK_HEADER_SIZE || blockSize > MAX_EXCESSIVE_BLOCK_SIZE) {
+    if (blockSize < BLOCK_HEADER_SIZE || blockSize > MAX_CONSENSUS_BLOCK_SIZE) {
         error("%s: block size verification failed for %s", __func__, blockPos.ToString());
         return std::nullopt;
     }

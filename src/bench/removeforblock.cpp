@@ -126,7 +126,7 @@ static void benchRemoveForBlock(const Config& config, benchmark::State& state,
 
     BlockAssembler::Options opts;
     opts.blockMinFeeRate = CFeeRate{Amount::zero()};
-    opts.nExcessiveBlockSize = config.GetExcessiveBlockSize();
+    opts.nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
     opts.nMaxGeneratedBlockSize = blockMB * ONE_MEGABYTE;
     const auto pblktemplate = BlockAssembler{config.GetChainParams(), ::g_mempool, opts}.CreateNewBlock(SCRIPT_PUB_KEY);
     const auto &block = pblktemplate->block;

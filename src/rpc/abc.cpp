@@ -23,7 +23,7 @@ static UniValue getexcessiveblock(const Config &config,
 
     UniValue::Object ret;
     ret.reserve(1);
-    ret.emplace_back("excessiveBlockSize", config.GetExcessiveBlockSize());
+    ret.emplace_back("excessiveBlockSize", config.GetConfiguredMaxBlockSize());
     return ret;
 }
 

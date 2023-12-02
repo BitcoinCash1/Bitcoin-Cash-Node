@@ -471,12 +471,12 @@ void SetupServerArgs() {
     gArgs.AddArg("-excessiveblocksize=<n>",
                  strprintf("Do not accept blocks larger than this limit, in "
                            "bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u, regtest: %u)",
-                           defaultChainParams->GetConsensus().nDefaultExcessiveBlockSize,
-                           testnetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
-                           testnet4ChainParams->GetConsensus().nDefaultExcessiveBlockSize,
-                           scalenetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
-                           chipnetChainParams->GetConsensus().nDefaultExcessiveBlockSize,
-                           regtestChainParams->GetConsensus().nDefaultExcessiveBlockSize),
+                           defaultChainParams->GetConsensus().nDefaultConsensusBlockSize,
+                           testnetChainParams->GetConsensus().nDefaultConsensusBlockSize,
+                           testnet4ChainParams->GetConsensus().nDefaultConsensusBlockSize,
+                           scalenetChainParams->GetConsensus().nDefaultConsensusBlockSize,
+                           chipnetChainParams->GetConsensus().nDefaultConsensusBlockSize,
+                           regtestChainParams->GetConsensus().nDefaultConsensusBlockSize),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-feefilter",
                  strprintf("Tell other nodes to filter invs to us by our "
@@ -514,11 +514,11 @@ void SetupServerArgs() {
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-maxmempool=<n>", strprintf("Keep the transaction memory pool below <n> "
                  "megabytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u)",
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * defaultChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnet4ChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * scalenetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE,
-                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * chipnetChainParams->GetConsensus().nDefaultExcessiveBlockSize / ONE_MEGABYTE),
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * defaultChainParams->GetConsensus().nDefaultConsensusBlockSize / ONE_MEGABYTE,
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnetChainParams->GetConsensus().nDefaultConsensusBlockSize / ONE_MEGABYTE,
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * testnet4ChainParams->GetConsensus().nDefaultConsensusBlockSize / ONE_MEGABYTE,
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * scalenetChainParams->GetConsensus().nDefaultConsensusBlockSize / ONE_MEGABYTE,
+                 DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * chipnetChainParams->GetConsensus().nDefaultConsensusBlockSize / ONE_MEGABYTE),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-maxorphantx=<n>",
                  strprintf("Keep at most <n> unconnectable transactions in "
@@ -1722,10 +1722,10 @@ bool AppInitParameterInteraction(Config &config) {
                   chainparams.GetConsensus().nMinimumChainWork.GetHex());
     }
 
-    // Configure excessive block size.
-    const uint64_t nProposedExcessiveBlockSize =
-        gArgs.GetArg("-excessiveblocksize", chainparams.GetConsensus().nDefaultExcessiveBlockSize);
-    if (!config.SetExcessiveBlockSize(nProposedExcessiveBlockSize)) {
+    // Configure maximum block size.
+    const uint64_t nProposedMaxBlockSize =
+        gArgs.GetArg("-excessiveblocksize", chainparams.GetConsensus().nDefaultConsensusBlockSize);
+    if (!config.SetConfiguredMaxBlockSize(nProposedMaxBlockSize)) {
         return InitError(
             _("Excessive block size must be > 1,000,000 bytes (1MB) and <= 2,000,000,000 bytes (2GB)."));
     }
@@ -1762,7 +1762,7 @@ bool AppInitParameterInteraction(Config &config) {
 
     // mempool limits
     const int64_t nMempoolSizeMax =
-        ONE_MEGABYTE * gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * config.GetExcessiveBlockSize()
+        ONE_MEGABYTE * gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE_PER_MB * config.GetConfiguredMaxBlockSize()
                                                    / ONE_MEGABYTE);
     if (nMempoolSizeMax < 0) {
         return InitError("-maxmempool must be at least 0 MB");

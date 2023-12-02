@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(blockfail) {
 
     // Set max blocksize to default in case other tests left it dirty
     GlobalConfig config;
-    config.SetExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE);
+    config.SetConfiguredMaxBlockSize(DEFAULT_CONSENSUS_BLOCK_SIZE);
 
     CBlock block;
     RunCheckOnBlock(config, block, "bad-cb-missing");
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(blockfail) {
     tx = CMutableTransaction(coinbaseTx);
     block.vtx[0] = MakeTransactionRef(tx);
     auto txSize = ::GetSerializeSize(tx, PROTOCOL_VERSION);
-    auto maxTxCount = ((DEFAULT_EXCESSIVE_BLOCK_SIZE - 1) / txSize) - 1;
+    auto maxTxCount = ((DEFAULT_CONSENSUS_BLOCK_SIZE - 1) / txSize) - 1;
 
     for (size_t i = 1; i < maxTxCount; i++) {
         tx.vin[0].prevout = InsecureRandOutPoint();
@@ -229,7 +229,7 @@ BOOST_FIXTURE_TEST_CASE(check_read_raw_block_from_disk, TestChain100Setup) {
     BOOST_REQUIRE_EQUAL(*optBlockSize, origBlockSize);
 
     // Try forbidden sizes -- ReadRawBlockFromDisk() and/or ReadBlockSizeFromDisk() should always guard against these
-    for (const unsigned badSize : {unsigned{BLOCK_HEADER_SIZE-1u}, unsigned{MAX_EXCESSIVE_BLOCK_SIZE+1u}}) {
+    for (const unsigned badSize : {unsigned{BLOCK_HEADER_SIZE-1u}, unsigned{MAX_CONSENSUS_BLOCK_SIZE+1u}}) {
         // Next, mess up the on-disk size -- ReadRawBlockFromDisk() should fail
         BOOST_REQUIRE(0 == std::fseek(filep, headerPos + sizeof(origMagic), SEEK_SET));
         file << badSize;

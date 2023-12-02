@@ -169,7 +169,7 @@ static void TestPackageSelection(const CChainParams &chainparams,
 
 static void TestCoinbaseMessageEB(uint64_t eb, const std::string &cbmsg) {
     GlobalConfig config;
-    config.SetExcessiveBlockSize(eb);
+    config.SetConfiguredMaxBlockSize(eb);
 
     CScript scriptPubKey =
         CScript() << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909"
@@ -634,13 +634,13 @@ static void CheckBlockMaxSizePercent(Config &config, std::optional<double> optPe
 BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
     GlobalConfig config;
 
-    // check that generated block size can never exceed excessive block size
+    // check that generated block size can never exceed conf. max block size
     {
-        BOOST_CHECK_LE(config.GetGeneratedBlockSize(), config.GetExcessiveBlockSize());
+        BOOST_CHECK_LE(config.GetGeneratedBlockSize(), config.GetConfiguredMaxBlockSize());
         const size_t prevVal = config.GetGeneratedBlockSize(),
-                     badVal = config.GetExcessiveBlockSize() + 1;
+                     badVal = config.GetConfiguredMaxBlockSize() + 1;
         BOOST_CHECK_NE(prevVal, badVal); // ensure not equal for thoroughness
-        // try and set generated block size beyond the excessive block size (should fail)
+        // try and set generated block size beyond the conf. max block size (should fail)
         BOOST_CHECK(!config.SetGeneratedBlockSizeBytes(badVal));
         // check that the failure really did not set the value
         BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), prevVal);
@@ -656,7 +656,7 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
     LOCK(cs_main);
 
     // Test around historical 1MB (plus one byte because that's mandatory)
-    config.SetExcessiveBlockSize(ONE_MEGABYTE + 1);
+    config.SetConfiguredMaxBlockSize(ONE_MEGABYTE + 1);
     CheckBlockMaxSize(config, 0, 1000);
     CheckBlockMaxSize(config, 1000, 1000);
     CheckBlockMaxSize(config, 1001, 1001);
@@ -674,50 +674,50 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
     CheckBlockMaxSizePercent(config, 1.0, ONE_MEGABYTE / 100);
     CheckBlockMaxSizePercent(config, 0.25, ONE_MEGABYTE / 400);
     CheckBlockMaxSizePercent(config, 25.0, ONE_MEGABYTE / 4);
-    // Modifying the excessive block size should preserve the previous percentage setting (25%)
-    config.SetExcessiveBlockSize(2 * ONE_MEGABYTE);
+    // Modifying the conf. max block size should preserve the previous percentage setting (25%)
+    config.SetConfiguredMaxBlockSize(2 * ONE_MEGABYTE);
     CheckBlockMaxSizePercent(config, std::nullopt, (2 * ONE_MEGABYTE) / 4);
 
     // Test around default cap
-    config.SetExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE);
+    config.SetConfiguredMaxBlockSize(DEFAULT_CONSENSUS_BLOCK_SIZE);
 
     // Now we can use the default max block size.
-    CheckBlockMaxSize(config, DEFAULT_EXCESSIVE_BLOCK_SIZE - 1001,
-                      DEFAULT_EXCESSIVE_BLOCK_SIZE - 1001);
-    CheckBlockMaxSize(config, DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000,
-                      DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
-    CheckBlockMaxSize(config, DEFAULT_EXCESSIVE_BLOCK_SIZE - 999,
-                      DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
-    CheckBlockMaxSize(config, DEFAULT_EXCESSIVE_BLOCK_SIZE,
-                      DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
+    CheckBlockMaxSize(config, DEFAULT_CONSENSUS_BLOCK_SIZE - 1001,
+                      DEFAULT_CONSENSUS_BLOCK_SIZE - 1001);
+    CheckBlockMaxSize(config, DEFAULT_CONSENSUS_BLOCK_SIZE - 1000,
+                      DEFAULT_CONSENSUS_BLOCK_SIZE - 1000);
+    CheckBlockMaxSize(config, DEFAULT_CONSENSUS_BLOCK_SIZE - 999,
+                      DEFAULT_CONSENSUS_BLOCK_SIZE - 1000);
+    CheckBlockMaxSize(config, DEFAULT_CONSENSUS_BLOCK_SIZE,
+                      DEFAULT_CONSENSUS_BLOCK_SIZE - 1000);
 
     // Test percent mode
-    CheckBlockMaxSizePercent(config, 100.0, DEFAULT_EXCESSIVE_BLOCK_SIZE - 1000);
-    CheckBlockMaxSizePercent(config, 50.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 2);
-    CheckBlockMaxSizePercent(config, 10.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 10);
-    CheckBlockMaxSizePercent(config, 1.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 100);
-    CheckBlockMaxSizePercent(config, 0.25, DEFAULT_EXCESSIVE_BLOCK_SIZE / 400);
-    CheckBlockMaxSizePercent(config, 25.0, DEFAULT_EXCESSIVE_BLOCK_SIZE / 4);
-    // Modifying the excessive block size should preserve the previous percentage setting (25%)
-    config.SetExcessiveBlockSize(2 * DEFAULT_EXCESSIVE_BLOCK_SIZE);
-    CheckBlockMaxSizePercent(config, std::nullopt, (2 * DEFAULT_EXCESSIVE_BLOCK_SIZE) / 4);
+    CheckBlockMaxSizePercent(config, 100.0, DEFAULT_CONSENSUS_BLOCK_SIZE - 1000);
+    CheckBlockMaxSizePercent(config, 50.0, DEFAULT_CONSENSUS_BLOCK_SIZE / 2);
+    CheckBlockMaxSizePercent(config, 10.0, DEFAULT_CONSENSUS_BLOCK_SIZE / 10);
+    CheckBlockMaxSizePercent(config, 1.0, DEFAULT_CONSENSUS_BLOCK_SIZE / 100);
+    CheckBlockMaxSizePercent(config, 0.25, DEFAULT_CONSENSUS_BLOCK_SIZE / 400);
+    CheckBlockMaxSizePercent(config, 25.0, DEFAULT_CONSENSUS_BLOCK_SIZE / 4);
+    // Modifying the conf. max block size should preserve the previous percentage setting (25%)
+    config.SetConfiguredMaxBlockSize(2 * DEFAULT_CONSENSUS_BLOCK_SIZE);
+    CheckBlockMaxSizePercent(config, std::nullopt, (2 * DEFAULT_CONSENSUS_BLOCK_SIZE) / 4);
 
-    // NB: If the generated block size parameter is not specified, the config object just defaults it to the excessive
+    // NB: If the generated block size parameter is not specified, the config object just defaults it to the conf. max
     // block size. But in that case the BlockAssembler ends up unconditionally reserving 1000 bytes of space for the
     // coinbase tx.
     constexpr size_t hardCodedCoinbaseReserved = 1000;
     {
         GlobalConfig freshConfig;
         BlockAssembler ba(freshConfig, g_mempool);
-        BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), freshConfig.GetExcessiveBlockSize() - hardCodedCoinbaseReserved);
+        BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), freshConfig.GetConfiguredMaxBlockSize() - hardCodedCoinbaseReserved);
 
-        // next, ensure that invariants are maintained -- setting excessiveblocksize should pull down generatedblocksize
+        // next, ensure that invariants are maintained -- setting conf. max block size should pull down generatedblocksize
         const auto prevVal = freshConfig.GetGeneratedBlockSize();
-        BOOST_CHECK(freshConfig.SetExcessiveBlockSize(prevVal / 2));
-        BOOST_CHECK_EQUAL(freshConfig.GetExcessiveBlockSize(), freshConfig.GetGeneratedBlockSize());
+        BOOST_CHECK(freshConfig.SetConfiguredMaxBlockSize(prevVal / 2));
+        BOOST_CHECK_EQUAL(freshConfig.GetConfiguredMaxBlockSize(), freshConfig.GetGeneratedBlockSize());
         BOOST_CHECK_LT(freshConfig.GetGeneratedBlockSize(), prevVal);
         BlockAssembler ba2(freshConfig, g_mempool);
-        BOOST_CHECK_EQUAL(ba2.GetMaxGeneratedBlockSize(), freshConfig.GetExcessiveBlockSize() - hardCodedCoinbaseReserved);
+        BOOST_CHECK_EQUAL(ba2.GetMaxGeneratedBlockSize(), freshConfig.GetConfiguredMaxBlockSize() - hardCodedCoinbaseReserved);
     }
 }
 
