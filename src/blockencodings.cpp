@@ -57,7 +57,7 @@ ReadStatus PartiallyDownloadedBlock::InitData(
         return READ_STATUS_INVALID;
     }
     if (cmpctblock.shorttxids.size() + cmpctblock.prefilledtxn.size() >
-        config->GetExcessiveBlockSize() / MIN_TRANSACTION_SIZE) {
+        config->GetConfiguredMaxBlockSize() / MIN_TRANSACTION_SIZE) {
         return READ_STATUS_INVALID;
     }
 

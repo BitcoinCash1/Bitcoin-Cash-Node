@@ -3017,7 +3017,7 @@ std::string getSubVersionEB(uint64_t MaxBlockSize) {
 
 std::string userAgent(const Config &config) {
     // format excessive blocksize value
-    std::string eb = getSubVersionEB(config.GetExcessiveBlockSize());
+    std::string eb = getSubVersionEB(config.GetConfiguredMaxBlockSize());
     std::vector<std::string> uacomments;
     uacomments.push_back("EB" + eb);
 

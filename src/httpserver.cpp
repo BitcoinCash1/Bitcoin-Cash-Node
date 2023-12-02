@@ -429,7 +429,7 @@ bool InitHTTPServer(Config &config) {
     evhttp_set_max_headers_size(http, MAX_HEADERS_SIZE);
     // scale the max body size with our block size so RPC always works for large blocks
     evhttp_set_max_body_size(http, MIN_SUPPORTED_BODY_SIZE +
-                                       2 * config.GetExcessiveBlockSize());
+                                       2 * config.GetConfiguredMaxBlockSize());
     evhttp_set_gencb(http, http_request_cb, &config);
 
     // Only POST and OPTIONS are supported, but we return HTTP 405 for the

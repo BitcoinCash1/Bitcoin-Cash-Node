@@ -8,7 +8,7 @@
 import re
 
 from test_framework.cdefs import (
-    DEFAULT_EXCESSIVE_BLOCK_SIZE,
+    DEFAULT_CONSENSUS_BLOCK_SIZE,
     LEGACY_MAX_BLOCK_SIZE,
 )
 from test_framework.test_framework import BitcoinTestFramework
@@ -36,10 +36,10 @@ class ABC_RPC_Test(BitcoinTestFramework):
         assert pattern.match(subversion)
 
     def test_excessiveblock(self):
-        # Check that we start with DEFAULT_EXCESSIVE_BLOCK_SIZE
+        # Check that we start with DEFAULT_CONSENSUS_BLOCK_SIZE
         getsize = self.nodes[0].getexcessiveblock()
         ebs = getsize['excessiveBlockSize']
-        assert_equal(ebs, DEFAULT_EXCESSIVE_BLOCK_SIZE)
+        assert_equal(ebs, DEFAULT_CONSENSUS_BLOCK_SIZE)
 
     def run_test(self):
         self.genesis_hash = int(self.nodes[0].getbestblockhash(), 16)

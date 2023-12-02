@@ -59,8 +59,8 @@ static constexpr unsigned int MAX_STANDARD_TX_SIZE = 100000;
 static constexpr unsigned int MAX_TX_IN_SCRIPT_SIG_SIZE = 1650;
 
 /**
- * Default maximum megabytes of mempool memory usage per MB of excessive block size. This is used to calculate the
- * default value for for -maxmempool. A value of 10 here with a 32 MB excessive block size setting results in a 320 MB
+ * Default maximum megabytes of mempool memory usage per MB of configured max block size. This is used to calculate the
+ * default value for for -maxmempool. A value of 10 here with a 32 MB max block size setting results in a 320 MB
  * maximum mempool size.
  */
 static constexpr unsigned int DEFAULT_MAX_MEMPOOL_SIZE_PER_MB = 10;

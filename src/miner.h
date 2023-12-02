@@ -75,7 +75,7 @@ private:
 public:
     struct Options {
         Options();
-        uint64_t nExcessiveBlockSize;
+        uint64_t nConsensusCurrentBlockSizeLimit;
         uint64_t nMaxGeneratedBlockSize;
         CFeeRate blockMinFeeRate;
     };

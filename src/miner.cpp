@@ -66,8 +66,8 @@ int64_t UpdateTime(CBlockHeader *pblock, const Consensus::Params &params,
 /// Note: This constructor is used in tests. The production code path ends up
 /// immediately overwriting these values in DefaultOptions() below.
 BlockAssembler::Options::Options()
-    : nExcessiveBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
-      nMaxGeneratedBlockSize(DEFAULT_EXCESSIVE_BLOCK_SIZE),
+    : nConsensusCurrentBlockSizeLimit(DEFAULT_CONSENSUS_BLOCK_SIZE),
+      nMaxGeneratedBlockSize(DEFAULT_CONSENSUS_BLOCK_SIZE),
       blockMinFeeRate(DEFAULT_BLOCK_MIN_TX_FEE_PER_KB) {}
 
 BlockAssembler::BlockAssembler(const CChainParams &params,
@@ -76,13 +76,13 @@ BlockAssembler::BlockAssembler(const CChainParams &params,
     : chainparams(params), mempool(&_mempool),
       fPrintPriority(gArgs.GetBoolArg("-printpriority", DEFAULT_PRINTPRIORITY)) {
     blockMinFeeRate = options.blockMinFeeRate;
-    // Limit size to between 1K and options.nExcessiveBlockSize -1K for sanity:
+    // Limit size to between 1K and options.nConsensusCurrentBlockSizeLimit -1K for sanity:
     nMaxGeneratedBlockSize = std::max<uint64_t>(
-        1000, std::min<uint64_t>(options.nExcessiveBlockSize - 1000,
+        1000, std::min<uint64_t>(options.nConsensusCurrentBlockSizeLimit - 1000,
                                  options.nMaxGeneratedBlockSize));
     // Calculate the max consensus sigchecks for this block.
     auto nMaxBlockSigChecks =
-        GetMaxBlockSigChecksCount(options.nExcessiveBlockSize);
+        GetMaxBlockSigChecksCount(options.nConsensusCurrentBlockSizeLimit);
     // Allow the full amount of signature check operations in lieu of a separate
     // config option. (We are mining relayed transactions with validity cached
     // by everyone else, and so the block will propagate quickly, regardless of
@@ -94,7 +94,7 @@ static BlockAssembler::Options DefaultOptions(const Config &config) {
     // Block resource limits
     BlockAssembler::Options options;
 
-    options.nExcessiveBlockSize = config.GetExcessiveBlockSize();
+    options.nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
     options.nMaxGeneratedBlockSize = config.GetGeneratedBlockSize();
 
     if (Amount n = Amount::zero();
@@ -424,8 +424,8 @@ void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
 }
 
 static
-std::vector<uint8_t> getExcessiveBlockSizeSig(uint64_t nExcessiveBlockSize) {
-    std::string cbmsg = "/EB" + getSubVersionEB(nExcessiveBlockSize) + "/";
+std::vector<uint8_t> getEBSig(uint64_t nConsensusMaxBlockSize) {
+    std::string cbmsg = "/EB" + getSubVersionEB(nConsensusMaxBlockSize) + "/";
     return std::vector<uint8_t>(cbmsg.begin(), cbmsg.end());
 }
 
@@ -438,7 +438,7 @@ void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev, const Co
         hashPrevBlock = pblock->hashPrevBlock;
     }
 
-    const uint64_t nExcessiveBlockSize = config.GetExcessiveBlockSize();
+    const uint64_t nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
     const uint64_t minTxSize = GetMinimumTxSize(config.GetChainParams().GetConsensus(), pindexPrev);
 
     ++nExtraNonce;
@@ -448,7 +448,7 @@ void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev, const Co
     txCoinbase.vin[0].scriptSig =
         (CScript() << ScriptInt::fromIntUnchecked(nHeight)
                    << CScriptNum::fromIntUnchecked(nExtraNonce)
-                   << getExcessiveBlockSizeSig(nExcessiveBlockSize)) +
+                   << getEBSig(nConsensusCurrentBlockSizeLimit)) +
         COINBASE_FLAGS;
 
     // Make sure the coinbase is big enough.

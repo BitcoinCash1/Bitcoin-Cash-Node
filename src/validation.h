@@ -261,16 +261,16 @@ static constexpr uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 550 * 1024 * 1024;
 
 class BlockValidationOptions {
 private:
-    uint64_t excessiveBlockSize;
+    uint64_t nMaxBlockSize;
     bool checkPoW : 1;
     bool checkMerkleRoot : 1;
 
 public:
     // Do full validation by default
     BlockValidationOptions(const Config &config);
-    BlockValidationOptions(uint64_t _excessiveBlockSize, bool _checkPow = true,
+    BlockValidationOptions(uint64_t _nMaxBlockSize, bool _checkPow = true,
                            bool _checkMerkleRoot = true)
-        : excessiveBlockSize(_excessiveBlockSize), checkPoW(_checkPow),
+        : nMaxBlockSize(_nMaxBlockSize), checkPoW(_checkPow),
           checkMerkleRoot(_checkMerkleRoot) {}
 
     BlockValidationOptions withCheckPoW(bool _checkPoW = true) const {
@@ -288,7 +288,7 @@ public:
 
     bool shouldValidatePoW() const { return checkPoW; }
     bool shouldValidateMerkleRoot() const { return checkMerkleRoot; }
-    uint64_t getExcessiveBlockSize() const { return excessiveBlockSize; }
+    uint64_t getMaxBlockSize() const { return nMaxBlockSize; }
 };
 
 /**

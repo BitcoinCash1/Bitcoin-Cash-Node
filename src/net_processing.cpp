@@ -4686,7 +4686,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
         // rawRatePerSecond * blockSizeInMB * broadcastIntervalInSeconds (rounded up)
         const uint64_t nMaxBroadcasts = std::ceil(
                                             config.GetInvBroadcastRate()
-                                          * (config.GetExcessiveBlockSize() / 1000000.0)
+                                          * (config.GetConfiguredMaxBlockSize() / 1000000.0)
                                           * (std::max<uint64_t>(invBroadcastInterval, 1) / 1000.0));
 
         {

@@ -1074,7 +1074,7 @@ void CTxMemPool::SetIsLoaded(bool loaded) {
 }
 
 /* static */ uint64_t DisconnectedBlockTransactions::maxDynamicUsage() {
-    return std::max(20 * DEFAULT_EXCESSIVE_BLOCK_SIZE, GetConfig().GetMaxMemPoolSize());
+    return std::max(20 * DEFAULT_CONSENSUS_BLOCK_SIZE, GetConfig().GetMaxMemPoolSize());
 }
 
 void DisconnectedBlockTransactions::addForBlock(const std::vector<CTransactionRef> &vtx) {
