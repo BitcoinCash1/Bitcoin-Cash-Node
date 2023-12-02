@@ -816,3 +816,6 @@ extern ActivationBlockTracker g_upgrade10_block_tracker;
 /// Returns the script flags which are basically nextBlockScriptFlags | STANDARD_SCRIPT_VERIFY_FLAGS
 uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex,
                                uint32_t *nextBlockFlags = nullptr /* out param: block flags without standard */);
+
+/// Returns the blocksize limit for the next block
+uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *pindexPrev);

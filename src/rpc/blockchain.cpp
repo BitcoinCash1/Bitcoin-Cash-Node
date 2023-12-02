@@ -2196,7 +2196,7 @@ static UniValue getblockstats(const Config &config,
         do_mediantxsize || loop_inputs ||
         SetHasKeys(stats, "total_size", "avgtxsize", "mintxsize", "maxtxsize");
 
-    const int64_t thisBlockMaxBlockSize = config.GetConfiguredMaxBlockSize();
+    const int64_t thisBlockMaxBlockSize = GetNextBlockSizeLimit(config, pindex->pprev);
     Amount maxfee = Amount::zero();
     Amount maxfeerate = Amount::zero();
     Amount minfee = MAX_MONEY;

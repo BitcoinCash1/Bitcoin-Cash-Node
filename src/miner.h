@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 class CBlockIndex;
 class CChainParams;
@@ -45,33 +46,6 @@ struct CBlockTemplate {
 
 /** Generate a new block, without valid proof-of-work */
 class BlockAssembler {
-private:
-    // The constructed block template
-    std::unique_ptr<CBlockTemplate> pblocktemplate;
-    // A convenience pointer that always refers to the CBlock in pblocktemplate
-    CBlock *pblock;
-
-    // Configuration parameters for the block size
-    uint64_t nMaxGeneratedBlockSize;
-    uint64_t nMaxGeneratedBlockSigChecks;
-    CFeeRate blockMinFeeRate;
-
-    // Information on the current status of the block
-    uint64_t nBlockSize;
-    uint64_t nBlockTx;
-    uint64_t nBlockSigChecks;
-    Amount nFees;
-
-    // Chain context for the block
-    int nHeight;
-    int64_t nLockTimeCutoff;
-    int64_t nMedianTimePast;
-    const CChainParams &chainparams;
-
-    const CTxMemPool *mempool;
-
-    const bool fPrintPriority;
-
 public:
     struct Options {
         Options();
@@ -80,9 +54,43 @@ public:
         CFeeRate blockMinFeeRate;
     };
 
-    BlockAssembler(const Config &config, const CTxMemPool &_mempool);
-    BlockAssembler(const CChainParams &params, const CTxMemPool &_mempool,
-                   const Options &options);
+private:
+    // The constructed block template
+    std::unique_ptr<CBlockTemplate> pblocktemplate;
+    // A convenience pointer that always refers to the CBlock in pblocktemplate
+    CBlock *pblock{};
+
+    // Configuration parameters for the block size
+    uint64_t nConsensusCurrentBlockSizeLimit{};
+    uint64_t nMaxGeneratedBlockSize{};
+    uint64_t nMaxGeneratedBlockSigChecks{};
+    CFeeRate blockMinFeeRate;
+
+    // Information on the current status of the block
+    uint64_t nBlockSize{};
+    uint64_t nBlockTx{};
+    uint64_t nBlockSigChecks{};
+    Amount nFees;
+
+    // Chain context for the block
+    int nHeight{};
+    int64_t nLockTimeCutoff{};
+    int64_t nMedianTimePast{};
+
+    const Config &config;
+    const CTxMemPool &mempool;
+    const CChainParams &chainparams;
+    /// If valid, options override for tests, otherwise we re-create options each call to CreateNewBlock().
+    std::optional<Options> overrideOptions;
+
+    const bool fPrintPriority;
+
+    void readOptions(const Options &options);
+
+public:
+    /// Invariant: `_config` and `_mempool` must be non-ephemeral objects and their lifetime must not be shorter than
+    /// this instance's lifetime.
+    BlockAssembler(const Config &_config, const CTxMemPool &_mempool, const std::optional<Options> &options = std::nullopt);
 
     /**
      *  Construct a new block template with coinbase to scriptPubKeyIn
@@ -94,11 +102,21 @@ public:
      *                         and instead assume the block we create
      *                         is valid. This option is offered for
      *                         performance.
+     *  @param ppindexPrev     Optional out pointer. If not nullptr,
+     *                         *ppindexPrev will be set to point to the
+     *                         CBlockIndex that was used as the previous
+     *                         block for the returned block template. This
+     *                         will always be the tip of the chain that was
+     *                         active at the time that this function was
+     *                         called.
      */
     std::unique_ptr<CBlockTemplate>
-    CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSecs = 0., bool checkValidity = true);
+    CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSecs = 0., bool checkValidity = true,
+                   const CBlockIndex **ppindexPrev = nullptr);
 
+    // Warning: These won't return real values until CreateNewBlock() has been called at least once on this instance.
     uint64_t GetMaxGeneratedBlockSize() const { return nMaxGeneratedBlockSize; }
+    uint64_t GetConsensusMaxBlockSize() const { return nConsensusCurrentBlockSizeLimit; }
 
 private:
     // utility functions
@@ -112,7 +130,7 @@ private:
      * Add transactions from the mempool based on individual tx feerate.
      */
     void addTxs(int64_t nLimitTimePoint)
-        EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
+        EXCLUSIVE_LOCKS_REQUIRED(mempool.cs);
 
     // helper functions for addTxs()
     /** Test if a new Tx would "fit" in the block */

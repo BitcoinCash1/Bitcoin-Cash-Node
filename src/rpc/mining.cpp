@@ -142,9 +142,10 @@ UniValue generateBlocks(const Config &config,
         // usually want to make full-sized blocks during functional testing
         const double maxGBTTimeSecs = gArgs.GetArg("-maxgbttime", DEFAULT_MAX_GBT_TIME) / 1e3;
 
+        const CBlockIndex *pindexMinedTip{};
         std::unique_ptr<CBlockTemplate> pblocktemplate(
             BlockAssembler(config, g_mempool)
-                .CreateNewBlock(coinbaseScript->reserveScript, maxGBTTimeSecs));
+                .CreateNewBlock(coinbaseScript->reserveScript, maxGBTTimeSecs, true, &pindexMinedTip));
 
         if (!pblocktemplate.get()) {
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
@@ -152,10 +153,7 @@ UniValue generateBlocks(const Config &config,
 
         CBlock *pblock = &pblocktemplate->block;
 
-        {
-            LOCK(cs_main);
-            IncrementExtraNonce(pblock, ::ChainActive().Tip(), config, nExtraNonce);
-        }
+        IncrementExtraNonce(pblock, pindexMinedTip, config, nExtraNonce);
 
         while (nMaxTries > 0 && pblock->nNonce < nInnerLoopCount &&
                !CheckProofOfWork(pblock->GetHash(), pblock->nBits,
@@ -264,8 +262,9 @@ static UniValue getmininginfo(const Config &config,
     obj.emplace_back("blocks", ::ChainActive().Height());
     obj.emplace_back("currentblocksize", nLastBlockSize);
     obj.emplace_back("currentblocktx", nLastBlockTx);
-    obj.emplace_back("difficulty", GetDifficulty(::ChainActive().Tip()));
-    obj.emplace_back("miningblocksizelimit", config.GetGeneratedBlockSize());
+    const CBlockIndex *pindexTip = ::ChainActive().Tip();
+    obj.emplace_back("difficulty", GetDifficulty(pindexTip));
+    obj.emplace_back("miningblocksizelimit", config.GetGeneratedBlockSize(GetNextBlockSizeLimit(config, pindexTip)));
     obj.emplace_back("networkhashps", getnetworkhashps(config, request));
     obj.emplace_back("pooledtx", g_mempool.size());
     obj.emplace_back("chain", config.GetChainParams().NetworkIDString());
@@ -548,12 +547,14 @@ static UniValue getblocktemplatecommon(bool fLight, const Config &config, const 
 
         // Create new block
         CScript scriptDummy = CScript() << OP_TRUE;
+        const CBlockIndex *pindexMinedTip{};
         pblocktemplate =
-            BlockAssembler(config, g_mempool).CreateNewBlock(scriptDummy, timeLimitSecs, checkValidity);
+            BlockAssembler(config, g_mempool).CreateNewBlock(scriptDummy, timeLimitSecs, checkValidity, &pindexMinedTip);
         plightresult.reset();
         if (!pblocktemplate) {
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
         }
+        assert(pindexMinedTip == pindexPrevNew); // sanity check
 
         // Need to update only after we know CreateNewBlock succeeded
         pindexPrev = pindexPrevNew;
@@ -726,7 +727,7 @@ static UniValue getblocktemplatecommon(bool fLight, const Config &config, const 
     result.emplace_back("mintime", pindexPrev->GetMedianTimePast() + 1);
     result.emplace_back("mutable", std::move(aMutable));
     result.emplace_back("noncerange", "00000000ffffffff");
-    const auto maxBlockSize = config.GetConfiguredMaxBlockSize();
+    const auto maxBlockSize = GetNextBlockSizeLimit(config, pindexPrev);
     result.emplace_back("sigoplimit", GetMaxBlockSigChecksCount(maxBlockSize));
     result.emplace_back("sizelimit", maxBlockSize);
     result.emplace_back("curtime", pblock->GetBlockTime());

@@ -70,19 +70,17 @@ BlockAssembler::Options::Options()
       nMaxGeneratedBlockSize(DEFAULT_CONSENSUS_BLOCK_SIZE),
       blockMinFeeRate(DEFAULT_BLOCK_MIN_TX_FEE_PER_KB) {}
 
-BlockAssembler::BlockAssembler(const CChainParams &params,
-                               const CTxMemPool &_mempool,
-                               const Options &options)
-    : chainparams(params), mempool(&_mempool),
-      fPrintPriority(gArgs.GetBoolArg("-printpriority", DEFAULT_PRINTPRIORITY)) {
+void BlockAssembler::readOptions(const Options &options) {
+    nConsensusCurrentBlockSizeLimit = options.nConsensusCurrentBlockSizeLimit;
     blockMinFeeRate = options.blockMinFeeRate;
-    // Limit size to between 1K and options.nConsensusCurrentBlockSizeLimit -1K for sanity:
+    // Limit size to between 1K and nConsensusCurrentBlockSizeLimit -1K for sanity:
+    constexpr unsigned coinbaseMargin = 1000u;
+    assert(nConsensusCurrentBlockSizeLimit >= coinbaseMargin);
     nMaxGeneratedBlockSize = std::max<uint64_t>(
-        1000, std::min<uint64_t>(options.nConsensusCurrentBlockSizeLimit - 1000,
-                                 options.nMaxGeneratedBlockSize));
+        coinbaseMargin, std::min<uint64_t>(nConsensusCurrentBlockSizeLimit - coinbaseMargin,
+                                           options.nMaxGeneratedBlockSize));
     // Calculate the max consensus sigchecks for this block.
-    auto nMaxBlockSigChecks =
-        GetMaxBlockSigChecksCount(options.nConsensusCurrentBlockSizeLimit);
+    const auto nMaxBlockSigChecks = GetMaxBlockSigChecksCount(nConsensusCurrentBlockSizeLimit);
     // Allow the full amount of signature check operations in lieu of a separate
     // config option. (We are mining relayed transactions with validity cached
     // by everyone else, and so the block will propagate quickly, regardless of
@@ -90,12 +88,12 @@ BlockAssembler::BlockAssembler(const CChainParams &params,
     nMaxGeneratedBlockSigChecks = nMaxBlockSigChecks;
 }
 
-static BlockAssembler::Options DefaultOptions(const Config &config) {
+static BlockAssembler::Options DefaultOptions(const Config &config, const CBlockIndex *pindexPrev) {
     // Block resource limits
     BlockAssembler::Options options;
 
-    options.nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
-    options.nMaxGeneratedBlockSize = config.GetGeneratedBlockSize();
+    options.nConsensusCurrentBlockSizeLimit = GetNextBlockSizeLimit(config, pindexPrev);
+    options.nMaxGeneratedBlockSize = config.GetGeneratedBlockSize(options.nConsensusCurrentBlockSizeLimit);
 
     if (Amount n = Amount::zero();
             gArgs.IsArgSet("-blockmintxfee") && ParseMoney(gArgs.GetArg("-blockmintxfee", ""), n)) {
@@ -105,9 +103,9 @@ static BlockAssembler::Options DefaultOptions(const Config &config) {
     return options;
 }
 
-BlockAssembler::BlockAssembler(const Config &config, const CTxMemPool &_mempool)
-    : BlockAssembler(config.GetChainParams(), _mempool,
-                     DefaultOptions(config)) {}
+BlockAssembler::BlockAssembler(const Config &_config, const CTxMemPool &_mempool, const std::optional<Options> &options)
+    : config(_config), mempool(_mempool), chainparams(_config.GetChainParams()), overrideOptions(options),
+      fPrintPriority(gArgs.GetBoolArg("-printpriority", DEFAULT_PRINTPRIORITY))  {}
 
 void BlockAssembler::resetBlock() {
     // Reserve space for coinbase tx.
@@ -120,7 +118,8 @@ void BlockAssembler::resetBlock() {
 }
 
 std::unique_ptr<CBlockTemplate>
-BlockAssembler::CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSecs, bool checkValidity) {
+BlockAssembler::CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSecs, bool checkValidity,
+                               const CBlockIndex **ppindexPrev) {
     const int64_t nTimeStart = GetTimeMicros();
 
     resetBlock();
@@ -133,10 +132,20 @@ BlockAssembler::CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSe
     // Add dummy coinbase tx as first transaction.  It is updated at the end.
     pblocktemplate->entries.emplace_back(CTransactionRef(), -SATOSHI, -1);
 
-    LOCK2(cs_main, mempool->cs);
+    LOCK2(cs_main, mempool.cs);
     CBlockIndex *pindexPrev = ::ChainActive().Tip();
     assert(pindexPrev != nullptr);
+    if (ppindexPrev) *ppindexPrev = pindexPrev;
     nHeight = pindexPrev->nHeight + 1;
+
+    // Read block creation options either from override (for tests) or based on config and latest tip
+    if (overrideOptions) {
+        // overrride for tests
+        readOptions(*overrideOptions);
+    } else {
+        // production codepath, construct latest DefaultOptions on-the-fly based on pindexPrev
+        readOptions(DefaultOptions(config, pindexPrev));
+    }
 
     const Consensus::Params &consensusParams = chainparams.GetConsensus();
 
@@ -232,7 +241,7 @@ BlockAssembler::CreateNewBlock(const CScript &scriptPubKeyIn, double timeLimitSe
     if (checkValidity) {
         CValidationState state;
         if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev,
-                               BlockValidationOptions(GetConfig())
+                               BlockValidationOptions(config)
                                    .withCheckPoW(false)
                                    .withCheckMerkleRoot(false))) {
             throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s",
@@ -316,25 +325,25 @@ void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
     ParentCountMap missingParentCount;
     // set of children we skipped because we have not yet added their parents
     ChildSet skippedChildren;
-    missingParentCount.reserve(mempool->size() / 2);
-    skippedChildren.reserve(mempool->size() / 2);
+    missingParentCount.reserve(mempool.size() / 2);
+    skippedChildren.reserve(mempool.size() / 2);
 
     auto TrackSkippedChild = [&skippedChildren](const auto &it) { skippedChildren.insert(&*it); };
     auto IsSkippedChild = [&skippedChildren](const auto &it) { return bool(skippedChildren.count(&*it)); };
 
-    auto MissingParents = [this, &missingParentCount](const auto &iter) EXCLUSIVE_LOCKS_REQUIRED(mempool->cs) {
+    auto MissingParents = [this, &missingParentCount](const auto &iter) EXCLUSIVE_LOCKS_REQUIRED(mempool.cs) {
         // If we've added any of this tx's parents already, then missingParentCount will have the current count
         if (auto pcIt = missingParentCount.find(&*iter); pcIt != missingParentCount.end())
             return pcIt->second != 0; // when pcIt->second reaches 0, we have added all of this tx's parents
-        return !mempool->GetMemPoolParents(iter).empty();
+        return !mempool.GetMemPoolParents(iter).empty();
     };
 
-    auto TrackParentAdded = [this, &missingParentCount](const auto & child) EXCLUSIVE_LOCKS_REQUIRED(mempool->cs) {
+    auto TrackParentAdded = [this, &missingParentCount](const auto & child) EXCLUSIVE_LOCKS_REQUIRED(mempool.cs) {
         const auto& [parentCount, inserted] = missingParentCount.try_emplace(&*child, 0 /* dummy */);
         if (inserted) {
             // We haven't processed any of this child tx's parents before,
             // so we're adding the first of its in-mempool parents
-            parentCount->second = mempool->GetMemPoolParents(child).size();
+            parentCount->second = mempool.GetMemPoolParents(child).size();
         }
         assert(parentCount->second > 0);
         return --parentCount->second == 0;
@@ -355,8 +364,8 @@ void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
     std::queue<CTxMemPool::txiter> backlog;
 
     CTxMemPool::txiter iter;
-    auto mi = mempool->mapTx.get<modified_feerate>().begin();
-    while (!TimedOut() && (!backlog.empty() || mi != mempool->mapTx.get<modified_feerate>().end())) {
+    auto mi = mempool.mapTx.get<modified_feerate>().begin();
+    while (!TimedOut() && (!backlog.empty() || mi != mempool.mapTx.get<modified_feerate>().end())) {
 
         // Get a new or old transaction in mapTx to evaluate.
         bool isFromBacklog = false;
@@ -365,7 +374,7 @@ void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
             backlog.pop();
             isFromBacklog = true;
         } else {
-            iter = mempool->mapTx.project<0>(mi++);
+            iter = mempool.mapTx.project<0>(mi++);
         }
 
         if (iter->GetModifiedFeeRate() < blockMinFeeRate) {
@@ -411,7 +420,7 @@ void BlockAssembler::addTxs(int64_t nLimitTimePoint) {
         // ends up taking O(n) time to process a single tx with n children,
         // that's okay because the amount of time taken is proportional to the
         // tx's byte size and fee paid.
-        for (const auto& child : mempool->GetMemPoolChildren(iter)) {
+        for (const auto& child : mempool.GetMemPoolChildren(iter)) {
             const bool allParentsAdded = TrackParentAdded(child);
             // If all parents have been added to the block, and if this child
             // has been previously skipped due to missing parents, enqueue it
@@ -431,14 +440,7 @@ std::vector<uint8_t> getEBSig(uint64_t nConsensusMaxBlockSize) {
 
 void IncrementExtraNonce(CBlock *pblock, const CBlockIndex *pindexPrev, const Config &config,
                          unsigned int &nExtraNonce) {
-    // Update nExtraNonce
-    static uint256 hashPrevBlock;
-    if (hashPrevBlock != pblock->hashPrevBlock) {
-        nExtraNonce = 0;
-        hashPrevBlock = pblock->hashPrevBlock;
-    }
-
-    const uint64_t nConsensusCurrentBlockSizeLimit = config.GetConfiguredMaxBlockSize();
+    const uint64_t nConsensusCurrentBlockSizeLimit = GetNextBlockSizeLimit(config, pindexPrev);
     const uint64_t minTxSize = GetMinimumTxSize(config.GetChainParams().GetConsensus(), pindexPrev);
 
     ++nExtraNonce;

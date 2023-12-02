@@ -33,11 +33,10 @@ BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
 
 static CFeeRate blockMinFeeRate = CFeeRate(DEFAULT_BLOCK_MIN_TX_FEE_PER_KB);
 
-static BlockAssembler AssemblerForTest(const CChainParams &params,
-                                       const CTxMemPool &mempool) {
+static BlockAssembler AssemblerForTest(const Config &config, const CTxMemPool &mempool) {
     BlockAssembler::Options options;
     options.blockMinFeeRate = blockMinFeeRate;
-    return BlockAssembler(params, mempool, options);
+    return BlockAssembler(config, mempool, options);
 }
 
 static struct {
@@ -92,7 +91,7 @@ static bool TestSequenceLocks(const CTransaction &tx, int flags)
 // Test suite for feerate transaction selection.
 // Implemented as an additional function, rather than a separate test case, to
 // allow reusing the blockchain created in CreateNewBlock_validity.
-static void TestPackageSelection(const CChainParams &chainparams,
+static void TestPackageSelection(const Config &config,
                                  const CScript &scriptPubKey,
                                  const std::vector<CTransactionRef> &txFirst)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, ::g_mempool.cs) {
@@ -135,7 +134,7 @@ static void TestPackageSelection(const CChainParams &chainparams,
                                .FromTx(tx));
 
     std::unique_ptr<CBlockTemplate> pblocktemplate =
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey);
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey);
 
 
     BOOST_CHECK(pblocktemplate->block.vtx[1]->GetId() == mediumFeeTxId);
@@ -158,7 +157,7 @@ static void TestPackageSelection(const CChainParams &chainparams,
     TxId highFeeDecendantTxId = tx.GetId();
     g_mempool.addUnchecked(entry.Fee(feeToUse).FromTx(tx));
     pblocktemplate =
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey);
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey);
 
     // Verify that the free tx and its high fee descendant tx didn't get selected.
     for (const auto &txn : pblocktemplate->block.vtx) {
@@ -177,15 +176,16 @@ static void TestCoinbaseMessageEB(uint64_t eb, const std::string &cbmsg) {
                               "de5c384df7ba0b8d578a4c702b6bf11d5f")
                   << OP_CHECKSIG;
 
+    const CBlockIndex *pindexMinedTip;
     std::unique_ptr<CBlockTemplate> pblocktemplate =
-        BlockAssembler(config, g_mempool).CreateNewBlock(scriptPubKey);
+        BlockAssembler(config, g_mempool).CreateNewBlock(scriptPubKey, 0, true, &pindexMinedTip);
 
     CBlock *pblock = &pblocktemplate->block;
 
     // IncrementExtraNonce creates a valid coinbase and merkleRoot
     unsigned int extraNonce = 0;
-    IncrementExtraNonce(pblock, ::ChainActive().Tip(), config, extraNonce);
-    unsigned int nHeight = ::ChainActive().Tip()->nHeight + 1;
+    IncrementExtraNonce(pblock, pindexMinedTip, config, extraNonce);
+    unsigned int nHeight = pindexMinedTip->nHeight + 1;
     std::vector<uint8_t> vec(cbmsg.begin(), cbmsg.end());
     BOOST_CHECK(pblock->vtx[0]->vin[0].scriptSig ==
                 ((CScript() << ScriptInt::fromIntUnchecked(nHeight) << CScriptNum::fromIntUnchecked(extraNonce) << vec) +
@@ -220,7 +220,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     fCheckpointsEnabled = false;
 
     // Simple block creation, nothing special yet:
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
 
     // We can't make transactions until we have inputs.
@@ -261,7 +261,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     LOCK(::g_mempool.cs);
 
     // Just to make sure we can still make simple blocks.
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
 
     const Amount BLOCKSUBSIDY = 50 * COIN;
@@ -294,14 +294,14 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
         tx.vin[0].prevout = COutPoint(txid, 0);
     }
 
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
     g_mempool.clear();
 
     // Orphan in mempool, template creation fails.
     g_mempool.addUnchecked(entry.Fee(LOWFEE).Time(GetTime()).FromTx(tx));
     BOOST_CHECK_EXCEPTION(
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey),
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey),
         std::runtime_error, HasReason("bad-txns-inputs-missingorspent"));
     g_mempool.clear();
 
@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     txid = tx.GetId();
     g_mempool.addUnchecked(
         entry.Fee(HIGHERFEE).Time(GetTime()).SpendsCoinbase(true).FromTx(tx));
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
     g_mempool.clear();
 
@@ -336,7 +336,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
         entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(false).FromTx(tx));
     // Should throw bad-tx-coinbase
     BOOST_CHECK_EXCEPTION(
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey),
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey),
         std::runtime_error, HasReason("bad-tx-coinbase"));
     g_mempool.clear();
 
@@ -353,7 +353,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     g_mempool.addUnchecked(
         entry.Fee(HIGHFEE).Time(GetTime()).SpendsCoinbase(true).FromTx(tx));
     BOOST_CHECK_EXCEPTION(
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey),
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey),
         std::runtime_error, HasReason("bad-txns-inputs-missingorspent"));
     g_mempool.clear();
 
@@ -370,7 +370,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
         next->BuildSkip();
         ::ChainActive().SetTip(next);
     }
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
     // Extend to a 210000-long block chain.
     while (::ChainActive().Tip()->nHeight < 210000) {
@@ -384,7 +384,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
         ::ChainActive().SetTip(next);
     }
 
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
 
     // Invalid p2sh txn in mempool, template creation fails
@@ -405,7 +405,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
         entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(false).FromTx(tx));
     // Should throw blk-bad-inputs
     BOOST_CHECK_EXCEPTION(
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey),
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey),
         std::runtime_error, HasReason("blk-bad-inputs"));
     g_mempool.clear();
 
@@ -582,7 +582,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     BOOST_CHECK(!TestSequenceLocks(CTransaction(tx), flags));
 
     pblocktemplate =
-        AssemblerForTest(chainparams, g_mempool).CreateNewBlock(scriptPubKey);
+        AssemblerForTest(config, g_mempool).CreateNewBlock(scriptPubKey);
     BOOST_CHECK(pblocktemplate);
 
     // None of the of the absolute height/time locked tx should have made it
@@ -602,7 +602,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     ::ChainActive().Tip()->nHeight++;
     SetMockTime(::ChainActive().Tip()->GetMedianTimePast() + 1);
 
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams, g_mempool)
+    BOOST_CHECK(pblocktemplate = AssemblerForTest(config, g_mempool)
                                      .CreateNewBlock(scriptPubKey));
     BOOST_CHECK_EQUAL(pblocktemplate->block.vtx.size(), 5UL);
 
@@ -610,15 +610,21 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     SetMockTime(0);
     g_mempool.clear();
 
-    TestPackageSelection(chainparams, scriptPubKey, txFirst);
+    TestPackageSelection(config, scriptPubKey, txFirst);
 
     fCheckpointsEnabled = true;
+}
+
+static void CallCreateNewBlockOnceToFullyInit(BlockAssembler &ba) {
+    ba.CreateNewBlock(CScript() << OP_TRUE, 1e-3);
 }
 
 static void CheckBlockMaxSize(Config &config, uint64_t size, uint64_t expected) {
     BOOST_CHECK(config.SetGeneratedBlockSizeBytes(size));
 
     BlockAssembler ba(config, g_mempool);
+    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // fresly-constructed class always has 0 here
+    CallCreateNewBlockOnceToFullyInit(ba); // must call CreateNewBlock() to have `config` options "take effect"
     BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
 }
 
@@ -628,6 +634,8 @@ static void CheckBlockMaxSizePercent(Config &config, std::optional<double> optPe
     }
 
     BlockAssembler ba(config, g_mempool);
+    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // fresly-constructed class always has 0 here
+    CallCreateNewBlockOnceToFullyInit(ba); // must call CreateNewBlock() to have `config` options "take effect"
     BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
 }
 
@@ -636,20 +644,21 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
 
     // check that generated block size can never exceed conf. max block size
     {
-        BOOST_CHECK_LE(config.GetGeneratedBlockSize(), config.GetConfiguredMaxBlockSize());
-        const size_t prevVal = config.GetGeneratedBlockSize(),
-                     badVal = config.GetConfiguredMaxBlockSize() + 1;
+        const auto cmbs = config.GetConfiguredMaxBlockSize();
+        BOOST_CHECK_LE(config.GetGeneratedBlockSize(cmbs), cmbs);
+        const size_t prevVal = config.GetGeneratedBlockSize(cmbs),
+                     badVal = cmbs + 1;
         BOOST_CHECK_NE(prevVal, badVal); // ensure not equal for thoroughness
         // try and set generated block size beyond the conf. max block size (should fail)
         BOOST_CHECK(!config.SetGeneratedBlockSizeBytes(badVal));
         // check that the failure really did not set the value
-        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), prevVal);
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(cmbs), prevVal);
         // check bad percentages
         BOOST_CHECK(!config.SetGeneratedBlockSizePercent(101.0));
         BOOST_CHECK(!config.SetGeneratedBlockSizePercent(100.1));
         BOOST_CHECK(!config.SetGeneratedBlockSizePercent(-0.001));
         // check that the failure really did not set the value
-        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(), prevVal);
+        BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(cmbs), prevVal);
     }
 
     // We are working on a fake chain and need to protect ourselves.
@@ -709,14 +718,20 @@ BOOST_AUTO_TEST_CASE(BlockAssembler_construction) {
     {
         GlobalConfig freshConfig;
         BlockAssembler ba(freshConfig, g_mempool);
-        BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), freshConfig.GetConfiguredMaxBlockSize() - hardCodedCoinbaseReserved);
+        BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0);
+        CallCreateNewBlockOnceToFullyInit(ba);
+        auto cmbs = freshConfig.GetConfiguredMaxBlockSize();
+        BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), cmbs - hardCodedCoinbaseReserved);
 
         // next, ensure that invariants are maintained -- setting conf. max block size should pull down generatedblocksize
-        const auto prevVal = freshConfig.GetGeneratedBlockSize();
+        const auto prevVal = freshConfig.GetGeneratedBlockSize(cmbs);
         BOOST_CHECK(freshConfig.SetConfiguredMaxBlockSize(prevVal / 2));
-        BOOST_CHECK_EQUAL(freshConfig.GetConfiguredMaxBlockSize(), freshConfig.GetGeneratedBlockSize());
-        BOOST_CHECK_LT(freshConfig.GetGeneratedBlockSize(), prevVal);
+        cmbs = freshConfig.GetConfiguredMaxBlockSize();
+        BOOST_CHECK_EQUAL(cmbs, freshConfig.GetGeneratedBlockSize(cmbs));
+        BOOST_CHECK_LT(freshConfig.GetGeneratedBlockSize(cmbs), prevVal);
         BlockAssembler ba2(freshConfig, g_mempool);
+        BOOST_CHECK_EQUAL(ba2.GetMaxGeneratedBlockSize(), 0);
+        CallCreateNewBlockOnceToFullyInit(ba2);
         BOOST_CHECK_EQUAL(ba2.GetMaxGeneratedBlockSize(), freshConfig.GetConfiguredMaxBlockSize() - hardCodedCoinbaseReserved);
     }
 }
