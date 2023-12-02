@@ -75,3 +75,6 @@
 
 /* Define if QtDBus support should be enabled */
 #cmakedefine USE_DBUS 1
+
+/* Define if we have __int128 */
+#cmakedefine01 HAVE_INT128
