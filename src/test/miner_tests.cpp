@@ -623,7 +623,7 @@ static void CheckBlockMaxSize(Config &config, uint64_t size, uint64_t expected) 
     BOOST_CHECK(config.SetGeneratedBlockSizeBytes(size));
 
     BlockAssembler ba(config, g_mempool);
-    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // fresly-constructed class always has 0 here
+    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // freshly-constructed class always has 0 here
     CallCreateNewBlockOnceToFullyInit(ba); // must call CreateNewBlock() to have `config` options "take effect"
     BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
 }
@@ -634,7 +634,7 @@ static void CheckBlockMaxSizePercent(Config &config, std::optional<double> optPe
     }
 
     BlockAssembler ba(config, g_mempool);
-    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // fresly-constructed class always has 0 here
+    BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), 0); // freshly-constructed class always has 0 here
     CallCreateNewBlockOnceToFullyInit(ba); // must call CreateNewBlock() to have `config` options "take effect"
     BOOST_CHECK_EQUAL(ba.GetMaxGeneratedBlockSize(), expected);
 }
