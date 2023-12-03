@@ -89,7 +89,6 @@ bool IsStandardTx(const CTransaction &tx, std::string &reason, uint32_t flags) {
         }
     }
 
-    unsigned int nDataOut = 0;
     CScript::size_type nDataSize = 0;
     txnouttype whichType;
     for (const CTxOut &txout : tx.vout) {
@@ -108,7 +107,6 @@ bool IsStandardTx(const CTransaction &tx, std::string &reason, uint32_t flags) {
         }
 
         if (whichType == TX_NULL_DATA) {
-            nDataOut++;
             nDataSize += txout.scriptPubKey.size();
         } else if ((whichType == TX_MULTISIG) && (!fIsBareMultisigStd)) {
             reason = "bare-multisig";
