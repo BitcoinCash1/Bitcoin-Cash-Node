@@ -1,19 +1,31 @@
-# Release Notes for Bitcoin Cash Node version 26.1.1
+# Release Notes for Bitcoin Cash Node version 27.0.0
 
-Bitcoin Cash Node version 26.1.1 is now available from:
+Bitcoin Cash Node version 27.0.0 is now available from:
 
   <https://bitcoincashnode.org>
 
 ## Overview
 
-This release of Bitcoin Cash Node (BCHN) is a patch release.
+This is a major release of Bitcoin Cash Node (BCHN) that implements the
+[May 15, 2024 Network Upgrade](https://upgradespecs.bitcoincashnode.org/2024-05-15-upgrade/).
+
+This release implements the following consensus CHIPs:
 
 ...
 
+This version contains further corrections and improvements, such as:
+
+...
+
+Users who are running any of our previous releases (25.0.0 or v26.x.0)
+are urged to upgrade to v27.0.0 ahead of 15 May 2024.
+
 ## Usage recommendations
 
-Users who are running v25.0.0 or v26.x.0 are encouraged to upgrade
-to v26.1.1.
+The update to Bitcoin Cash Node 27.0.0 is required for the May 15, 2024
+Bitcoin Cash network upgrade.
+
+...
 
 ## Network changes
 
