@@ -31,6 +31,7 @@ struct CustomArgumentsFixture {
             testsuitename,
             "-axionactivationtime",
             "-upgrade10activationtime",
+            "-upgrade11activationtime",
             force_locale,
         };
 
