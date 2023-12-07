@@ -86,13 +86,14 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
         assert self.options.interval <= MAX_INV_BROADCAST_INTERVAL
         self.scale = self.options.interval / 1000
         self.num_nodes = 3
+        # Note that for this test, since we want to control the blocksize, we turn ABLA off (no upgrade 10).
         args = [
             ["-txbroadcastinterval={}".format(self.options.interval),
                 "-txbroadcastrate=1", "-excessiveblocksize=2000000",
-                "-blockmaxsize=2000000"],
+                "-blockmaxsize=2000000", "-upgrade10activationtime=2000000000"],
             ["-txbroadcastinterval=1",
                 "-txbroadcastrate=1", "-excessiveblocksize=2000000",
-                "-blockmaxsize=2000000"],
+                "-blockmaxsize=2000000", "-upgrade10activationtime=2000000000"],
             []
         ]
         self.extra_args = args

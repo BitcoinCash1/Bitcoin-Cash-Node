@@ -87,14 +87,20 @@ BOOST_AUTO_TEST_CASE(blockfail) {
     RunCheckOnBlock(config, block, "bad-cb-length");
 
     // Oversize block.
-    tx = CMutableTransaction(coinbaseTx);
-    block.vtx[0] = MakeTransactionRef(tx);
-    auto txSize = ::GetSerializeSize(tx, PROTOCOL_VERSION);
-    auto maxTxCount = ((DEFAULT_CONSENSUS_BLOCK_SIZE - 1) / txSize) - 1;
+    block.vtx[0] = MakeTransactionRef(CMutableTransaction{coinbaseTx});
+    // To make a ~2GB block, we make about 2000 fat opreturn txns in order to minimize CPU and memory load of this test
+    CMutableTransaction fatOpReturnTx;
+    const auto blockBaseSize = ::GetSerializeSize(block, PROTOCOL_VERSION);
+    fatOpReturnTx.vin.resize(1);
+    fatOpReturnTx.vout.resize(1);
+    fatOpReturnTx.vout[0].nValue = 42 * SATOSHI;
+    fatOpReturnTx.vout[0].scriptPubKey = CScript() << OP_RETURN << std::vector<uint8_t>(size_t(ONE_MEGABYTE - 200));
+    const auto fatTxSize = ::GetSerializeSize(fatOpReturnTx, PROTOCOL_VERSION);
+    const auto maxTxCount = (MAX_CONSENSUS_BLOCK_SIZE - blockBaseSize) / fatTxSize;
 
-    for (size_t i = 1; i < maxTxCount; i++) {
-        tx.vin[0].prevout = InsecureRandOutPoint();
-        block.vtx.push_back(MakeTransactionRef(tx));
+    for (size_t i = 0; i < maxTxCount; ++i) {
+        fatOpReturnTx.vin[0].prevout = InsecureRandOutPoint();
+        block.vtx.push_back(MakeTransactionRef(fatOpReturnTx));
     }
 
     // Check that at this point, we still accept the block.
@@ -102,8 +108,8 @@ BOOST_AUTO_TEST_CASE(blockfail) {
 
     // But reject it with one more transaction as it goes over the maximum
     // allowed block size.
-    tx.vin[0].prevout = InsecureRandOutPoint();
-    block.vtx.push_back(MakeTransactionRef(tx));
+    fatOpReturnTx.vin[0].prevout = InsecureRandOutPoint();
+    block.vtx.push_back(MakeTransactionRef(fatOpReturnTx));
     RunCheckOnBlock(config, block, "bad-blk-length");
 }
 

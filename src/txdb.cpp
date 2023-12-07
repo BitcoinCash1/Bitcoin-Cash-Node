@@ -288,6 +288,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(
         pindexNew->nNonce = diskindex.nNonce;
         pindexNew->nStatus = diskindex.nStatus;
         pindexNew->nTx = diskindex.nTx;
+        pindexNew->SetAblaStateOpt(diskindex.GetAblaStateOpt());
 
         if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits,
                               params)) {

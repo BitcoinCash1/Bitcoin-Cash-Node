@@ -10,8 +10,10 @@
 #include <policy/policy.h>
 #include <util/noncopyable.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <variant>
@@ -23,9 +25,17 @@ class CChainParams;
 
 class Config : public NonCopyable {
 public:
-    /** The largest block size this node will accept. */
+    /** The largest block size this node will accept pre-upgrade 10.
+        Post-upgrade 10 it is the ABLA minimum max block size. */
     virtual bool SetConfiguredMaxBlockSize(uint64_t maxBlockSize) = 0;
     virtual uint64_t GetConfiguredMaxBlockSize() const = 0;
+
+    /** Look-ahead "guess" for the max blocksize (actual blocksize limit is guaranteed to be <= this value for
+        blocks within the block download window). This value gets updated by validation.cpp when the tip changes.
+        Used by net code and some pre-checks on blocks to discard blocks that are definitely oversized. */
+    virtual uint64_t GetMaxBlockSizeLookAheadGuess() const = 0;
+    virtual void NotifyMaxBlockSizeLookAheadGuessChanged(uint64_t) const = 0;
+
     /** Set the largest block size this node will generate (mine) in bytes.
         Returns false if `blockSize` exceeds GetConfiguredMaxBlockSize(). */
     virtual bool SetGeneratedBlockSizeBytes(uint64_t blockSize) = 0;
@@ -65,6 +75,8 @@ public:
     //! Note: `maxBlockSize` must not be smaller than 1MB and cannot exceed 2GB
     bool SetConfiguredMaxBlockSize(uint64_t maxBlockSize) override;
     uint64_t GetConfiguredMaxBlockSize() const override;
+    uint64_t GetMaxBlockSizeLookAheadGuess() const override;
+    void NotifyMaxBlockSizeLookAheadGuessChanged(uint64_t) const override;
     bool SetGeneratedBlockSizeBytes(uint64_t blockSize) override;
     bool SetGeneratedBlockSizePercent(double percent) override;
     uint64_t GetGeneratedBlockSize(std::optional<uint64_t> currentMaxBlockSize) const override;
@@ -101,7 +113,8 @@ private:
     uint64_t nInvBroadcastRate;
     uint64_t nInvBroadcastInterval;
 
-    /** The largest block size this node will accept. */
+    /** The largest block size this node will accept, pre-upgrade 10.
+        Post-upgrade 10 it is the ABLA minimum max block size. */
     uint64_t nConfMaxBlockSize;
 
     /** The largest block size this node will generate. Stores either a size in bytes or a percentage (double). */
@@ -111,6 +124,10 @@ private:
     uint64_t nMaxMemPoolSize;
 
     std::set<std::string> rejectSubVersions;
+
+    /** Temporarily set to mutable because consensus code only gets passed a `const Config &`, but it does need to
+        modify this value as the chain tip is updated. */
+    mutable std::atomic<uint64_t> nMaxBlockSizeWorstCaseGuess{0u};
 };
 
 // Dummy for subclassing in unittests
@@ -121,6 +138,8 @@ public:
     DummyConfig(std::unique_ptr<CChainParams> chainParamsIn);
     bool SetConfiguredMaxBlockSize(uint64_t) override { return false; }
     uint64_t GetConfiguredMaxBlockSize() const override { return 0; }
+    uint64_t GetMaxBlockSizeLookAheadGuess() const override { return 0; }
+    void NotifyMaxBlockSizeLookAheadGuessChanged(uint64_t) const override {}
     bool SetGeneratedBlockSizeBytes(uint64_t) override { return false; }
     bool SetGeneratedBlockSizePercent(double) override { return false; }
     uint64_t GetGeneratedBlockSize(std::optional<uint64_t>) const override { return 0; }

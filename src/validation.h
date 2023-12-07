@@ -260,18 +260,17 @@ static constexpr unsigned int DEFAULT_CHECKLEVEL = 3;
 static constexpr uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 550 * 1024 * 1024;
 
 class BlockValidationOptions {
-private:
-    uint64_t nMaxBlockSize;
-    bool checkPoW : 1;
-    bool checkMerkleRoot : 1;
+    bool checkPoW;
+    bool checkMerkleRoot;
 
 public:
     // Do full validation by default
-    BlockValidationOptions(const Config &config);
-    BlockValidationOptions(uint64_t _nMaxBlockSize, bool _checkPow = true,
-                           bool _checkMerkleRoot = true)
-        : nMaxBlockSize(_nMaxBlockSize), checkPoW(_checkPow),
-          checkMerkleRoot(_checkMerkleRoot) {}
+    BlockValidationOptions(bool _checkPow = true, bool _checkMerkleRoot = true)
+        : checkPoW(_checkPow), checkMerkleRoot(_checkMerkleRoot) {}
+
+    // Compatibility c'tor to keep old source working (config param unused but may be used again someday)
+    BlockValidationOptions(const Config &config [[maybe_unused]], bool _checkPow = true, bool _checkMerkleRoot = true)
+        : BlockValidationOptions(_checkPow, _checkMerkleRoot) {}
 
     BlockValidationOptions withCheckPoW(bool _checkPoW = true) const {
         BlockValidationOptions ret = *this;
@@ -288,7 +287,6 @@ public:
 
     bool shouldValidatePoW() const { return checkPoW; }
     bool shouldValidateMerkleRoot() const { return checkMerkleRoot; }
-    uint64_t getMaxBlockSize() const { return nMaxBlockSize; }
 };
 
 /**
@@ -365,7 +363,7 @@ bool LoadChainTip(const Config &config) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 /**
  * Unload database information.
  */
-void UnloadBlockIndex();
+void UnloadBlockIndex(const Config &config);
 
 /** Run instances of script checking worker threads */
 void StartScriptCheckWorkerThreads(int threads_num);
@@ -617,6 +615,14 @@ bool CheckBlock(const CBlock &block, CValidationState &state,
                 BlockValidationOptions validationOptions);
 
 /**
+ * Checks that the block's size doesn't exceed nMaxBlockSize.
+ * @param pBlockSize optional out param to report the calculated size. This is only set on true return.
+ * @return true if the check passes, false otherwise
+ */
+bool CheckBlockSize(const CBlock &block, CValidationState &state, uint64_t nMaxBlockSize,
+                    uint64_t *pBlockSize = nullptr);
+
+/**
  * This is a variant of ContextualCheckTransaction which computes the contextual
  * check for a transaction based on the chain tip.
  *
@@ -817,5 +823,9 @@ extern ActivationBlockTracker g_upgrade10_block_tracker;
 uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex,
                                uint32_t *nextBlockFlags = nullptr /* out param: block flags without standard */);
 
-/// Returns the blocksize limit for the next block
+/// Returns the adaptive blocksize limit for the next block, given `pindexPrev`, if upgrade10 is activated.
+/// If upgrade 10 is not activated, returns the legacy blocksize limit for the chain (e.g. 32MB for mainnet,
+/// 2MB for testnet4, -excessiveblocksize=XX, etc).
+/// @pre Either upgrade10 must *not* be activated, *or* if it is, `pindexPrev` *must* have a valid `ablaStateOpt`.
+///      (This precondition is guaranteed if `pindexPrev` is on the active chain.)
 uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *pindexPrev);

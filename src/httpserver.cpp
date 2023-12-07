@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -428,8 +429,9 @@ bool InitHTTPServer(Config &config) {
         http, gArgs.GetArg("-rpcservertimeout", DEFAULT_HTTP_SERVER_TIMEOUT));
     evhttp_set_max_headers_size(http, MAX_HEADERS_SIZE);
     // scale the max body size with our block size so RPC always works for large blocks
-    evhttp_set_max_body_size(http, MIN_SUPPORTED_BODY_SIZE +
-                                       2 * config.GetConfiguredMaxBlockSize());
+    const ssize_t maxBodySize = std::min<uint64_t>(MIN_SUPPORTED_BODY_SIZE + 2u * MAX_CONSENSUS_BLOCK_SIZE,
+                                                   std::numeric_limits<ssize_t>::max());
+    evhttp_set_max_body_size(http, maxBodySize);
     evhttp_set_gencb(http, http_request_cb, &config);
 
     // Only POST and OPTIONS are supported, but we return HTTP 405 for the

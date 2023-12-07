@@ -213,7 +213,7 @@ TestingSetup::~TestingSetup() {
     GetMainSignals().UnregisterBackgroundSignalScheduler();
     g_connman.reset();
     g_banman.reset();
-    UnloadBlockIndex();
+    UnloadBlockIndex(GetConfig());
     pcoinsTip.reset();
     pcoinsdbview.reset();
     pblocktree.reset();

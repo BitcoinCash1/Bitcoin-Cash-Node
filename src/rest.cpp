@@ -190,7 +190,7 @@ static bool rest_headers(const std::any& context, Config &config, HTTPRequest *r
             UniValue::Array jsonHeaders;
             jsonHeaders.reserve(headers.size());
             for (const CBlockIndex *pindex : headers) {
-                jsonHeaders.emplace_back(blockheaderToJSON(tip, pindex));
+                jsonHeaders.emplace_back(blockheaderToJSON(config, tip, pindex));
             }
             std::string strJSON = UniValue::stringify(jsonHeaders) + "\n";
             req->WriteHeader("Content-Type", "application/json");

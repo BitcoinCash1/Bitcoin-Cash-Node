@@ -12,6 +12,7 @@
 #include <checkpoints.h>
 #include <coins.h>
 #include <config.h>
+#include <consensus/abla.h>
 #include <consensus/validation.h>
 #include <core_io.h>
 #include <hash.h>
@@ -37,6 +38,7 @@
 #include <validationinterface.h>
 #include <warnings.h>
 
+#include <algorithm>
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -87,13 +89,14 @@ static int ComputeNextBlockAndDepth(const CBlockIndex *tip,
     return blockindex == tip ? 1 : -1;
 }
 
-UniValue::Object blockheaderToJSON(const CBlockIndex *tip, const CBlockIndex *blockindex) {
+UniValue::Object blockheaderToJSON(const Config &config, const CBlockIndex *tip, const CBlockIndex *blockindex) {
     const CBlockIndex *pnext;
     int confirmations = ComputeNextBlockAndDepth(tip, blockindex, pnext);
     bool previousblockhash = blockindex->pprev;
     bool nextblockhash = pnext;
+    const auto ablaStateOpt = blockindex->GetAblaStateOpt();
     UniValue::Object result;
-    result.reserve(13 + previousblockhash + nextblockhash);
+    result.reserve(13 + previousblockhash + nextblockhash + bool(ablaStateOpt));
     result.emplace_back("hash", blockindex->GetBlockHash().GetHex());
     result.emplace_back("confirmations", confirmations);
     result.emplace_back("height", blockindex->nHeight);
@@ -113,6 +116,9 @@ UniValue::Object blockheaderToJSON(const CBlockIndex *tip, const CBlockIndex *bl
     if (nextblockhash) {
         result.emplace_back("nextblockhash", pnext->GetBlockHash().GetHex());
     }
+    if (ablaStateOpt) {
+        result.emplace_back("ablastate", ablaStateToJSON(config, *ablaStateOpt));
+    }
     return result;
 }
 
@@ -122,8 +128,9 @@ UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CB
     int confirmations = ComputeNextBlockAndDepth(tip, blockindex, pnext);
     bool previousblockhash = blockindex->pprev;
     bool nextblockhash = pnext;
+    const auto ablaStateOpt = blockindex->GetAblaStateOpt();
     UniValue::Object result;
-    result.reserve(15 + previousblockhash + nextblockhash);
+    result.reserve(15 + previousblockhash + nextblockhash + bool(ablaStateOpt));
     result.emplace_back("hash", blockindex->GetBlockHash().GetHex());
     result.emplace_back("confirmations", confirmations);
     result.emplace_back("size", ::GetSerializeSize(block, PROTOCOL_VERSION));
@@ -170,7 +177,25 @@ UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CB
     if (nextblockhash) {
         result.emplace_back("nextblockhash", pnext->GetBlockHash().GetHex());
     }
+    if (ablaStateOpt) {
+        result.emplace_back("ablastate", ablaStateToJSON(config, *ablaStateOpt));
+    }
     return result;
+}
+
+UniValue::Object ablaStateToJSON(const Config &config, const abla::State &state) {
+    UniValue::Object ret;
+    ret.reserve(5);
+    ret.emplace_back("epsilon", state.GetControlBlockSize());
+    ret.emplace_back("beta", state.GetElasticBufferSize());
+    ret.emplace_back("blocksize", state.GetBlockSize());
+    // Note that consensus rules are that the max block size is always at least the configured max block size,
+    // or what ABLA says, whichever is greater.
+    const auto cmbs = config.GetConfiguredMaxBlockSize();
+    ret.emplace_back("blocksizelimit", std::max(cmbs, state.GetBlockSizeLimit()));
+    ret.emplace_back("nextblocksizelimit", std::max(cmbs, state.GetNextBlockSizeLimit(
+                                                              config.GetChainParams().GetConsensus().ablaConfig)));
+    return ret;
 }
 
 static UniValue getblockcount(const Config &config,
@@ -758,6 +783,17 @@ static UniValue getblockhash(const Config &config,
     return pblockindex->GetBlockHash().GetHex();
 }
 
+static std::string ablaStateHelpCommon(bool trailingComma) {
+    return strprintf(
+        "  \"ablastate\" : {        (json object, optional) The block's ABLA state\n"
+        "    \"epsilon\" : n,       (numeric) ABLA state epsilon value\n"
+        "    \"beta\" : n,          (numeric) ABLA state beta value\n"
+        "    \"blocksize\" : n,     (numeric) The size of this block\n"
+        "    \"blocksizelimit\" : n,        (numeric) The size limit for this block\n"
+        "    \"nextblocksizelimit\" : n,    (numeric) The size limit for the next block\n"
+        "  }%s\n", trailingComma ? "," : "");
+}
+
 static UniValue getblockheader(const Config &config,
                                const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() < 1 ||
@@ -796,7 +832,8 @@ static UniValue getblockheader(const Config &config,
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the "
             "previous block\n"
             "  \"nextblockhash\" : \"hash\",      (string) The hash of the "
-            "next block\n"
+            "next block,\n"
+            + ablaStateHelpCommon(false) +
             "}\n"
             "\nResult (for verbose=false):\n"
             "\"data\"             (string) A string that is serialized, "
@@ -855,7 +892,7 @@ static UniValue getblockheader(const Config &config,
         return HexStr(ssBlock);
     }
 
-    return blockheaderToJSON(tip, pindex);
+    return blockheaderToJSON(config, tip, pindex);
 }
 
 /// Requires cs_main; called by getblock() and getblockstats()
@@ -959,7 +996,8 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the "
             "previous block\n"
             "  \"nextblockhash\" : \"hash\"       (string) The hash of the "
-            "next block\n"
+            "next block,\n"
+            + ablaStateHelpCommon(false) +
             "}\n"
             "\nResult (for verbosity = 2):\n"
             "{\n"

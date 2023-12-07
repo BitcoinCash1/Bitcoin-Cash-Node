@@ -19,7 +19,9 @@ inline constexpr uint64_t MIN_TX_SIZE_MAGNETIC_ANOMALY = 100;
 inline constexpr uint64_t MIN_TX_SIZE_UPGRADE9 = 65;
 /** The maximum allowed size for a block, before the UAHF */
 inline constexpr uint64_t LEGACY_MAX_BLOCK_SIZE = ONE_MEGABYTE;
-/** Default setting for maximum allowed size for a block, in bytes */
+/** Default setting for maximum allowed size for a block, in bytes. Post activation of upgrade 10, this is the minimum
+    for the max block size since ABLA will dynamically adjust the blocksize upward based on demand
+    (except on testnet3/testnet4 where maximum blocksize remains fixed) */
 inline constexpr uint64_t DEFAULT_CONSENSUS_BLOCK_SIZE = 32 * ONE_MEGABYTE;
 /**
  *  Maximum consensus blocks size: 2GB. This is a temporary limit
