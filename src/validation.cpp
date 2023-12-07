@@ -173,7 +173,7 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // Block disconnection on our pcoinsTip:
-    bool DisconnectTip(const CChainParams &params, CValidationState &state,
+    bool DisconnectTip(const Config &config, CValidationState &state,
                        DisconnectedBlockTransactions *disconnectpool)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -303,10 +303,6 @@ std::multimap<CBlockIndex *, CBlockIndex *> &mapBlocksUnlinked =
 } // namespace
 
 void FlushBlockFile(bool fFinalize = false);
-
-BlockValidationOptions::BlockValidationOptions(const Config &config)
-    : nMaxBlockSize(config.GetConfiguredMaxBlockSize()), checkPoW(true),
-      checkMerkleRoot(true) {}
 
 CBlockIndex *FindForkInGlobalIndex(const CChain &chain,
                                    const CBlockLocator &locator) {
@@ -1510,6 +1506,42 @@ uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockInde
     return flags | STANDARD_SCRIPT_VERIFY_FLAGS;
 }
 
+/// Maintain invariants, update ABLA state (if possible).
+/// Called from: LoadGenesisBlock, AcceptBlock, and ConnectBlock.
+/// @pre `pindex` must be the index for `block` and must already be added to `mapBlockIndex`. `pindex` need not
+///      be on any active chain (it may even be ahead of ::ChainActive().Tip()).
+/// @param blockSize - Pass non-zero if the blockSize is known, otherwise it will be calculated on-the-fly.
+static void MaintainAblaState(const Consensus::Params &consensusParams, const CBlock &block, CBlockIndex *pindex,
+                              const char *debugPrefix = nullptr, uint64_t blockSize = 0)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+    if (IsUpgrade10Enabled(consensusParams, pindex)) {
+        std::optional<abla::State> ablaStateOpt;
+        if (!IsUpgrade10Enabled(consensusParams, pindex->pprev)) {
+            // activation block, give default state
+            blockSize = blockSize ? blockSize : ::GetSerializeSize(block, PROTOCOL_VERSION);
+            ablaStateOpt.emplace(consensusParams.ablaConfig, blockSize);
+        } else if ((ablaStateOpt = pindex->pprev->GetAblaStateOpt())) {
+            // non-activation block, advance state from previous, based on this block's size
+            blockSize = blockSize ? blockSize : ::GetSerializeSize(block, PROTOCOL_VERSION);
+            ablaStateOpt = ablaStateOpt->NextBlockState(consensusParams.ablaConfig, blockSize);
+        }
+        debugPrefix = debugPrefix ? debugPrefix : __func__;
+        LogPrint(BCLog::ABLA, "%s: ABLA state for block %d: ", debugPrefix, pindex->nHeight);
+        if (ablaStateOpt) {
+            const char *newstr = " (existing)";
+            if (pindex->GetAblaStateOpt() != ablaStateOpt) {
+                pindex->SetAblaStateOpt(ablaStateOpt);
+                newstr = " ** NEW **";
+                setDirtyBlockIndex.insert(pindex);
+            }
+            LogPrint(BCLog::ABLA, "%s, nextBlockSizeLimit: %i%s\n", ablaStateOpt->ToString(),
+                     ablaStateOpt->GetNextBlockSizeLimit(consensusParams.ablaConfig), newstr);
+        } else {
+            LogPrint(BCLog::ABLA, "??? NOT YET DEFINED ???\n");
+        }
+    }
+}
+
 static int64_t nTimeCheck = 0;
 static int64_t nTimeForks = 0;
 static int64_t nTimeVerify = 0;
@@ -1563,6 +1595,14 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
                      FormatStateMessage(state));
     }
 
+    // Size check (both pre and post upgrade 10 are handled here, after CheckBlock above)
+    const uint64_t nMaxBlockSize = GetNextBlockSizeLimit(::GetConfig(), pindex->pprev);
+    uint64_t nThisBlockSize = 0;
+    if (!CheckBlockSize(block, state, nMaxBlockSize, &nThisBlockSize)) {
+        return error("%s: CheckBlockSize: %s", __func__, FormatStateMessage(state));
+    }
+    assert(nThisBlockSize != 0);
+
     // Verify that the view's current state corresponds to the previous block
     BlockHash hashPrevBlock =
         pindex->pprev == nullptr ? BlockHash() : pindex->pprev->GetBlockHash();
@@ -1575,6 +1615,8 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
     if (block.GetHash() == consensusParams.hashGenesisBlock) {
         if (!fJustCheck) {
             view.SetBestBlock(pindex->GetBlockHash());
+            // Ensure ABLA state is updated just in case -upgrade10activationtime=<before genesis>
+            MaintainAblaState(consensusParams, block, pindex, __func__, nThisBlockSize);
         }
 
         return true;
@@ -1699,8 +1741,7 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
     // inputs) is per-input atomic and validation in each thread stops very
     // quickly after the limit is exceeded, so an adversary cannot cause us to
     // exceed the limit by much at all.
-    CheckInputsLimiter nSigChecksBlockLimiter(
-        GetMaxBlockSigChecksCount(options.getMaxBlockSize()));
+    CheckInputsLimiter nSigChecksBlockLimiter(GetMaxBlockSigChecksCount(nMaxBlockSize));
 
     std::vector<TxSigCheckLimiter> nSigChecksTxLimiters;
     nSigChecksTxLimiters.resize(block.vtx.size() - 1);
@@ -1867,6 +1908,9 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
     if (fJustCheck) {
         return true;
     }
+
+    // Upgrade10: Update ABLA state upon connection
+    MaintainAblaState(consensusParams, block, pindex, __func__, nThisBlockSize);
 
     if (!WriteUndoDataForBlock(blockundo, state, pindex, params)) {
         return false;
@@ -2070,8 +2114,51 @@ void PruneAndFlush() {
     }
 }
 
+/// Does some book-keeping when a tip changes and calls config.NotifyMaxBlockSizeLookAheadGuessChanged()
+static void TipChanged(const ::Config &config, const CBlockIndex *pindexNew) {
+    Tic t0;
+    if (!pindexNew) {
+        // NB: This branch is normally only taken by UnloadBlockIndex()
+        config.NotifyMaxBlockSizeLookAheadGuessChanged(0 /* no guess; 0 = chain default max block size */);
+        LogPrint(BCLog::ABLA, "%s: called with nullptr tip, lookahead blocksize guess defaulting to %d\n", __func__,
+                 config.GetMaxBlockSizeLookAheadGuess());
+        return;
+    }
+    const CChainParams &params = config.GetChainParams();
+
+    // Notify config of the new future block "worst-case guess" as to max block size
+    const auto &consensusParams = params.GetConsensus();
+    const abla::State ablaState = pindexNew->GetAblaStateOr([&]{
+        // If this lambda is called, no ABLA state for this tip (not activated yet). Build a default ABLA state based on
+        // the current block's size, etc (tolerating failure of ReadBlockSizeFromDisk() for defensive programming).
+        return abla::State(consensusParams.ablaConfig,
+                           ReadBlockSizeFromDisk(pindexNew, params)
+                               .value_or(config.GetConfiguredMaxBlockSize()));
+    });
+
+    // This is a worst-case guess as to how much the max blocksize can grow in the next 2048 blocks. Note we only
+    // ever download 1024 blocks into the future anyway. We use this guess in the following places:
+    // - blockencodings.cpp to reject oversized compactblks that are clearly impossibly large
+    // - protocol.cpp to determine the maximum message size
+    // As such we guess a bit large, at 2x the download window. Note that we recalculate our guess every time the tip
+    // is updated, even if upgrade 10 is not enabled yet, since for all we know here right now, the upgrade may be
+    // enabled in the next few blocks (since it depends on MTP).
+    const uint64_t nLimit = ablaState.CalcLookaheadBlockSizeLimit(consensusParams.ablaConfig,
+                                                                  BLOCK_DOWNLOAD_WINDOW * 2);
+    config.NotifyMaxBlockSizeLookAheadGuessChanged(nLimit);
+    LogPrint(BCLog::ABLA, "%s: set lookahead-blocksize-guess for tip height %i to %i (%s msec elapsed)\n",
+             __func__, pindexNew->nHeight, config.GetMaxBlockSizeLookAheadGuess(), t0.msecStr());
+}
+
 /** Check warning conditions and do some notifications on new chain tip set. */
-static void UpdateTip(const CChainParams &params, CBlockIndex *pindexNew) {
+static void UpdateTip(const Config &config, CBlockIndex *pindexNew)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+
+    const CChainParams &params = config.GetChainParams();
+
+    // Tell rest of codebase (in particular ABLA) about new tip
+    TipChanged(config, pindexNew);
+
     // New best block
     g_mempool.AddTransactionsUpdated(1);
 
@@ -2104,10 +2191,11 @@ static void UpdateTip(const CChainParams &params, CBlockIndex *pindexNew) {
  * disconnectpool (note that the caller is responsible for mempool consistency
  * in any case).
  */
-bool CChainState::DisconnectTip(const CChainParams &params,
+bool CChainState::DisconnectTip(const Config &config,
                                 CValidationState &state,
                                 DisconnectedBlockTransactions *disconnectpool) {
     AssertLockHeld(cs_main);
+    const CChainParams &params = config.GetChainParams();
     CBlockIndex *pindexDelete = m_chain.Tip();
     const Consensus::Params &consensusParams = params.GetConsensus();
 
@@ -2171,7 +2259,7 @@ bool CChainState::DisconnectTip(const CChainParams &params,
     m_chain.SetTip(pindexDelete->pprev);
 
     // Update ::ChainActive() and related variables.
-    UpdateTip(params, pindexDelete->pprev);
+    UpdateTip(config, pindexDelete->pprev);
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
     GetMainSignals().BlockDisconnected(pblock);
@@ -2456,7 +2544,7 @@ bool CChainState::ConnectTip(const Config &config, CValidationState &state,
 
     // Update m_chain & related variables.
     m_chain.SetTip(pindexNew);
-    UpdateTip(params, pindexNew);
+    UpdateTip(config, pindexNew);
 
     int64_t nTime6 = GetTimeMicros();
     nTimePostConnect += nTime6 - nTime5;
@@ -2677,7 +2765,7 @@ bool CChainState::ActivateBestChainStep(
             disconnectpool.importMempool(g_mempool);
         }
 
-        if (!DisconnectTip(config.GetChainParams(), state, &disconnectpool)) {
+        if (!DisconnectTip(config, state, &disconnectpool)) {
             // This is likely a fatal error, but keep the mempool consistent,
             // just in case. Only remove from the mempool in this case.
             disconnectpool.updateMempoolForReorg(config, false);
@@ -3035,7 +3123,7 @@ bool CChainState::UnwindBlock(const Config &config, CValidationState &state,
             // ActivateBestChain considers blocks already in m_chain
             // unconditionally valid already, so force disconnect away from it.
 
-            ret = DisconnectTip(config.GetChainParams(), state, optDisconnectPool);
+            ret = DisconnectTip(config, state, optDisconnectPool);
             ++disconnected;
 
             if (optDisconnectPool && disconnected > maxDisconnectPoolBlocks) {
@@ -3455,19 +3543,9 @@ bool CheckBlock(const CBlock &block, CValidationState &state,
                          "first tx is not coinbase");
     }
 
-    // Size limits.
-    auto nMaxBlockSize = validationOptions.getMaxBlockSize();
-
-    // Bail early if there is no way this block is of reasonable size.
-    if ((block.vtx.size() * MIN_TRANSACTION_SIZE) > nMaxBlockSize) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false,
-                         "size limits failed");
-    }
-
-    auto currentBlockSize = ::GetSerializeSize(block, PROTOCOL_VERSION);
-    if (currentBlockSize > nMaxBlockSize) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false,
-                         "size limits failed");
+    // Size limits (context-less, so we check against the consensus 2GB limit).
+    if (!CheckBlockSize(block, state, MAX_CONSENSUS_BLOCK_SIZE)) {
+        return false; // state set by CheckBlockSize()
     }
 
     // And a valid coinbase.
@@ -3495,6 +3573,22 @@ bool CheckBlock(const CBlock &block, CValidationState &state,
         validationOptions.shouldValidateMerkleRoot()) {
         block.fChecked = true;
     }
+
+    return true;
+}
+
+bool CheckBlockSize(const CBlock &block, CValidationState &state, uint64_t nMaxBlockSize, uint64_t *pBlockSize) {
+    // Bail early if there is no way this block is of reasonable size.
+    if ((block.vtx.size() * MIN_TRANSACTION_SIZE) > nMaxBlockSize) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false, "size limits failed");
+    }
+
+    const auto currentBlockSize = ::GetSerializeSize(block, PROTOCOL_VERSION);
+    if (currentBlockSize > nMaxBlockSize) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false, "size limits failed");
+    }
+
+    if (pBlockSize) *pBlockSize = currentBlockSize;
 
     return true;
 }
@@ -4034,6 +4128,7 @@ bool CChainState::AcceptBlock(const Config &config,
             return false;
         }
         ReceivedBlockTransactions(block, pindex, blockPos);
+        MaintainAblaState(consensusParams, block, pindex, __func__);
     } catch (const std::runtime_error &e) {
         return AbortNode(state, std::string("System error: ") + e.what());
     }
@@ -4472,6 +4567,81 @@ static bool LoadBlockIndexDB(const Config &config)
     return true;
 }
 
+// Verifies that the ABLA state for the active chain `chain` is valid, and if not, attempts to rebuild it.
+// An ABLA state can become invalid as a corner-case if the user switched to an older BCHN version for the same
+// data dir, then switched back. Note that in the case of pruning nodes, it may not always be possible to rebuild the
+// state if ABLA activated long ago and the lost state info included some pruned blocks.  In that case the user
+// will get an error message at startup telling them to -reindex.
+static bool VerifyAblaStateForChain(const Config &config, CChain &chain) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+    Tic t0;
+    const auto &params = config.GetChainParams();
+    const auto &consensus = params.GetConsensus();
+    CBlockIndex *ptip = chain.Tip();
+    if (!IsUpgrade10Enabled(consensus, ptip)) {
+        return true;
+    }
+    const CBlockIndex *pbase = g_upgrade10_block_tracker.GetActivationBlock(ptip, consensus);
+    assert(pbase != nullptr);
+    LogPrintf("%s: Verifying %i block headers have correct ABLA state ...\n",
+              __func__, ptip->nHeight - pbase->nHeight + 1);
+    const abla::Config &ablaConfig = consensus.ablaConfig;
+    std::optional<abla::State> prevState;
+    bool rebuilding = false;
+    for (int ht = pbase->nHeight; ht <= ptip->nHeight; ++ht) {
+        CBlockIndex *pcur = chain[ht];
+        assert(pcur);
+        const char *err{};
+        if (!rebuilding) {
+            std::optional<uint64_t> optSize;
+            const auto curAblaStateOpt = pcur->GetAblaStateOpt();
+            if (!curAblaStateOpt || !curAblaStateOpt->IsValid(ablaConfig, &err)) {
+                err = err && *err ? err : "missing";
+                rebuilding = true;
+            } else if ((optSize = ReadBlockSizeFromDisk(pcur, params)).value_or(curAblaStateOpt->GetBlockSize())
+                       != curAblaStateOpt->GetBlockSize()) {
+                err = "bad block size";
+                rebuilding = true;
+            } else if (optSize && prevState && prevState->NextBlockState(ablaConfig, *optSize) != *curAblaStateOpt) {
+                err = "bad state";
+                rebuilding = true;
+            }
+            if (!rebuilding) {
+                prevState = curAblaStateOpt;
+            } else {
+                LogPrintf("%s: Bad ABLA data starting at height=%d (%s), will rebuild ABLA state for %d blocks ...\n",
+                          __func__, ht, err, ptip->nHeight - pcur->nHeight + 1);
+            }
+        }
+        if (rebuilding) {
+            const auto optBlockSize = ReadBlockSizeFromDisk(pcur, params);
+            if (!optBlockSize) {
+                return error("%s: Unable to restore ABLA state, unable to read block file for block %d\n",
+                             __func__, pcur->nHeight);
+            }
+            abla::State state;
+            if (pcur == pbase) {
+                // Activation block, give it base state
+                state = abla::State(ablaConfig, *optBlockSize);
+            } else {
+                // Else, this block's state is based on its size + the previous block's state
+                assert(pcur->pprev);
+                prevState = pcur->pprev->GetAblaStateOpt();
+                assert(prevState);
+                state = prevState->NextBlockState(ablaConfig, *optBlockSize);
+            }
+            assert(state.IsValid(ablaConfig));
+            pcur->SetAblaStateOpt(state);
+            setDirtyBlockIndex.insert(pcur); // mark for re-save to disk
+        }
+    }
+    if (!setDirtyBlockIndex.empty()) {
+        // Save changes to block indices to the DB
+        FlushStateToDisk();
+    }
+    LogPrintf("%s: Verified ABLA state for chain in %s msec\n", __func__, t0.msecStr());
+    return true;
+}
+
 bool LoadChainTip(const Config &config) {
     AssertLockHeld(cs_main);
     // Never called when the coins view is empty
@@ -4489,7 +4659,14 @@ bool LoadChainTip(const Config &config) {
     }
     ::ChainActive().SetTip(pindex);
 
+    // Verify that the ABLA state is valid for this chain
+    if (!VerifyAblaStateForChain(config, ::ChainActive())) {
+        return false;
+    }
+
     g_chainstate.PruneBlockIndexCandidates();
+
+    TipChanged(config, pindex); // tell ABLA, so it can update its max block size guess
 
     LogPrintf(
         "Loaded best chain: hashBestChain=%s height=%d date=%s progress=%f\n",
@@ -4812,9 +4989,10 @@ void CChainState::UnloadBlockIndex() {
 // May NOT be used after any connections are up as much
 // of the peer-processing logic assumes a consistent
 // block index state
-void UnloadBlockIndex() {
+void UnloadBlockIndex(const Config &config) {
     LOCK(cs_main);
     ::ChainActive().SetTip(nullptr);
+    TipChanged(config, nullptr);
     pindexFinalized = nullptr;
     pindexBestInvalid = nullptr;
     pindexBestParked = nullptr;
@@ -4886,6 +5064,7 @@ bool CChainState::LoadGenesisBlock(const CChainParams &chainparams) {
         }
         CBlockIndex *pindex = AddToBlockIndex(block);
         ReceivedBlockTransactions(block, pindex, blockPos);
+        MaintainAblaState(chainparams.GetConsensus(), block, pindex, __func__);
     } catch (const std::runtime_error &e) {
         return error("%s: failed to write genesis block: %s", __func__,
                      e.what());
@@ -5736,6 +5915,14 @@ ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Cons
     return pwalk;
 }
 
-uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *) {
-    return config.GetConfiguredMaxBlockSize();
+uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *pindexPrev) {
+    const auto &params = config.GetChainParams().GetConsensus();
+    const uint64_t confMaxBlockSize = config.GetConfiguredMaxBlockSize();
+    if (!IsUpgrade10Enabled(params, pindexPrev)) {
+        return confMaxBlockSize;
+    }
+    const auto ablaStateOpt = pindexPrev->GetAblaStateOpt();
+    assert(ablaStateOpt);
+    // std::max here to ensure the minimum max block size is what the user overrode from config, if anything
+    return std::max(confMaxBlockSize, ablaStateOpt->GetNextBlockSizeLimit(params.ablaConfig));
 }

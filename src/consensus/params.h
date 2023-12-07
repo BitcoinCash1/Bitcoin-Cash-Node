@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <consensus/abla.h>
 #include <primitives/blockhash.h>
 #include <uint256.h>
 
@@ -53,7 +54,9 @@ struct Params {
     /** Unix time used for tentative MTP activation of 15 May 2024 12:00:00 UTC upgrade */
     int64_t upgrade10ActivationTime;
 
-    /** Default blocksize limit -- can be overridden with the -excessiveblocksize= command-line switch */
+    /** Default blocksize limit -- can be overridden with the -excessiveblocksize= command-line switch.
+        After activation of upgrade 10, this is the minimum max block size, since the ABLA algorithm allows for
+        growing the limit based on demand.*/
     uint64_t nDefaultConsensusBlockSize;
     /**
      * Chain-specific default for -percentblockmaxsize, which controls the maximum size of blocks that the
@@ -89,5 +92,7 @@ struct Params {
     /** For chains with a checkpoint after the ASERT anchor block, this is always defined */
     std::optional<ASERTAnchor> asertAnchorParams;
 
+    /** For upgrade10 -- the ABLA config (adjustable block limit algorithm) */
+    abla::Config ablaConfig;
 };
 } // namespace Consensus

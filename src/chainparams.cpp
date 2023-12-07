@@ -163,6 +163,13 @@ public:
             1605447844,   // anchor block previous block timestamp
         };
 
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ false);
+        // Ensure base ABLA state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA is *not* "fixed size" for mainnet
+        assert( ! consensus.ablaConfig.IsFixedSize());
+
         /**
          * The message start string is designed to be unlikely to occur in
          * normal data. The characters are rarely used upper ASCII, not valid as
@@ -394,6 +401,13 @@ public:
             1605445400,   // anchor block previous block timestamp
         };
 
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ true);
+        // Ensure base abla state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA *is* "fixed size" for testnet3
+        assert(consensus.ablaConfig.IsFixedSize());
+
         diskMagic[0] = 0x0b;
         diskMagic[1] = 0x11;
         diskMagic[2] = 0x09;
@@ -586,6 +600,13 @@ public:
             1605451779,   // anchor block previous block timestamp
         };
 
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ true);
+        // Ensure base abla state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA *is* "fixed size" for testnet4
+        assert(consensus.ablaConfig.IsFixedSize());
+
         diskMagic[0] = 0xcd;
         diskMagic[1] = 0x22;
         diskMagic[2] = 0xa7;
@@ -748,6 +769,13 @@ public:
         // reorg back down to height 10,000 periodically.
         consensus.asertAnchorParams.reset();
 
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ false);
+        // Ensure base abla state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA is *not* "fixed size" for scalenet
+        assert( ! consensus.ablaConfig.IsFixedSize());
+
         diskMagic[0] = 0xba;
         diskMagic[1] = 0xc2;
         diskMagic[2] = 0x2d;
@@ -898,6 +926,13 @@ public:
             1605451779,   // anchor block previous block timestamp
         };
 
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ false);
+        // Ensure base abla state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA is *not* "fixed size" for chipnet
+        assert( ! consensus.ablaConfig.IsFixedSize());
+
         diskMagic[0] = 0xcd;
         diskMagic[1] = 0x22;
         diskMagic[2] = 0xa7;
@@ -1042,6 +1077,13 @@ public:
         assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
                && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
         assert(consensus.GetDefaultGeneratedBlockSizeBytes() <= consensus.nDefaultConsensusBlockSize);
+
+        // ABLA config -- upgrade 10 adjustable block limit algorithm
+        consensus.ablaConfig = abla::Config::MakeDefault(consensus.nDefaultConsensusBlockSize, /* fixedSize = */ false);
+        // Ensure base abla state yields same limit as pre-activation.
+        assert(abla::State(consensus.ablaConfig, 0).GetBlockSizeLimit() == consensus.nDefaultConsensusBlockSize);
+        // Ensure ABLA is *not* "fixed size" for regtest
+        assert( ! consensus.ablaConfig.IsFixedSize());
 
         diskMagic[0] = 0xfa;
         diskMagic[1] = 0xbf;

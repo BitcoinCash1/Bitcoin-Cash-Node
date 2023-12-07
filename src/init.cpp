@@ -469,8 +469,10 @@ void SetupServerArgs() {
                            DEFAULT_DEBUGLOGFILE),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg("-excessiveblocksize=<n>",
-                 strprintf("Do not accept blocks larger than this limit, in "
-                           "bytes (default: %u, testnet: %u, testnet4: %u, scalenet: %u, chipnet: %u, regtest: %u)",
+                 strprintf("Before upgrade 10 activates: Do not accept blocks larger than this limit, in bytes."
+                           " After upgrade 10 activates: The minimum (floor) maximum block size used by the adaptive"
+                           " blocksize limit algorithm, in bytes. (default: %u, testnet: %u, testnet4: %u,"
+                           " scalenet: %u, chipnet: %u, regtest: %u)",
                            defaultChainParams->GetConsensus().nDefaultConsensusBlockSize,
                            testnetChainParams->GetConsensus().nDefaultConsensusBlockSize,
                            testnet4ChainParams->GetConsensus().nDefaultConsensusBlockSize,
@@ -2431,7 +2433,7 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
         do {
             try {
                 LOCK(cs_main);
-                UnloadBlockIndex();
+                UnloadBlockIndex(config);
                 pcoinsTip.reset();
                 pcoinsdbview.reset();
                 pcoinscatcher.reset();

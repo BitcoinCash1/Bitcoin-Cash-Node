@@ -63,6 +63,24 @@ endfunction()
 
 gen_chip_tests_header(CHIP_HEADER)
 
+function(gen_abla_tests_header NAME)
+    set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/abla_test_vectors.json.h")
+    file(GLOB vector_files "${CMAKE_CURRENT_SOURCE_DIR}/data/abla_test_vectors/config*-test*-*.json")
+    add_custom_command(OUTPUT ${combined_vec_h}
+      COMMAND
+        "${Python_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_abla_test_vectors.py"
+        ${vector_files} > ${combined_vec_h}
+      DEPENDS
+        "data/generate_abla_test_vectors.py"
+        ${vector_files}
+      VERBATIM
+    )
+    set(${NAME} "${combined_vec_h}" PARENT_SCOPE)
+endfunction()
+
+gen_abla_tests_header(ABLA_HEADER)
+
 include(TestSuite)
 create_test_suite(bitcoin)
 add_dependencies(check check-bitcoin)
@@ -135,6 +153,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
   # Tests generated from JSON
   ${JSON_HEADERS}
   ${CHIP_HEADER}
+  ${ABLA_HEADER}
 
   # Wallet test fixture
   ${BITCOIN_WALLET_TEST_FIXTURE}
@@ -143,6 +162,8 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
   ${BITCOIN_PROPERTY_BASED_TEST_FIXTURE}
 
   TESTS
+    abla_basic_tests.cpp
+    abla_test_vectors.cpp
     activation_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp
@@ -288,7 +309,7 @@ function(add_boost_test_runners_with_upgrade_activated SUITE EXECUTABLE)
       ${SUITE_UPGRADE_ACTIVATED}
       "${_test_name}"
       ${EXECUTABLE} -t "${_test_name}"
-      -- -upgrade10activationtime=1715774400
+      -- -upgrade10activationtime=1694779200  # Fri Sep 15 12:00:00 2023
     )
   endforeach()
 endfunction()

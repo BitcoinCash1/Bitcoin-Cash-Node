@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2023 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,8 @@
 #include <arith_uint256.h>
 #include <blockstatus.h>
 #include <blockvalidity.h>
+#include <clientversion.h>
+#include <consensus/abla.h>
 #include <consensus/params.h>
 #include <crypto/common.h> // for ReadLE64
 #include <flatfile.h>
@@ -17,8 +19,11 @@
 #include <tinyformat.h>
 #include <uint256.h>
 
+#include <ios>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 /**
@@ -44,12 +49,49 @@ static constexpr int64_t TIMESTAMP_WINDOW = MAX_FUTURE_BLOCK_TIME;
 static constexpr int64_t MAX_BLOCK_TIME_GAP = 90 * 60;
 
 /**
+ *  Mixin class that provides guarded, thread-safe access to the property: `ablaStateOpt`.
+ *  Used by CBlockIndex and its subclasses to capture the abla state (if any) of a particular block.
+ */
+class AblaStateMixin {
+    mutable SharedMutex cs_ablaState;
+    std::optional<abla::State> ablaStateOpt GUARDED_BY(cs_ablaState);
+
+public:
+    AblaStateMixin() = default;
+    AblaStateMixin(const AblaStateMixin &o) : ablaStateOpt(o.GetAblaStateOpt()) {}
+
+    AblaStateMixin &operator=(const AblaStateMixin &) = delete;
+
+    std::optional<abla::State> GetAblaStateOpt() const {
+        LOCK_SHARED(cs_ablaState);
+        return ablaStateOpt;
+    }
+
+    /// If `ablaStateOpt` is valid, returns `*ablaStateOpt`, otherwise returns the results of invoking `func()`.
+    /// `func()` is only invoked if `!ablaStateOpt`, and it is invoked without any locks held.
+    template <typename Func>
+    abla::State GetAblaStateOr(Func &&func) const {
+        {
+            LOCK_SHARED(cs_ablaState);
+            if (ablaStateOpt) return *ablaStateOpt;
+        }
+        return func();
+    }
+
+    void SetAblaStateOpt(const std::optional<abla::State> &s) {
+        LOCK(cs_ablaState);
+        ablaStateOpt = s;
+    }
+
+};
+
+/**
  * The block chain is a tree shaped structure starting with the genesis block at
  * the root, with each block potentially having multiple candidates to be the
  * next block. A blockindex may have multiple pprev pointing to it, but at most
  * one of them can be part of the currently active branch.
  */
-class CBlockIndex {
+class CBlockIndex : public AblaStateMixin {
 protected:
     //! Copy & assignment operators are protected for safety since this is a
     //! linked list node with pointers pointing to this instance and it would
@@ -331,6 +373,26 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+
+        // blocksize AA state data -- may be missing if older serialized data before CLIENT_VERSION_ABLA_BLOCKINDEX_DATA
+        if (_nVersion >= CLIENT_VERSION_ABLA_BLOCKINDEX_DATA) {
+            std::optional<abla::State> ablaStateOpt;
+            SER_WRITE(obj, ablaStateOpt = obj.GetAblaStateOpt());
+            try {
+                READWRITE(ablaStateOpt);
+            } catch (const std::ios_base::failure &e) {
+                if (!ser_action.ForRead() || std::string_view{e.what()}.find("end of data") == std::string_view::npos) {
+                    // if writing or if not end-of-data, bubble error out
+                    throw;
+                }
+                // otherwise, tolerate end-of-data on reading; reset the optional
+                ablaStateOpt.reset();
+            }
+            SER_READ(obj, obj.SetAblaStateOpt(ablaStateOpt));
+        } else {
+            // old serialized data, indicate missing data.
+            SER_READ(obj, obj.SetAblaStateOpt(std::nullopt));
+        }
     }
 
     BlockHash GetBlockHash() const {

@@ -44,6 +44,14 @@ BOOST_AUTO_TEST_CASE(max_block_size) {
     BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), 7 * ONE_MEGABYTE);
     BOOST_CHECK(config.SetConfiguredMaxBlockSize(ONE_MEGABYTE + 1));
     BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), ONE_MEGABYTE + 1);
+
+    // MAX_CONSENSUS_BLOCK_SIZE
+    BOOST_CHECK(config.SetConfiguredMaxBlockSize(MAX_CONSENSUS_BLOCK_SIZE));
+    BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), MAX_CONSENSUS_BLOCK_SIZE);
+
+    // Invalid size keep config.
+    BOOST_CHECK(!config.SetConfiguredMaxBlockSize(MAX_CONSENSUS_BLOCK_SIZE + 1));
+    BOOST_CHECK_EQUAL(config.GetConfiguredMaxBlockSize(), MAX_CONSENSUS_BLOCK_SIZE);
 }
 
 BOOST_AUTO_TEST_CASE(chain_params) {
@@ -99,6 +107,27 @@ BOOST_AUTO_TEST_CASE(generated_block_size_percent) {
         BOOST_CHECK(config.SetGeneratedBlockSizePercent(percent));
         BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(std::nullopt), expected);
         BOOST_CHECK_EQUAL(config.GetGeneratedBlockSize(size_override), expected_override);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(lookahead_guess) {
+    GlobalConfig config;
+
+    BOOST_REQUIRE_EQUAL(config.GetConfiguredMaxBlockSize(), DEFAULT_CONSENSUS_BLOCK_SIZE);
+
+    for (uint64_t size = 0; size <= MAX_CONSENSUS_BLOCK_SIZE + ONE_MEGABYTE; size += ONE_MEGABYTE / 10) {
+        config.NotifyMaxBlockSizeLookAheadGuessChanged(size);
+        if (size <= config.GetConfiguredMaxBlockSize()) {
+            // the max blocksize lookahead guess can never be smaller than the configured max blocksize
+            BOOST_CHECK_EQUAL(config.GetMaxBlockSizeLookAheadGuess(), config.GetConfiguredMaxBlockSize());
+        } else if (size <= MAX_CONSENSUS_BLOCK_SIZE) {
+            // however if it is set to larger, the lookahead guess should be verbatim what was set by
+            // NotifyMaxBlockSizeLookAheadGuessChanged() above
+            BOOST_CHECK_EQUAL(config.GetMaxBlockSizeLookAheadGuess(), size);
+        } else {
+            // except the lookahead guess should never exceed MAX_CONSENSUS_BLOCK_SIZE
+            BOOST_CHECK_EQUAL(config.GetMaxBlockSizeLookAheadGuess(), MAX_CONSENSUS_BLOCK_SIZE);
+        }
     }
 }
 

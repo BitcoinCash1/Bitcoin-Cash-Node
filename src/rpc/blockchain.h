@@ -19,6 +19,7 @@ class CBlockIndex;
 class Config;
 class CTxMemPool;
 class JSONRPCRequest;
+namespace abla { class State; }
 
 UniValue getblockchaininfo(const Config &config, const JSONRPCRequest &request);
 
@@ -46,7 +47,10 @@ UniValue::Object MempoolInfoToJSON(const Config &config, const CTxMemPool &pool)
 UniValue MempoolToJSON(const CTxMemPool &pool, bool verbose = false);
 
 /** Block header to JSON */
-UniValue::Object blockheaderToJSON(const CBlockIndex *tip, const CBlockIndex *blockindex);
+UniValue::Object blockheaderToJSON(const Config &config, const CBlockIndex *tip, const CBlockIndex *blockindex);
+
+/** ABLA state to JSON */
+UniValue::Object ablaStateToJSON(const Config &config, const abla::State &ablaState);
 
 /** Used by getblockstats to get feerates at different percentiles by weight  */
 void CalculatePercentilesBySize(Amount result[NUM_GETBLOCKSTATS_PERCENTILES], std::vector<std::pair<Amount, int64_t>>& scores, int64_t total_size);

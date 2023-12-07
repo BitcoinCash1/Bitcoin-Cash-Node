@@ -93,6 +93,7 @@ const CLogCategoryDesc LogCategories[] = {
     {BCLog::PARKING, "parking"},
     {BCLog::DSPROOF, "dsproof"},
     {BCLog::HTTPTRACE, "httptrace"},
+    {BCLog::ABLA, "abla"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };

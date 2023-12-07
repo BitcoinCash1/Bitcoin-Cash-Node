@@ -107,8 +107,11 @@ class BlockSigChecksTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.block_heights = {}
-        self.extra_args = [['-acceptnonstdtxn=1',
-                            "-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE),
+        # Note that for this test, since we want to control the blocksize, we turn ABLA off (no upgrade 10). This test
+        # is still valid, however, since it tests that sigchecks are what we expect given a particular max block size.
+        self.base_extra_args = ['-acceptnonstdtxn=1', '-upgrade10activationtime=2000000000']
+        self.extra_args = [self.base_extra_args +
+                           ["-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE),
                             "-blockmaxsize={}".format(MAXGENERATEDBLOCKSIZE)]]
 
     def getbestblock(self, node):
@@ -281,8 +284,8 @@ class BlockSigChecksTest(BitcoinTestFramework):
         self.log.info("Bump the excessiveblocksize limit by 1 byte, and send another block with same txes (new sigchecks limit: {})".format(
             (EXCESSIVEBLOCKSIZE + 1) // BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO))
         self.stop_node(0)
-        self.extra_args = [['-acceptnonstdtxn=1',
-                            "-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE + 1),
+        self.extra_args = [self.base_extra_args +
+                           ["-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE + 1),
                             "-blockmaxsize={}".format(MAXGENERATEDBLOCKSIZE)]]
         self.start_node(0)
         node.add_p2p_connection(P2PDataStore())

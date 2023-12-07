@@ -36,6 +36,14 @@ bool GlobalConfig::SetConfiguredMaxBlockSize(uint64_t blockSize) {
     return true;
 }
 
+void GlobalConfig::NotifyMaxBlockSizeLookAheadGuessChanged(uint64_t nSize) const {
+    nMaxBlockSizeWorstCaseGuess = nSize;
+}
+
+uint64_t GlobalConfig::GetMaxBlockSizeLookAheadGuess() const {
+    return std::clamp(nMaxBlockSizeWorstCaseGuess.load(), nConfMaxBlockSize, MAX_CONSENSUS_BLOCK_SIZE);
+}
+
 uint64_t GlobalConfig::GetConfiguredMaxBlockSize() const {
     return nConfMaxBlockSize;
 }

@@ -186,8 +186,10 @@ bool CMessageHeader::IsOversized(const Config &config) const {
         return true;
     }
 
-    // Scale the maximum accepted size with the block size.
-    if (nMessageSize > 2 * config.GetConfiguredMaxBlockSize()) {
+    // Scale the maximum accepted size with the expected maximum block size (ABLA's 2 * BLOCK_DOWNLOAD_WINDOW lookahead
+    // guess). Note that the correctness of this size check relies on downloads of blocks never being beyond the active
+    // chain tip + BLOCK_DOWNLOAD_WINDOW (enforced elsewhere in the network code).
+    if (nMessageSize > 2u * config.GetMaxBlockSizeLookAheadGuess()) {
         return true;
     }
 
