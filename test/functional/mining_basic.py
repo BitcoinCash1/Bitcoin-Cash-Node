@@ -68,7 +68,7 @@ class MiningTest(BitcoinTestFramework):
                      Decimal('0.003333333333333334'))
         assert_equal(mining_info['pooledtx'], 0)
         # Check that the "miningblocksizelimit" key from `getmininginfo` is correct (should match -blockmaxsize)
-        assert_equal(mining_info['miningblocksizelimit'], 8000000)
+        assert_equal(mining_info['miningblocksizelimit'], 16000000)
         mining_info1 = self.nodes[1].getmininginfo()
         assert_equal(mining_info1['miningblocksizelimit'], 2123456)
         mining_info2 = self.nodes[2].getmininginfo()

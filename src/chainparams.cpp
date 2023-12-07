@@ -153,7 +153,7 @@ public:
         consensus.nDefaultConsensusBlockSize = DEFAULT_CONSENSUS_BLOCK_SIZE;
 
         // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
-        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
+        consensus.nDefaultGeneratedBlockSizePercent = 50.0; // 50% of 32MB = 16MB
 
         assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
                && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
@@ -394,7 +394,7 @@ public:
         consensus.nDefaultConsensusBlockSize = DEFAULT_CONSENSUS_BLOCK_SIZE;
 
         // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
-        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
+        consensus.nDefaultGeneratedBlockSizePercent = 50.0; // 50% of 32MB = 16MB
 
         assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
                && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
@@ -771,7 +771,7 @@ public:
         consensus.nDefaultConsensusBlockSize = 256 * ONE_MEGABYTE;
 
         // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
-        consensus.nDefaultGeneratedBlockSizePercent = 3.1250; // 3.125% of 256MB = 8MB
+        consensus.nDefaultGeneratedBlockSizePercent = 6.25; // 6.25% of 256MB = 16MB
 
         assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
                && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
@@ -1090,7 +1090,7 @@ public:
         consensus.nDefaultConsensusBlockSize = DEFAULT_CONSENSUS_BLOCK_SIZE;
 
         // Chain-specific default for mining block size, in percent of excessive block size (conf: -percentblockmaxsize)
-        consensus.nDefaultGeneratedBlockSizePercent = 25.0; // 25% of 32MB = 8MB
+        consensus.nDefaultGeneratedBlockSizePercent = 50.0; // 50% of 32MB = 16MB
 
         assert(consensus.nDefaultGeneratedBlockSizePercent >= 0.0
                && consensus.nDefaultGeneratedBlockSizePercent <= 100.0);
