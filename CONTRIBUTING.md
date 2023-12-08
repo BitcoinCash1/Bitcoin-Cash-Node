@@ -115,7 +115,7 @@ Project maintainers aim for a quick turnaround on refactoring merge requests, so
 where possible keep them short, uncomplex and easy to verify.
 
 Merge requests that refactor the code should not be made by new contributors. It
-requires a certain level of experience to know where the code belongs to and to
+requires a certain level of experience to know where the code belongs and to
 understand the full ramification (including rebase effort of other open MRs).
 
 Trivial merge requests or merge requests that refactor the code with no clear
@@ -248,34 +248,34 @@ Here are some handy links for development practices aligned with Bitcoin Cash No
 
 9. Code formatting tools
 
-    During submission of patches, our GitLab process may refused code that
+    During submission of patches, our GitLab CI process may refuse code that
     is not styled according to our coding guidelines.
 
     To enforce Bitcoin Cash Node codeformatting standards, you may need to
-    install `clang-format-8`, `clang-tidy` (version >=8), `autopep8`, `flake8`,
+    install `clang-format-11`, `clang-tidy` (version >=11), `autopep8`, `flake8`,
     `phpcs` and `shellcheck` on your system to format your code before submission
     as a Merge Request.
 
-    To install `clang-format-8` and `clang-tidy` on Ubuntu (>= 18.04+updates)
+    To install `clang-format-11` and `clang-tidy` on Ubuntu (>= 18.04+updates)
     or Debian (>= 10):
 
     ```
-    sudo apt-get install clang-format-8 clang-tidy-8 clang-tools-8
+    sudo apt-get install clang-format-11 clang-tidy-11 clang-tools-11
     ```
 
-    If not available in the distribution, `clang-format-8` and `clang-tidy` can be
+    If not available in the distribution, `clang-format-11` and `clang-tidy` can be
     installed from [https://releases.llvm.org/download.html](https://releases.llvm.org/download.html)
     or [https://apt.llvm.org](https://apt.llvm.org).
 
     For example, for macOS:
 
     ```
-    curl http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz | tar -xJv
-    ln -s $PWD/clang+llvm-8.0.0-x86_64-apple-darwin/bin/clang-format /usr/local/bin/clang-format
-    ln -s $PWD/clang+llvm-8.0.0-x86_64-apple-darwin/bin/clang-tidy /usr/local/bin/clang-tidy
+    curl -L https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/clang+llvm-11.0.0-x86_64-apple-darwin.tar.xz | tar -xJv
+    ln -s $PWD/clang+llvm-11.0.0-x86_64-apple-darwin/bin/clang-format /usr/local/bin/clang-format
+    ln -s $PWD/clang+llvm-11.0.0-x86_64-apple-darwin/bin/clang-tidy /usr/local/bin/clang-tidy
     ```
 
-    To install `autopep8`, `flake8` and `phpcs` on Ubuntu:
+    To install `autopep8`, `flake8`, `phpcs` and `shellcheck` on Ubuntu:
 
     ```
     sudo apt-get install python-autopep8 flake8 php-codesniffer shellcheck
