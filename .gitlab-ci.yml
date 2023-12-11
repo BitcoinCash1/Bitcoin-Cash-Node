@@ -803,7 +803,7 @@ pages:
             - .cache/pip
     before_script:
         - pip3 install wheel
-        - pip3 install jinja2==3.0.0 mkdocs mkdocs-material
+        - pip3 install jinja2==3.0.0 mkdocs pymdown-extensions==10.2.1 mkdocs-material
     script:
         - (cd build; ninja -t restat)
         - (cd build; ninja doc-html)
