@@ -302,6 +302,9 @@ public:
 
                 // Upgrade 9; May 15, 2023 (MTP time >= 1684152000), first upgrade block: 792773
                 {792773, BlockHash::fromHex("000000000000000002fc0cdadaef1857bbd2936d37ea94f80ba3db4a5e8353e8")},
+
+                // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
+                {823112, BlockHash::fromHex("0000000000000000014e75464739e2b6f12a756f0d749cc15c243adb73ffbd5b")},
             }};
 
         // Data as of block
@@ -502,6 +505,9 @@ public:
 
                 // Upgrade 9; May 15, 2023 (MTP time >= 1684152000), first upgrade block: 1552788
                 {1552788, BlockHash::fromHex("000000007bc92323648b95ea8401a2247e977b653b13adb9e40748ce06b30a5e")},
+
+                // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
+                {1582896, BlockHash::fromHex("000000000000088ef4d908ed35dc511b97fe4df78d5e37ab1e1aea4084d19506")},
             }};
 
         // Data as of block
@@ -677,6 +683,9 @@ public:
 
                 // Upgrade 9; May 15, 2023 (MTP time >= 1684152000), first upgrade block: 148044
                 {148044, BlockHash::fromHex("0000000008d96c4423ac92aa200af82819339435251736b08babde1ecaf8a5b6")},
+
+                // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
+                {178150, BlockHash::fromHex("00000000bd585ef9f37712bca4539acd8ec7c3b02620186dda1ee880bc07ba71")},
             }};
 
         // Data as of block
@@ -1007,6 +1016,9 @@ public:
                 {122396, BlockHash::fromHex("000000000363cd56e49a46684cec1d99854c4aae662a6faee0df4c9a49dc8a33")},
                 {128042, BlockHash::fromHex("0000000010e506eeb528dd8238947c6fcdf8d752ece66517eea778650600edae")},
                 {148000, BlockHash::fromHex("000000009788ecce39b046caab3cf0f72e8c5409df23454679dbdcae2bd4dded")},
+
+                // A block significantly after Upgrade 10 activated (which activated on Nov. 15, 2023)
+                {178140, BlockHash::fromHex("000000003c37cc0372a5b9ccacca921786bbfc699722fc41e9fdbb1de4146ef1")},
             }};
 
         // Data as of block
