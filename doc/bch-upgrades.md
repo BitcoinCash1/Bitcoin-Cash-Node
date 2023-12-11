@@ -69,6 +69,7 @@ Network upgrades
     * [CHIP-2021-01 Minimum Transaction Size](https://gitlab.com/bitcoin.cash/chips/-/blob/00e55fbfdaacf1436e455289086d9b4c6b3e7306/CHIP-2021-01-Allow%20Smaller%20Transactions.md) v0.4 is implemented in v25.0.0 ([MR!1598](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1598)) bundled into ([MR!1600](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1600))
     * [CHIP-2022-02 CashTokens](https://github.com/bitjson/cashtokens) v2.2.1 is implemented in v25.0.0 ([MR!1580](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1580)) bundled into ([MR!1600](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1600))
     * [CHIP-2022-05 P2SH32](https://gitlab.com/0353F40E/p2sh32/-/blob/f58ecf835f58555c9087c53af25da92a0e74534c/CHIP-2022-05_Pay-to-Script-Hash-32_%28P2SH32%29_for_Bitcoin_Cash.md) v1.5.1 is implemented in v25.0.0 ([MR!1556](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1556)) bundled into ([MR!1600](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1600))
+    * [CHIP-2023-04 Adaptive Blocksize Limit Algorithm for Bitcoin Cash](https://gitlab.com/0353F40E/ebaa) commit `ba9ed768` (19 Nov 2023) is implemented in v27.0.0 ([MR!1782](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/merge_requests/1782) and its dependency MRs)
 
 Other
 -----
