@@ -28,13 +28,17 @@ Testnet3
 
 This is the historical testnet in Bitcoin Cash, maintained as a fork from
 BTC's testnet3 since 2017. It has grown substantially in size
-(2020/Oct/15: 44GB), in part due to scaling tests that deposited a number
+(2023/Dec/11: 45GB), in part due to scaling tests that deposited a number
 of 32MB blocks, and due to the resulting time to sync a test node from
 scratch, has become inconvenient for quick tests.
 
 The historical role is as a test network where application builders can
 test their apps against the currently deployed consensus rules (as much
 as possible) and at minimal expense without disrupting the main network.
+
+After the upgrade to Adaptive Blocksize Limit Algorithm for Bitcoin Cash
+in May 2024, the maximum blocksize of this network will remain capped to
+32MB.
 
 Testnet4
 --------
@@ -52,6 +56,10 @@ difficulty algorithm settings adjusted to make sure it recovers to be
 CPU-mineable quickly after someone has used an ASIC on it.
 
 Scaling tests should use 'scalenet' instead (see next section).
+
+After the upgrade to Adaptive Blocksize Limit Algorithm for Bitcoin Cash
+in May 2024, the maximum blocksize of this network will remain capped to
+2MB.
 
 Scalenet
 --------
@@ -84,6 +92,10 @@ consensus upgrade.
 It therefore deploys these CHIPs (and updates to them) as much in advance as
 possible (optimally 6 months ahead of the main network upgrades).
 
+After the upgrade to Adaptive Blocksize Limit Algorithm for Bitcoin Cash
+on this network in November 2023, the maximum blocksize of this network will
+vary dynamically with a floor capacity of 2MB.
+
 Overview Table for BCHN-supported Test Networks
 -----------------------------------------------
 
@@ -93,6 +105,7 @@ Overview Table for BCHN-supported Test Networks
 | Network magic bytes          |  0xf4e5f3f4 |  0xe2b7daaf  |  0xc3afe1a2 |  0xe2b7daaf |
 | CashAddr prefix              |  bchtest    |  bchtest     |  bchtest    |  bchtest    |
 | Default excessive block size |  32MB       |  2MB         |  256MB      |  2MB        |
+| Block cap after ABLA activ.  |  fixed      |  fixed       |  dynamic    |  dynamic    |
 | Block Target spacing         |  10 min     |  10 min      |  10 min     |  10 min     |
 | POW limit                    |  2^224      |  2^224       |  2^224      |  2^224      |
 | ASERT half-life              |  1 hour     |  1 hour      |  2 days     |  1 hour     |
@@ -129,7 +142,7 @@ Note 2: scalenet is intended to be periodically reorganized down to a
         variable (it is block 16869 now, but may be different once the
         network is reset).
 
-Note 3: Chipnet upgrade 9 forked 6-months ahead of others, on Nov 15, 2023
+Note 3: Chipnet upgrades forked 6-months ahead of other networks, i.e. previous November
 
 Further references
 ------------------
