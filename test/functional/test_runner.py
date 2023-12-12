@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2014-2019 The Bitcoin Core developers
-# Copyright (c) 2017-2020 The Bitcoin developers
-# Copyright (c) 2022 The Bitcoin Cash Node developers
+# Copyright (c) 2017-2022 The Bitcoin developers
+# Copyright (c) 2023 The Bitcoin Cash Node developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Run regression test suite.

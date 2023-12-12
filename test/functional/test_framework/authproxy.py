@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2011 Jeff Garzik
-# Copyright (c) 2020 The Bitcoin developers
+# Copyright (c) 2020-2022 The Bitcoin developers
 #
 # Previous copyright, from python-jsonrpc/jsonrpc/proxy.py:
 #
