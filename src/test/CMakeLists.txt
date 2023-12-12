@@ -1,4 +1,4 @@
-# Copyright (c) 2018 The Bitcoin developers
+# Copyright (c) 2018-2023 The Bitcoin developers
 
 project(bitcoin-test)
 

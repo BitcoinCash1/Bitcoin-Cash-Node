@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2022 The Bitcoin developers
+# Copyright (c) 2022-2023 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test that ensures coinbase txns may create "fake" token data outputs pre-activation, as well as outputs that send to

@@ -1,3 +1,7 @@
+# Copyright (c) 2022 The Bitcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QTextEdit, QGridLayout, QWidget, QHBoxLayout
 from PyQt5.QtWidgets import QPushButton
