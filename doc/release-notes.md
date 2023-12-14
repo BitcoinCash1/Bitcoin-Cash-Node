@@ -1,83 +1,55 @@
-# Release Notes for Bitcoin Cash Node version 27.0.0
+# Release Notes for Bitcoin Cash Node version 27.0.1
 
-Bitcoin Cash Node version 27.0.0 is now available from:
+Bitcoin Cash Node version 27.0.1 is now available from:
 
   <https://bitcoincashnode.org>
 
 ## Overview
 
-This is a major release of Bitcoin Cash Node (BCHN) that implements the
-[May 15, 2024 Network Upgrade](https://upgradespecs.bitcoincashnode.org/2024-05-15-upgrade/).
+This is a minor release of Bitcoin Cash Node (BCHN) that implements
 
-This release implements the following consensus CHIPs:
-
-- [CHIP-2023-04 Adaptive Blocksize Limit Algorithm for Bitcoin Cash](https://gitlab.com/0353F40E/ebaa) commit `ba9ed768` (19 Nov 2023)
-
-This version contains various additional minor corrections and improvements.
-
-Users who are running any of our previous releases (25.0.0 or v26.x.0)
-are urged to upgrade to v27.0.0 ahead of 15 May 2024.
+TODO
 
 ## Usage recommendations
 
-The update to Bitcoin Cash Node 27.0.0 is required for the May 15, 2024
-Bitcoin Cash network upgrade.
+TODO
 
 ## Network changes
 
-This major release implements the Adaptive Blocksize Limit Algorithm for
-Bitcoin Cash, which is a change to consensus rules that allows the maximum
-block size to gradually increase and decrease based on how full blocks are.
+TODO
 
 ## Added functionality
 
-- Added configuration option `-percentblockmaxsize` which is an alternative to
-  `-blockmaxsize`. `-percentmaxblocksize` can be used to configure the node's
-  maximum mined block size as a percentage of the maximum block size for the
-  network. So for instance the default on mainnet is `-percentblockmaxsize=50.0`
-  (16 MB). Can be any value from 0.0 to 100.0.
+TODO
 
 ## Deprecated functionality
 
-- While 32-bit builds are still supported in this release, they are deprecated
-  and planned to be removed from BCHN after the May 2024 upgrade.
+TODO
 
 ## Modified functionality
 
-- The -excessiveblocksize configuration value has modified semantics pre-upgrade
-  vs post-upgrade. After ABLA activates, it acts as a floor value as the base
-  "minimum" max block size.
-- Added an additional returned data item to the `getmininginfo` RPC:
-  "miningblocksizelimit", which is the block size limit used for mining as
-  configured for the node by e.g.: `-blockmaxsize`.
-- The Qt GUI RPC console now is fixed to match the HTTP RPC with respect
-  to stateful "config related" commands. Commands such as `getmininginfo`
-  and `getexcessiveblock` now match the actual node config (and the HTTP RPC).
-- The default size cap for mining blocks has been set to 50% of the capacity
-  on networks where it has previously been set to 25%. This effectively
-  increases the soft (mining) blocksize default from 8MB to 16MB.
-  Mining pools that wish to generate bigger or smaller blocks can still
-  adjust the configuration option as usual.
+TODO
 
 ## Removed functionality
 
-None.
+TODO
 
 ## New RPC methods
 
-A 'fillmempool' RPC method has been added for regtest.
+TODO
 
 ## User interface changes
 
-- The new configuration option `-percentblockmaxsize` has been added. It is
-  described in more detail in the "Added functionality" section above.
+TODO
 
 ## Regressions
 
-Bitcoin Cash Node 27.0.0 does not introduce any known regressions as compared
-to 26.1.0.
+(TODO) Bitcoin Cash Node 27.0.1 does not introduce any known regressions as compared
+to 27.0.0.
 
 ## Limitations
+
+(TODO - update as needed)
 
 The following are limitations in this release of which users should be aware:
 
@@ -112,6 +84,8 @@ The following are limitations in this release of which users should be aware:
 
 
 ## Known Issues
+
+(TODO - update as needed)
 
 Some issues could not be closed in time for release, but we are tracking all
 of them on our GitLab repository.
@@ -204,125 +178,91 @@ of them on our GitLab repository.
 
 ### New documents
 
-None
+TODO
 
 ### Removed documents
 
-None
+TODO
 
 ### Notable commits grouped by functionality
 
 #### Security or consensus relevant fixes
 
-- 286ca4e9ce4a3a127b89f0711b6b8bc0f3819762 Implement CHIP-2023-04 Adaptive Blocksize Limit Algorithm
+TODO
 
 #### Interfaces / RPC
 
-- 37f9f474c5a1f396bc4fed20e5fb3d3fc8e94513 Bump node expiry to May 15, 2025, introduce tentative "upgrade11"
-- a7b52f819182b4693c21bc520b17405f3252df14 Add the RPC `fillmempool` (regtest only)
-- b110d07a901543f522c3797dd421a023c18a6e5b Added new CLI arg `-percentblockmaxsize` as an alternative to `-blockmaxsize`
-- e4bc71dfb9caaf1c5dc917309db7c228e1488634 Add the ability to see the configured `-blockmaxsize` from the RPC
+TODO
 
 #### Features in internal development: support for UTXO commitments
 
-None
+TODO
 
 ### Data directory changes
 
-None
+TODO
 
 #### Performance optimizations
 
-- 40e3d6ce6c2880a8af982b2b13970ad706370af7 Update the codebase to do a height-based check for upgrade 9
-- 6877945346bc2a7ce6b2be1033d7b7e4b9a91843 Increase the default mining block sizes
-- a130eb09b48d39a5794f8af7a0e68545a7bebec7 Add ReadBlockSizeFromDisk() function to blockstorage.cpp
-- bedee413c700b2ca2cd7599e28e9ccf325712f06 [qa] Update chainparams assumevalid and minimumchainwork for 27.0.0
-- e635da2b4f91319ffc1d648d7385324ff2c4bb40 [qa] Update network checkpoints
+TODO
 
 #### GUI
 
-- 24bd12154e6bb527ce69510a75cbbf45b5984839 Alternative fix for Qt GUI RPC Console using an "ephemeral" config object
+TODO
 
 #### Code quality
 
-- 0eaa947c39b874944ce8b208f667f83694a666a0 Code quality nit: Fix a G++ 12 warning in blockstorage.cpp
-- 45ad5a4a2cb34cc05b0830037942727c5a2a1efc Make class CAutoFile move-assignable and move-constructible
-- 4624f046484200b1b8c118b135894d3122c9f6b9 Compiler warning fix: Remove unused variable in policy.cpp
-- 7b781217f8722436d6ed437502d4d889fbb1904a Trivial: Fix two typos in comments in miner_tests.cpp
-- 7f2b83aca1d0819da2d3539616246571e997b9a6 [qa] Bump version to 27.0.0, rotate release notes
-- 94433b8e3972f39418f12566f7fd0323c2f4b164 Add support for generic serialization of std::optional<T>
-- 959d6ed06f4a43f3742214bd375eb3c2dcdaaf22 Add `GetNextBlockSizeLimit()`, refactor `BlockAssembler` to use it
-- a395e319eea1cf52a6ed4a07bacd91df9c9a5c79 Fix comparing wrong blocksize parameter variable
-- b7110f8aca0e320f8c716ffaa6c57340eeee6176 [qa] Update blockchain data sizes for mainnet for v27.0.0
-- bf9c3c754c69daa5ee80c3587932defd9b734335 Rename the "excessive block size" concept in the C++ codebase
-- c8bcd188937c9ca6fbb5c7c499a87e4d190056d3 Compiler warning fix: Remove unused variable in txmempool.cpp
-- ca48aa4c644282935c1ff868e24f03aab8ea828a [qa] Update copyrights across the codebase
-- d0f989cb9954d9743430b49215042f18df7695a2 Add Upgrade 10 "Activation" API and unit test
-- fa886d49c7177a4ac5d2e9facc6d99bd9f0da315 Remove `const_cast<Config &>` from various places in code.
+TODO
 
 #### Documentation updates
 
-- 73e413cdf4a60d389e933a3d140713e5692f8ac9 [doc] Update Clang formatting tools documentation
-- 79c8650d229d191cae2aeb59b4cccefe05589534 [qa] Update test network document to reflect testnet3/4 remain fixed
-- b46cec23212b10682928a20d657eb1025a43d28f [doc] Update header include guard documentation
-- e3181397524c4fabcbafee026dd6fe81621f63cb [doc] Add ABLA CHIP to BCHN's BCH upgrades document
+TODO
 
 #### Build / general
 
-- ebed3da1dc7f60abd5f0e1ca6278b79ad6132b66 Added HAVE_INT128 test and variable to bitcoin-config.h
+TODO
 
 #### Build / Linux
 
-- 2adefbfc7f6a0225f32fb7f8823d257c4a8a51c4 build: Support building inside of a git worktree
+TODO
 
 #### Build / Windows
 
-- 9a767b3c9db219c772d53292a65e2cd8f2d52211 [build] Remove unnecessary _Event_WINDOWS_LIBRARIES
+TODO
 
 #### Build / MacOSX
 
-None
+TODO
 
 #### Tests / test framework
 
-- 67ca3f406f42d155adacaa5d247456ef79649542 [tests] fix PEP 484 implicit optional error
-- 88300e6d2d34e1e820ad15fff36f644eb5f9e62a Add a unit test for the Config class's "percent max blocksize" setter/getter
-- f4a906bd05da68aac0a99b622764dd8354c277d8 test framework: Pass down the rpc_timeout to wait_until on node restart
+TODO
 
 #### Benchmarks
 
-None
+TODO
 
 #### Seeds / seeder software
 
-- 0521923f432cf4abc978510785e94e775ea1c1f8 Update regex'es in makeseeds.py ahead of May 2024 upgrade
-- 2c08e4c74f10a10f873feaa2ca44e46936655f78 [qa] Update static seeds for some test networks
-- 43a1620e306d0567b6b937ac05e58ac1941234ed [qa] Update mainnet static seeds for v27.0.0 release
-- 55f5916401fb474c44d15b2d962928bd34856b88 [qa] Update static seeds for chipnet test network
+TODO
 
 #### Maintainer tools
 
-None
+TODO
 
 #### Infrastructure
 
-None
+TODO
 
 #### Cleanup
 
-- 66442fd03829c0ce9667533b03546134095324b9 [qa] Update freetrader public key (expiry extension to 2025-06-07)
+TODO
 
 #### Continuous Integration (GitLab CI)
 
-- 64fd5f891fe1a02875b0e16f088862b6312423a9 [ci] Pin the pymdown-extensions dependency to v10.2.1
-- 9300b882e022085272e3090bb0349110fdbbe8e7 CI: Save more sanitizer-undefined artifacts on failure
+TODO
 
 #### Backports
 
-- 1ae5ca204e1104a0f2f6b46ae93eedb307196379 [backport] refactor: Drop `owns_lock()` call
-- 34301c7128f505fef08712527e3ab522a9eeb906 [backport] build: libevent 2.1.12-stable
-- 8e889ee9c9e2830cf77a3d2f59cf652b4e4e9b3b [backport] refactor: Do not discard `try_lock()` return value
-- b9a103d2f0a8b17952e4829af570b29013a91bdc [backport] [cmake] Use the protobuf supplied cmake file instead of the cmake supplied one
-- c97419daeb7907dcad3958a9dcbe0939a10fd587 [backport] build: suppress array-bounds errors in libxkbcommon
-- fc9c13e97036c5a8619cdfa310371cc765684052 [backport] bump libevent to 2.1.11 in depends
+TODO
 
