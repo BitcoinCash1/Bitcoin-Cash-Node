@@ -837,13 +837,13 @@ const fs::path &GetBlocksDir() {
             path = "";
             return path;
         }
+        path /= BaseParams().DataDir();
     } else {
-        path = GetDataDir(false);
+        path = GetDataDir();
     }
-
-    path /= BaseParams().DataDir();
     path /= "blocks";
     fs::create_directories(path);
+
     return path;
 }
 
