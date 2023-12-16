@@ -7,6 +7,7 @@
 #include <chainparams.h>
 #include <consensus/consensus.h> // DEFAULT_CONSENSUS_BLOCK_SIZE, MAX_CONSENSUS_BLOCK_SIZE
 #include <policy/policy.h> // MAX_INV_BROADCAST_*
+#include <util/overloaded.h>
 
 #include <algorithm>
 
@@ -83,17 +84,13 @@ uint64_t GlobalConfig::GetGeneratedBlockSize(std::optional<uint64_t> currentMaxB
     uint64_t blockSize;
     const uint64_t maxBlockSize = currentMaxBlockSize.value_or(nConfMaxBlockSize);
 
-    struct Visitor {
-        uint64_t &blockSize;
-        const uint64_t maxBlockSize;
-
-        void operator()(uint64_t val) { blockSize = val; }
-        void operator()(double percent) {
-            blockSize = static_cast<uint64_t>(maxBlockSize * (percent / 100.0));
-        }
-    };
-
-    std::visit(Visitor{blockSize, maxBlockSize}, varGeneratedBlockSizeParam);
+    std::visit(
+        util::Overloaded{
+            [&blockSize](uint64_t val) { blockSize = val; },
+            [&blockSize, maxBlockSize](double percent) {
+                blockSize = static_cast<uint64_t>(maxBlockSize * (percent / 100.0));
+            }
+        }, varGeneratedBlockSizeParam);
 
     // Maintain invariant: ensure that blockSize <= maxBlockSize
     blockSize = std::min(maxBlockSize, blockSize);
