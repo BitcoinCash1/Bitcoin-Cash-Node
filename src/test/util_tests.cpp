@@ -12,6 +12,7 @@
 #include <util/bit_cast.h>
 #include <util/defer.h>
 #include <util/moneystr.h>
+#include <util/overloaded.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/vector.h>
@@ -30,6 +31,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #ifndef WIN32
@@ -2318,6 +2320,41 @@ BOOST_AUTO_TEST_CASE(test_tracked_vector) {
     BOOST_CHECK_EQUAL(v8[0].copies, 0);
     BOOST_CHECK_EQUAL(v8[1].copies, 1);
     BOOST_CHECK_EQUAL(v8[2].copies, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_overloaded_visitor) {
+    std::variant<std::monostate, bool, std::string, double, int64_t> var;
+    std::string which = "";
+
+    auto visitor = util::Overloaded{
+        [&which](std::monostate) { which = "monostate"; },
+        [&which](bool b) { which = strprintf("bool: %d", b); },
+        [&which](const std::string &s) { which = strprintf("string: %s", s); },
+        [&which](double d) { which = strprintf("double: %g", d); },
+        [&which](int64_t i) { which = strprintf("int64_t: %i", i); },
+    };
+
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "monostate");
+
+    var = false;
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "bool: 0");
+    var = true;
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "bool: 1");
+
+    var = std::string{"foo"};
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "string: foo");
+
+    var = 3.14;
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "double: 3.14");
+
+    var = int64_t(42);
+    std::visit(visitor, var);
+    BOOST_CHECK_EQUAL(which, "int64_t: 42");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
