@@ -231,7 +231,7 @@ void ChipTestingSetup::LoadChipsVectors() {
                     if (!found) {
                         orphans.insert(ident);
                         BOOST_CHECK_MESSAGE(false, strprintf("Found expected test failure reasons for a nonexistent "
-                                                             "test \"%\".", ident));
+                                                             "test \"%s\".", ident));
                     }
                 }
             }
