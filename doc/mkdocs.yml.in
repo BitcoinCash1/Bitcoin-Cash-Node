@@ -215,6 +215,7 @@ nav:
           - doc/fuzzing.md
           - doc/benchmarking.md
           - doc/test-networks.md
+          - doc/libauth-test-reasons.md
       - Translation: doc/translation_process.md
       - doc/release-process.md
       - Responsible disclosure: DISCLOSURE_POLICY.md
