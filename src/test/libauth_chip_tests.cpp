@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2023 The Bitcoin developers
+// Copyright (c) 2022-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -54,10 +54,18 @@ protected:
 } // namespace
 
 
-BOOST_AUTO_TEST_SUITE(token_transaction_tests)
+BOOST_AUTO_TEST_SUITE(libauth_chip_tests)
 
-BOOST_FIXTURE_TEST_CASE(test_chips, TokenTransactionTestingSetup) {
+BOOST_FIXTURE_TEST_CASE(cashtokens, TokenTransactionTestingSetup) {
     RunTestsForChip("cashtokens");
+}
+
+// This test relies on all Libauth's CHIP tests having previously completed as part of this run
+BOOST_FIXTURE_TEST_CASE(test_lookup_table, TestingSetup) {
+    bool match = ChipTestingSetup::ProcessReasonsLookupTable();
+    BOOST_CHECK_MESSAGE(match, (match ? "The error messages resulting from the Libauth CHIP tests are as expected"
+                               : "Some of the error messages resulting from the Libauth CHIP tests are unexpected. See: "
+                                 "doc/libauth-test-reasons.html"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
