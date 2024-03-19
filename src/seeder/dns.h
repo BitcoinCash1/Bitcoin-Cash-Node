@@ -1,9 +1,10 @@
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -21,17 +22,28 @@ struct AddrGeneric {
     } data;
 };
 
-struct dns_opt_t {
-    int port;
-    int datattl;
-    int nsttl;
-    const char *host;
-    const char *ns;
-    const char *mbox;
-    uint32_t (*cb)(void *opt, const char *requested_hostname, AddrGeneric *addr,
-                   uint32_t max, uint32_t ipv4, uint32_t ipv6);
+struct DnsServer {
+    const int port;
+    const int datattl;
+    const int nsttl;
+    const char * const host;
+    const char * const ns;
+    const char * const mbox;
     // stats
-    uint64_t nRequests;
+    std::atomic_uint64_t nRequests = 0;
+
+    virtual ~DnsServer();
+
+    // Runs the dns server. Doesn't return until it exits (usually at app exit).
+    int run();
+
+    virtual uint32_t GetIPList(const char *requestedHostname, AddrGeneric *addr, uint32_t max, bool ipv4, bool ipv6) = 0;
+
+protected:
+    DnsServer(int port, const char *host, const char *ns, const char *mbox = nullptr, int datattl = 3600, int nsttl = 40000);
+
+private:
+    ssize_t handle(const uint8_t *inbuf, size_t insize, uint8_t *outbuf);
 };
 
 enum class ParseNameStatus {
@@ -52,5 +64,3 @@ ParseNameStatus parse_name(const uint8_t **inpos, const uint8_t *inend,
 // -3: two subsequent dots
 int write_name(uint8_t **outpos, const uint8_t *outend, const char *name,
                int offset);
-
-int dnsserver(dns_opt_t *opt);

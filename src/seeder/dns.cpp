@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cctype>
 #include <cstdbool>
 #include <cstdio>
 #include <cstdlib>
@@ -362,8 +361,7 @@ error:
     return error;
 }
 
-static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
-                         uint8_t *outbuf) {
+ssize_t DnsServer::handle(const uint8_t *inbuf, size_t insize, uint8_t *outbuf) {
     DNSResponseCode responseCode = DNSResponseCode::OK;
     if (insize < 12) {
         // DNS header
@@ -432,10 +430,10 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
             goto error;
         }
 
-        int namel = std::strlen(name), hostl = std::strlen(opt->host);
-        if (strcasecmp(name, opt->host) &&
+        int namel = std::strlen(name), hostl = std::strlen(this->host);
+        if (strcasecmp(name, this->host) &&
             (namel < hostl + 2 || name[namel - hostl - 1] != '.' ||
-             strcasecmp(name + namel - hostl, opt->host))) {
+             strcasecmp(name + namel - hostl, this->host))) {
             responseCode = DNSResponseCode::REFUSED;
             goto error;
         }
@@ -475,12 +473,12 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
               (cls == CLASS_IN || cls == QCLASS_ANY))) {
             // authority section will be necessary, either NS or SOA
             uint8_t *newpos = outpos;
-            write_record_ns(&newpos, outend, "", offset, CLASS_IN, 0, opt->ns);
+            write_record_ns(&newpos, outend, "", offset, CLASS_IN, 0, this->ns);
             max_auth_size = newpos - outpos;
 
             newpos = outpos;
-            write_record_soa(&newpos, outend, "", offset, CLASS_IN, opt->nsttl,
-                             opt->ns, opt->mbox, std::time(nullptr), 604800, 86400,
+            write_record_soa(&newpos, outend, "", offset, CLASS_IN, this->nsttl,
+                             this->ns, this->mbox, std::time(nullptr), 604800, 86400,
                              2592000, 604800);
             if (max_auth_size < newpos - outpos) {
                 max_auth_size = newpos - outpos;
@@ -495,7 +493,7 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         if ((typ == TYPE_NS || typ == QTYPE_ANY) &&
             (cls == CLASS_IN || cls == QCLASS_ANY)) {
             int ret2 = write_record_ns(&outpos, outend - max_auth_size, "",
-                                       offset, CLASS_IN, opt->nsttl, opt->ns);
+                                       offset, CLASS_IN, this->nsttl, this->ns);
             //    std::fprintf(stdout, "wrote NS record: %i\n", ret2);
             if (!ret2) {
                 outbuf[7]++;
@@ -505,10 +503,10 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
 
         // SOA records
         if ((typ == TYPE_SOA || typ == QTYPE_ANY) &&
-            (cls == CLASS_IN || cls == QCLASS_ANY) && opt->mbox) {
+            (cls == CLASS_IN || cls == QCLASS_ANY) && this->mbox) {
             int ret2 =
                 write_record_soa(&outpos, outend - max_auth_size, "", offset,
-                                 CLASS_IN, opt->nsttl, opt->ns, opt->mbox,
+                                 CLASS_IN, this->nsttl, this->ns, this->mbox,
                                  std::time(nullptr), 604800, 86400, 2592000, 604800);
             //    std::fprintf(stdout, "wrote SOA record: %i\n", ret2);
             if (!ret2) {
@@ -520,20 +518,18 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         if ((typ == TYPE_A || typ == TYPE_AAAA || typ == QTYPE_ANY) &&
             (cls == CLASS_IN || cls == QCLASS_ANY)) {
             AddrGeneric addr[32];
-            int naddr = opt->cb((void *)opt, name, addr, 32,
-                                typ == TYPE_A || typ == QTYPE_ANY,
-                                typ == TYPE_AAAA || typ == QTYPE_ANY);
+            int naddr = GetIPList(name, addr, 32, typ == TYPE_A || typ == QTYPE_ANY, typ == TYPE_AAAA || typ == QTYPE_ANY);
             int n = 0;
             while (n < naddr) {
                 int mustbreak = 1;
                 if (addr[n].v == 4) {
                     mustbreak = write_record_a(&outpos, outend - max_auth_size,
                                                "", offset, CLASS_IN,
-                                               opt->datattl, &addr[n]);
+                                               this->datattl, &addr[n]);
                 } else if (addr[n].v == 6) {
                     mustbreak = write_record_aaaa(
                         &outpos, outend - max_auth_size, "", offset, CLASS_IN,
-                        opt->datattl, &addr[n]);
+                        this->datattl, &addr[n]);
                 }
 
                 //      std::fprintf(stdout, "wrote A record: %i\n", mustbreak);
@@ -549,7 +545,7 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         // Authority section
         if (!have_ns && outbuf[7]) {
             int ret2 = write_record_ns(&outpos, outend, "", offset, CLASS_IN,
-                                       opt->nsttl, opt->ns);
+                                       this->nsttl, this->ns);
             //    std::fprintf(stdout, "wrote NS record: %i\n", ret2);
             if (!ret2) {
                 outbuf[9]++;
@@ -560,8 +556,8 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
             // horizontal referral loop, as the NS response indicates where the
             // resolver should try next.
             int ret2 = write_record_soa(
-                &outpos, outend, "", offset, CLASS_IN, opt->nsttl, opt->ns,
-                opt->mbox, std::time(nullptr), 604800, 86400, 2592000, 604800);
+                &outpos, outend, "", offset, CLASS_IN, this->nsttl, this->ns,
+                this->mbox, std::time(nullptr), 604800, 86400, 2592000, 604800);
             //    std::fprintf(stdout, "wrote SOA record: %i\n", ret2);
             if (!ret2) {
                 outbuf[9]++;
@@ -591,7 +587,12 @@ error:
 
 static int listenSocket = -1;
 
-int dnsserver(dns_opt_t *opt) {
+DnsServer::DnsServer(int port_, const char *host_, const char *ns_, const char *mbox_, int datattl_, int nsttl_)
+    : port(port_), datattl(datattl_), nsttl(nsttl_), host(host_), ns(ns_), mbox(mbox_) {}
+
+DnsServer::~DnsServer() {}
+
+int DnsServer::run() {
     struct sockaddr_in6 si_other;
     int senderSocket = -1;
     senderSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
@@ -615,7 +616,7 @@ int dnsserver(dns_opt_t *opt) {
                    sizeof sockopt);
         std::memset((char *)&si_me, 0, sizeof(si_me));
         si_me.sin6_family = AF_INET6;
-        si_me.sin6_port = htons(opt->port);
+        si_me.sin6_port = htons(this->port);
         si_me.sin6_addr = in6addr_any;
         if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) ==
             -1) {
@@ -641,7 +642,7 @@ int dnsserver(dns_opt_t *opt) {
     msg.msg_control = &cmsg;
     msg.msg_controllen = sizeof(cmsg);
 
-    for (; 1; ++(opt->nRequests)) {
+    for (; 1; ++this->nRequests) {
         ssize_t insize = recvmsg(listenSocket, &msg, 0);
         //    uint8_t *addr = (uint8_t*)&si_other.sin_addr.s_addr;
         //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i
@@ -651,7 +652,7 @@ int dnsserver(dns_opt_t *opt) {
             continue;
         }
 
-        ssize_t ret = dnshandle(opt, inbuf, insize, outbuf);
+        ssize_t ret = handle(inbuf, insize, outbuf);
         if (ret <= 0) {
             continue;
         }

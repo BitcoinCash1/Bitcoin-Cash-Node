@@ -200,11 +200,7 @@ extern "C" void *ThreadCrawler(void *data) {
     return nullptr;
 }
 
-uint32_t GetIPList(void *thread, const char *requestedHostname,
-                   AddrGeneric *addr, uint32_t max, uint32_t ipv4,
-                   uint32_t ipv6);
-
-class CDnsThread {
+class CDnsThread final : public DnsServer {
 public:
     struct FlagSpecificData {
         int nIPv4 = 0, nIPv6 = 0;
@@ -213,7 +209,6 @@ public:
         unsigned int cacheHits = 0;
     };
 
-    dns_opt_t dns_opt; // must be first
     const int id;
     std::map<uint64_t, FlagSpecificData> perflag;
     std::atomic<uint64_t> dbQueries{0};
@@ -264,25 +259,16 @@ public:
         }
     }
 
-    CDnsThread(CDnsSeedOpts *opts, int idIn) : id(idIn) {
-        dns_opt.host = opts->host.c_str();
-        dns_opt.ns = opts->ns.c_str();
-        dns_opt.mbox = opts->mbox.c_str();
-        dns_opt.datattl = 3600;
-        dns_opt.nsttl = 40000;
-        dns_opt.cb = GetIPList;
-        dns_opt.port = opts->nPort;
-        dns_opt.nRequests = 0;
-        filterWhitelist = opts->filter_whitelist;
-    }
+    CDnsThread(CDnsSeedOpts *opts, int idIn)
+        : DnsServer(opts->nPort, opts->host.c_str(), opts->ns.c_str(), opts->mbox.c_str()),
+          id(idIn), filterWhitelist(opts->filter_whitelist) {}
 
-    void run() { dnsserver(&dns_opt); }
+    ~CDnsThread() override = default;
+
+    uint32_t GetIPList(const char *requestedHostname, AddrGeneric *addr, uint32_t max, bool ipv4, bool ipv6) override;
 };
 
-uint32_t GetIPList(void *data, const char *requestedHostname, AddrGeneric *addr,
-                   uint32_t max, uint32_t ipv4, uint32_t ipv6) {
-    CDnsThread *thread = (CDnsThread *)data;
-
+uint32_t CDnsThread::GetIPList(const char *requestedHostname, AddrGeneric *addr, uint32_t max, bool ipv4, bool ipv6) {
     uint64_t requestedFlags = 0;
     int hostlen = std::strlen(requestedHostname);
     if (hostlen > 1 && requestedHostname[0] == 'x' &&
@@ -290,18 +276,18 @@ uint32_t GetIPList(void *data, const char *requestedHostname, AddrGeneric *addr,
         char *pEnd;
         uint64_t flags = uint64_t(std::strtoull(requestedHostname + 1, &pEnd, 16));
         if (*pEnd == '.' && pEnd <= requestedHostname + 17 &&
-            std::find(thread->filterWhitelist.begin(),
-                      thread->filterWhitelist.end(),
-                      flags) != thread->filterWhitelist.end()) {
+            std::find(this->filterWhitelist.begin(),
+                      this->filterWhitelist.end(),
+                      flags) != this->filterWhitelist.end()) {
             requestedFlags = flags;
         } else {
             return 0;
         }
-    } else if (strcasecmp(requestedHostname, thread->dns_opt.host)) {
+    } else if (strcasecmp(requestedHostname, this->host)) {
         return 0;
     }
-    thread->cacheHit(requestedFlags);
-    auto &thisflag = thread->perflag[requestedFlags];
+    this->cacheHit(requestedFlags);
+    auto &thisflag = this->perflag[requestedFlags];
     uint32_t size = thisflag.cache.size();
     uint32_t maxmax = (ipv4 ? thisflag.nIPv4 : 0) + (ipv6 ? thisflag.nIPv6 : 0);
     if (max > size) {
@@ -312,7 +298,7 @@ uint32_t GetIPList(void *data, const char *requestedHostname, AddrGeneric *addr,
     }
     uint32_t i = 0;
     while (i < max) {
-        uint32_t j = i + thread->rng.randrange(size - i);
+        uint32_t j = i + this->rng.randrange(size - i);
         do {
             bool ok = (ipv4 && thisflag.cache[j].v == 4) ||
                       (ipv6 && thisflag.cache[j].v == 6);
@@ -455,7 +441,7 @@ extern "C" void *ThreadStats(void *) {
         for (const auto *dnsThread : dnsThreads) {
             if (!dnsThread)
                 continue;
-            requests += dnsThread->dns_opt.nRequests;
+            requests += dnsThread->nRequests;
             queries += dnsThread->dbQueries;
         }
         // pad the line with spaces to ensure old text from the end is cleared
