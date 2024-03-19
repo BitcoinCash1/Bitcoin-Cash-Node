@@ -342,10 +342,53 @@ bool StatCompare(const CAddrReport &a, const CAddrReport &b) noexcept {
     }
 }
 
+void SaveAllToDisk() {
+    std::vector<CAddrReport> v = db.GetAll();
+    std::sort(v.begin(), v.end(), StatCompare);
+    FILE *f = fsbridge::fopen("dnsseed.dat.new", "w+");
+    if (f) {
+        try {
+            {
+                CAutoFile cf(f, SER_DISK, CLIENT_VERSION);
+                cf << db;
+            }
+            std::rename("dnsseed.dat.new", "dnsseed.dat");
+        } catch (const std::exception &e) {
+            std::fprintf(stderr, "WARNING: Unable to save dnsseed.dat, caught exception (%s): %s\n",
+                         typeid(e).name(), e.what());
+        }
+    }
+    FILE *d = fsbridge::fopen("dnsseed.dump", "w");
+    std::fprintf(d, "# address                                        good  "
+                    "lastSuccess    %%(2h)   %%(8h)   %%(1d)   %%(7d)  "
+                    "%%(30d)  blocks      svcs  version\n");
+    double stat[5] = {0, 0, 0, 0, 0};
+    for (const CAddrReport &rep : v) {
+        std::fprintf(
+            d,
+            "%-47s  %4d  %11" PRId64
+            "  %6.2f%% %6.2f%% %6.2f%% %6.2f%% %6.2f%%  %6i  %08" PRIx64
+            "  %5i \"%s\"\n",
+            rep.ip.ToString().c_str(), rep.reliableness == Reliableness::OK ? 1 : 0, rep.lastSuccess,
+            100.0 * rep.uptime[0], 100.0 * rep.uptime[1],
+            100.0 * rep.uptime[2], 100.0 * rep.uptime[3],
+            100.0 * rep.uptime[4], rep.blocks, rep.services,
+            rep.clientVersion, rep.clientSubVersion.c_str());
+        stat[0] += rep.uptime[0];
+        stat[1] += rep.uptime[1];
+        stat[2] += rep.uptime[2];
+        stat[3] += rep.uptime[3];
+        stat[4] += rep.uptime[4];
+    }
+    std::fclose(d);
+    FILE *ff = fsbridge::fopen("dnsstats.log", "a");
+    std::fprintf(ff, "%llu %g %g %g %g %g\n",
+                 (unsigned long long)(std::time(nullptr)), stat[0], stat[1],
+                 stat[2], stat[3], stat[4]);
+    std::fclose(ff);
+}
+
 extern "C" void *ThreadDumper(void *) {
-    auto PrintCantOpenMsg = [](const char *fname) {
-        std::fprintf(stderr, "WARNING: Unable to open file '%s': %s\n", fname, SysErrorString(errno).c_str());
-    };
     int count = 0;
     do {
         // First 100s, than 200s, 400s, 800s, 1600s, and then 3200s forever
@@ -353,66 +396,7 @@ extern "C" void *ThreadDumper(void *) {
         if (count < 5) {
             count++;
         }
-
-        {
-            std::vector<CAddrReport> v = db.GetAll();
-            std::sort(v.begin(), v.end(), StatCompare);
-            FILE *f = fsbridge::fopen("dnsseed.dat.new", "w+");
-            if (f) {
-                try {
-                    {
-                        CAutoFile cf(f, SER_DISK, CLIENT_VERSION);
-                        cf << db;
-                    }
-                    std::rename("dnsseed.dat.new", "dnsseed.dat");
-                } catch (const std::exception &e) {
-                    std::fprintf(stderr, "WARNING: Unable to save dnsseed.dat, caught exception (%s): %s\n",
-                                 typeid(e).name(), e.what());
-                }
-            } else {
-                // This may happen if we run out of file descriptors
-                PrintCantOpenMsg("dnsseed.dat.new");
-                continue;
-            }
-            FILE *d = fsbridge::fopen("dnsseed.dump", "w");
-            if (!d) {
-                // This may happen if we run out of file descriptors
-                PrintCantOpenMsg("dnsseed.dump");
-                continue;
-            }
-            std::fprintf(d, "# address                                        good  "
-                            "lastSuccess    %%(2h)   %%(8h)   %%(1d)   %%(7d)  "
-                            "%%(30d)  blocks      svcs  version\n");
-            double stat[5] = {0, 0, 0, 0, 0};
-            for (CAddrReport rep : v) {
-                std::fprintf(
-                    d,
-                    "%-47s  %4d  %11" PRId64
-                    "  %6.2f%% %6.2f%% %6.2f%% %6.2f%% %6.2f%%  %6i  %08" PRIx64
-                    "  %5i \"%s\"\n",
-                    rep.ip.ToString().c_str(), rep.reliableness == Reliableness::OK ? 1 : 0, rep.lastSuccess,
-                    100.0 * rep.uptime[0], 100.0 * rep.uptime[1],
-                    100.0 * rep.uptime[2], 100.0 * rep.uptime[3],
-                    100.0 * rep.uptime[4], rep.blocks, rep.services,
-                    rep.clientVersion, rep.clientSubVersion.c_str());
-                stat[0] += rep.uptime[0];
-                stat[1] += rep.uptime[1];
-                stat[2] += rep.uptime[2];
-                stat[3] += rep.uptime[3];
-                stat[4] += rep.uptime[4];
-            }
-            std::fclose(d);
-            FILE *ff = fsbridge::fopen("dnsstats.log", "a");
-            if (!ff) {
-                // This may happen if we run out of file descriptors
-                PrintCantOpenMsg("dnsstats.log");
-                continue;
-            }
-            std::fprintf(ff, "%llu %g %g %g %g %g\n",
-                         (unsigned long long)(std::time(nullptr)), stat[0], stat[1],
-                         stat[2], stat[3], stat[4]);
-            std::fclose(ff);
-        }
+        SaveAllToDisk();
     } while (1);
     return nullptr;
 }
@@ -599,5 +583,6 @@ int main(int argc, char **argv) {
     pthread_create(&threadDump, nullptr, ThreadDumper, nullptr);
     void *res;
     pthread_join(threadDump, &res);
+    SaveAllToDisk(); // Save to disk one last time after all threads are stopped (not currently reached)
     return EXIT_SUCCESS;
 }
