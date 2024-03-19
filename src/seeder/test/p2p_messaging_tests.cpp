@@ -139,6 +139,13 @@ BOOST_AUTO_TEST_CASE(process_verack_msg) {
     BOOST_CHECK(hashStop == uint256());
 }
 
+static CDataStream CreateHeadersMessage(const std::vector<CBlockHeader> &sendHeaders, int clientVersion) {
+    CDataStream payload(SER_NETWORK, 0);
+    payload.SetVersion(clientVersion);
+    payload << sendHeaders;
+    return payload;
+}
+
 BOOST_AUTO_TEST_CASE(process_headers_msg) {
     CService serviceFrom;
     CAddress addrFrom(serviceFrom,
@@ -149,25 +156,20 @@ BOOST_AUTO_TEST_CASE(process_headers_msg) {
     testNode->TestProcessMessage(NetMsgType::VERSION, versionMessage,
                                  PeerMessagingState::AwaitingMessages);
 
+    BOOST_CHECK(!testNode->IsCheckpointVerified());
+
     auto blockOneHeader = ::ChainActive()[1]->GetBlockHeader();
 
-    CDataStream headersMessage(SER_NETWORK, 0);
-    headersMessage.SetVersion(testNode->GetClientVersion());
-    WriteCompactSize(headersMessage, 1);
-    headersMessage << blockOneHeader;
-    WriteCompactSize(headersMessage, 0);
+    CDataStream headersMessage = CreateHeadersMessage({blockOneHeader}, testNode->GetClientVersion());
 
     testNode->TestProcessMessage(NetMsgType::HEADERS, headersMessage,
                                  PeerMessagingState::AwaitingMessages);
     BOOST_CHECK(testNode->GetBan() == 0);
+    BOOST_CHECK(testNode->IsCheckpointVerified());
 
     auto badBlockOneHeader = CBlockHeader();
 
-    CDataStream badHeadersMessage(SER_NETWORK, 0);
-    badHeadersMessage.SetVersion(testNode->GetClientVersion());
-    WriteCompactSize(badHeadersMessage, 1);
-    badHeadersMessage << badBlockOneHeader;
-    WriteCompactSize(badHeadersMessage, 0);
+    CDataStream badHeadersMessage = CreateHeadersMessage({badBlockOneHeader}, testNode->GetClientVersion());
 
     testNode->TestProcessMessage(NetMsgType::HEADERS, badHeadersMessage,
                                  PeerMessagingState::Finished);
@@ -199,6 +201,14 @@ static CDataStream CreateAddrMessage(const std::vector<CAddress> &sendAddrs, boo
 
 // Test that seeder responds to both ADDR and ADDRV2 messages
 BOOST_AUTO_TEST_CASE(process_addr_msg) {
+    // First, must send headers to satisfy the criteria that both ADDR/ADDRV2 *and* HEADERS must arrive before TestNode
+    // can advance to the Finished state
+    auto headersMsg = CreateHeadersMessage({::ChainActive()[1]->GetBlockHeader()}, testNode->GetClientVersion());
+    BOOST_CHECK(!testNode->IsCheckpointVerified()); // sanity check: node is expecting headers
+    testNode->TestProcessMessage(NetMsgType::HEADERS, headersMsg, PeerMessagingState::AwaitingMessages);
+    BOOST_CHECK_EQUAL(testNode->GetBan(), 0);
+    BOOST_CHECK(testNode->IsCheckpointVerified()); // node got the checkpointed header; it can advance to Finished after addr message
+
     for (auto [msg_type, isV2] : {std::pair(NetMsgType::ADDR, false), std::pair(NetMsgType::ADDRV2, true)}) {
         // vAddrs starts with 1 entry.
         std::vector<CAddress> sendAddrs(ADDR_SOFT_CAP - 1, vAddr[0]);
