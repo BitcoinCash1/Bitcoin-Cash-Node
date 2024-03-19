@@ -271,9 +271,10 @@ protected:
     bool Get_(CServiceResult &ip);
     // mark an IP as good (must have been returned by Get_)
     void Good_(const CServiceResult &res);
-    // mark an IP as bad (and optionally ban it) (must have been returned by
-    // Get_)
+    // mark an IP as bad (and optionally ban it) (must have been returned by Get_)
     void Bad_(const CServiceResult &res);
+    // mark an IP as skipped (must have been returned by Get_)
+    void Skipped_(const CServiceResult &res);
     // look up id of an IP
     int Lookup_(const CService &ip) const;
     // get a random set of IPs (shared lock only)
@@ -411,6 +412,13 @@ public:
             } else {
                 Bad_(ips[i]);
             }
+        }
+    }
+
+    void SkippedMany(const std::vector<CServiceResult> &ips) {
+        LOCK(cs);
+        for (const auto &ip : ips) {
+            Skipped_(ip);
         }
     }
 

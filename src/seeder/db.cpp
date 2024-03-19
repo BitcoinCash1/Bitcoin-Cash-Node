@@ -129,6 +129,15 @@ void CAddrDb::Bad_(const CServiceResult &res) {
     }
 }
 
+void CAddrDb::Skipped_(const CServiceResult &ip) {
+    int id = Lookup_(ip.service);
+    if (id == -1) {
+        return;
+    }
+    unkId.erase(id);
+    ourId.push_back(id);
+}
+
 void CAddrDb::Add_(const CAddress &addr, bool force) {
     if (!force && !addr.IsRoutable()) {
         return;
