@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <limits>
 #include <typeinfo>
 
 #include <pthread.h>
@@ -163,15 +164,27 @@ private:
 
 CAddrDb db;
 
+struct CrawlerArg {
+    uint16_t threadNum;
+    uint16_t nThreads;
+};
+
+static_assert(sizeof(void *) >= sizeof(CrawlerArg));
+
 extern "C" void *ThreadCrawler(void *data) {
-    int *nThreads = (int *)data;
+    const CrawlerArg arg = [&]{
+        // unpack arg by copying "pointer" bytes into struct CrawlerArg
+        CrawlerArg ret;
+        std::memcpy(&ret, &data, sizeof(ret));
+        return ret;
+    }();
     FastRandomContext rng;
     do {
         std::vector<CServiceResult> ips;
         db.GetMany(ips, 16);
         int64_t now = std::time(nullptr);
         if (ips.empty()) {
-            Sleep(5000 + rng.randrange(500 * *nThreads));
+            Sleep(5000 + rng.randrange(500 * arg.nThreads));
             continue;
         }
 
@@ -573,9 +586,13 @@ int main(int argc, char **argv) {
     pthread_attr_t attr_crawler;
     pthread_attr_init(&attr_crawler);
     pthread_attr_setstacksize(&attr_crawler, 0x20000);
+    assert(size_t(opts.nThreads) <= std::numeric_limits<uint16_t>::max());
     for (int i = 0; i < opts.nThreads; i++) {
         pthread_t thread;
-        pthread_create(&thread, &attr_crawler, ThreadCrawler, &opts.nThreads);
+        const CrawlerArg crawlerArg = { /*.threadNum = */uint16_t(i), /* .nThreads = */ uint16_t(opts.nThreads) };
+        void *arg{};
+        std::memcpy(&arg, &crawlerArg, sizeof(crawlerArg)); // stuff raw bytes of CrawlerArg into a void * "pointer"
+        pthread_create(&thread, &attr_crawler, ThreadCrawler, arg);
     }
     pthread_attr_destroy(&attr_crawler);
     std::fprintf(stdout, "done\n");
