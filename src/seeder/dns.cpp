@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <seeder/dns.h>
+#include <seeder/util.h>
 #include <sync.h>
 #include <tinyformat.h>
 
@@ -589,6 +590,7 @@ error:
 
 static SharedMutex listenSocketMut;
 static int listenSocket GUARDED_BY(listenSocketMut) = -1;
+static constexpr int polltimeMsec = 500;
 
 static void closeSocket_nolock() EXCLUSIVE_LOCKS_REQUIRED(listenSocketMut) {
     if (listenSocket > -1) {
@@ -601,6 +603,11 @@ DnsServer::DnsServer(int port_, const char *host_, const char *ns_, const char *
     : port(port_), datattl(datattl_), nsttl(nsttl_), host(host_), ns(ns_), mbox(mbox_) {}
 
 DnsServer::~DnsServer() {}
+
+void DnsServer::Shutdown() {
+    LOCK(listenSocketMut);
+    closeSocket_nolock();
+}
 
 std::optional<std::string> DnsServer::run() {
     struct sockaddr_in6 si_other;
@@ -626,6 +633,15 @@ std::optional<std::string> DnsServer::run() {
             }
             const int sockopt = 1;
             setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt, sizeof sockopt);
+            struct timeval recvtimeout;
+            recvtimeout.tv_sec = polltimeMsec / 1000;
+            recvtimeout.tv_usec = (polltimeMsec % 1000) * 1000;
+            // Use a receive timeout for listenSocket (so we can periodically check if shutdown is requested)
+            if (0 != setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, &recvtimeout, sizeof recvtimeout)) {
+                auto ret = strprintf("setsockopt (SO_RCVTIMEO): %s", strerror(errno));
+                closeSocket_nolock();
+                return ret;
+            }
             std::memset((char *)&si_me, 0, sizeof(si_me));
             si_me.sin6_family = AF_INET6;
             si_me.sin6_port = htons(this->port);
@@ -656,13 +672,21 @@ std::optional<std::string> DnsServer::run() {
     msg.msg_control = &cmsg;
     msg.msg_controllen = sizeof(cmsg);
 
-    for (; 1; ++this->nRequests) {
+    while (!seeder::ShutdownRequested()) {
         LOCK_SHARED(listenSocketMut);
+        if (listenSocket < 0) {
+            break;
+        }
         ssize_t insize = recvmsg(listenSocket, &msg, 0);
-        //    uint8_t *addr = (uint8_t*)&si_other.sin_addr.s_addr;
-        //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i
-        //                 bytes\n", (unsigned long long)(opt->nRequests), addr[0], addr[1],
-        //                 addr[2], addr[3], ntohs(si_other.sin_port), (int)insize);
+        if (insize < 0 && errno == EWOULDBLOCK) {
+            // socket polled, no data available, keep polling until app shutdown
+            continue;
+        }
+        ++this->nRequests;
+        //    uint8_t *addr = (uint8_t*)&si_other.sin6_addr.s6_addr;
+        //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i bytes\n",
+        //                 (unsigned long long)(this->nRequests), addr[0], addr[1], addr[2], addr[3],
+        //                 ntohs(si_other.sin6_port), (int)insize);
         if (insize <= 0) {
             continue;
         }
@@ -673,8 +697,7 @@ std::optional<std::string> DnsServer::run() {
         }
 
         bool handled = false;
-        for (struct cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr;
-             hdr = CMSG_NXTHDR(&msg, hdr)) {
+        for (struct cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr && !seeder::ShutdownRequested(); hdr = CMSG_NXTHDR(&msg, hdr)) {
             if (hdr->cmsg_level == IPPROTO_IP &&
                 hdr->cmsg_type == DSTADDR_SOCKOPT) {
                 msg.msg_iov[0].iov_base = outbuf;
@@ -685,9 +708,8 @@ std::optional<std::string> DnsServer::run() {
                 handled = true;
             }
         }
-        if (!handled) {
-            sendto(listenSocket, outbuf, ret, 0, (struct sockaddr *)&si_other,
-                   sizeof(si_other));
+        if (!handled && !seeder::ShutdownRequested()) {
+            sendto(listenSocket, outbuf, ret, 0, (struct sockaddr *)&si_other, sizeof(si_other));
         }
     }
     return std::nullopt;

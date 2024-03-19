@@ -11,8 +11,10 @@
 #include <seeder/bitcoin.h>
 #include <seeder/db.h>
 #include <seeder/dns.h>
+#include <seeder/util.h>
 #include <streams.h>
 #include <tinyformat.h>
+#include <util/defer.h>
 #include <util/strencodings.h>
 #include <util/syserror.h>
 #include <util/system.h>
@@ -39,6 +41,8 @@ const std::function<std::string(const char *)> G_TRANSLATION_FUN = nullptr;
 
 //! All globals in this file are private to this translation unit
 namespace {
+
+static constexpr bool DEBUG_THREAD_LIFETIMES = false; // set to true to see debug messages for when threads exit
 
 static const int CONTINUE_EXECUTION = -1;
 
@@ -175,24 +179,35 @@ struct CrawlerArg {
 static_assert(sizeof(void *) >= sizeof(CrawlerArg));
 
 extern "C" void *ThreadCrawler(void *data) {
+    static std::atomic_int extantThreads = 0;
     const CrawlerArg arg = [&]{
         // unpack arg by copying "pointer" bytes into struct CrawlerArg
         CrawlerArg ret;
         std::memcpy(&ret, &data, sizeof(ret));
         return ret;
     }();
+    Defer d([&]{
+        const int nleft = --extantThreads;
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "Crawler thread %u/%u exit%s\n", arg.threadNum, arg.nThreads,
+                         nleft ? strprintf(" (%d threads still alive)", nleft).c_str() : "");
+        }
+    });
+    ++extantThreads;
     FastRandomContext rng;
     do {
         std::vector<CServiceResult> ips;
         db.GetMany(ips, 16);
         int64_t now = std::time(nullptr);
         if (ips.empty()) {
-            Sleep(5000 + rng.randrange(500 * arg.nThreads));
+            if ( ! seeder::SleepAndPollShutdownFlag(5000 + rng.randrange(500 * arg.nThreads))) {
+                break; // shutdown requested...
+            }
             continue;
         }
 
         std::vector<CAddress> addr;
-        for (size_t i = 0; i < ips.size(); i++) {
+        for (size_t i = 0; !seeder::ShutdownRequested() && i < ips.size(); ++i) {
             CServiceResult &res = ips[i];
             res.nBanTime = 0;
             res.nClientV = 0;
@@ -209,10 +224,15 @@ extern "C" void *ThreadCrawler(void *data) {
             if (res.fGood && getaddr)
                 res.lastAddressRequest = now;
         }
-
-        db.ResultMany(ips);
+        if (seeder::ShutdownRequested()) {
+            // Since we may have been interrupted at any time during this operation due to shutdown,
+            // give back the ips without reporting any result so as to not adversely affect stats.
+            db.SkippedMany(ips);
+        } else {
+            db.ResultMany(ips);
+        }
         db.Add(addr);
-    } while (1);
+    } while (!seeder::ShutdownRequested());
     return nullptr;
 }
 
@@ -339,10 +359,15 @@ uint32_t CDnsThread::GetIPList(const char *requestedHostname, AddrGeneric *addr,
 std::vector<std::unique_ptr<CDnsThread>> dnsThreads;
 
 void ThreadDNS(CDnsThread *thread) {
+    Defer d([&]{
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "ThreadDNS %d exit\n", thread->id);
+        }
+    });
     const auto optError = thread->run();
     if ((thread->hadError = bool(optError))) {
         std::fprintf(stderr, "\nWARNING: DNS thread %d exited with error: %s\n", thread->id, optError->c_str());
-        std::abort(); // Coming soon: graceful app shutdown here
+        seeder::RequestShutdown();
     }
 }
 
@@ -405,10 +430,17 @@ void SaveAllToDisk() {
 }
 
 void ThreadDumper() {
+    Defer cleanup([]{
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "ThreadDumper exit\n");
+        }
+    });
     int count = 0;
     do {
         // First 100s, than 200s, 400s, 800s, 1600s, and then 3200s forever
-        Sleep(100000 << count);
+        if ( ! seeder::SleepAndPollShutdownFlag(100'000 << count)) {
+            break;
+        }
         if (count < 5) {
             count++;
         }
@@ -417,6 +449,11 @@ void ThreadDumper() {
 }
 
 void ThreadStats() {
+    Defer d([]{
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "ThreadStats exit\n");
+        }
+    });
     bool first = true;
     size_t lastLineLength = 0;
     auto stdoutIsTerminal = isatty(fileno(stdout)) == 1;
@@ -458,22 +495,73 @@ void ThreadStats() {
         const std::string pad(padLen, ' ');
         lastLineLength = line.length();
         std::fprintf(stdout, "%s%s\n", line.c_str(), stdoutIsTerminal ? pad.c_str() : "");
-        Sleep(stdoutIsTerminal ? 1000 : 10000);
+        if ( ! seeder::SleepAndPollShutdownFlag(stdoutIsTerminal ? 1000 : 10'000)) {
+            break; // shutdown requested...
+        }
     } while (1);
 }
 
 static constexpr unsigned int MAX_HOSTS_PER_SEED = 128;
 
 void ThreadSeeder() {
+    Defer d([]{
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "ThreadSeeder exit\n");
+        }
+    });
     do {
         for (const std::string &seed : Params().DNSSeeds()) {
+            if (seeder::ShutdownRequested()) break;
             std::vector<CNetAddr> ips;
             LookupHost(seed.c_str(), ips, MAX_HOSTS_PER_SEED, true);
             for (auto &ip : ips) {
                 db.Add(CAddress(CService(ip, GetDefaultPort()), ServiceFlags()), true);
             }
         }
-        Sleep(1800000);
+        if ( ! seeder::SleepAndPollShutdownFlag(1800'000)) {
+            break; // shutdown requested...
+        }
+    } while (1);
+}
+
+int asyncSignalPipes[2] = {-1, -1};
+
+extern "C" void signalHandler(int sig) {
+    // This is one of the few things that is safe to do in a signal handler, hence this pipe mechanism to notify
+    // ThreadAppShutdownNotifier.
+    auto ign [[maybe_unused]] = write(asyncSignalPipes[1], &sig, sizeof(sig));
+}
+
+void ThreadAppShutdownNotifier() {
+    Defer d([]{
+        if constexpr (DEBUG_THREAD_LIFETIMES) {
+            std::fprintf(stderr, "ThreadAppShutdownNotifier exit\n");
+        }
+    });
+    int ctr = 0;
+    constexpr int maxctr = 5;
+    do {
+        int sig = 0, res;
+        res = read(asyncSignalPipes[0], &sig, sizeof(sig));
+        if (res == sizeof(sig)) {
+            ++ctr;
+            std::fprintf(stdout, "\n--- Caught signal %d (%d/%d), exiting ...\n", sig, ctr, maxctr);
+            seeder::RequestShutdown();
+            if (ctr >= maxctr) {
+                std::fprintf(stdout, "--- Too many signals caught, aborting program.\n");
+                std::abort();
+            }
+        } else {
+            if (res < 0) {
+                perror("read");
+            } else if (res == 1 && reinterpret_cast<char *>(&sig)[0] == 'x') {
+                // app signaled us to exit
+                return;
+            } else {
+                std::fprintf(stderr, "\nWARNING: ThreadAppShutdownNotifier got unexepected return from read():"
+                                     " %d (read bytes: %x)\n", res, sig);
+            }
+        }
     } while (1);
 }
 
@@ -483,7 +571,6 @@ int main(int argc, char **argv) {
     // The logger dump everything on the console by default.
     LogInstance().m_print_to_console = true;
 
-    std::signal(SIGPIPE, SIG_IGN);
     std::setbuf(stdout, nullptr);
     CDnsSeedOpts opts;
     int parseResults = opts.ParseCommandLine(argc, argv);
@@ -557,6 +644,41 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
     }
+
+    // Set up shutdown notifier thread
+    if (pipe(asyncSignalPipes) != 0) { // for asynch-signal-safe notification
+        perror("pipe");
+        return EXIT_FAILURE;
+    }
+    std::thread threadShutdownNotifier(ThreadAppShutdownNotifier);
+    Defer cleanupShutdownNotifier([&]{
+        // Tell the threadShutdownNotifier to exit; also clean up the pipes.
+        auto ign [[maybe_unused]] = write(asyncSignalPipes[1], "x", 1);
+        threadShutdownNotifier.join();
+        for (int &fd : asyncSignalPipes) {
+            if (fd > -1) {
+                close(fd);
+                fd = -1;
+            }
+        }
+    });
+
+    // Set up signal handler
+    std::vector<std::pair<int, void (*)(int)>> signalsToRestore{{
+        {SIGINT , std::signal(SIGINT , signalHandler)},
+        {SIGTERM, std::signal(SIGTERM, signalHandler)},
+        {SIGQUIT, std::signal(SIGQUIT, signalHandler)},
+        {SIGHUP , std::signal(SIGHUP , signalHandler)},
+        {SIGPIPE, std::signal(SIGPIPE, SIG_IGN)},
+    }};
+    Defer restoreSigs([&]{
+        for (const auto & [sig, origHandler] : signalsToRestore) {
+            std::signal(sig, origHandler);
+        }
+        signalsToRestore.clear();
+    });
+
+    // Start main app threads
     CAddrDbStats dbStats;
     db.GetStats(dbStats);
     if (opts.fReseed || dbStats.nAvail < 1) {
@@ -606,6 +728,7 @@ int main(int argc, char **argv) {
         pthread_join(thread, &res);
     }
     threadSeed.join();
+    DnsServer::Shutdown();
     bool hadError = false;
     for (auto &dnsThread : dnsThreads) {
         dnsThread->threadHandle.join();

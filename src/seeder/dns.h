@@ -42,6 +42,9 @@ struct DnsServer {
 
     virtual uint32_t GetIPList(const char *requestedHostname, AddrGeneric *addr, uint32_t max, bool ipv4, bool ipv6) = 0;
 
+    // Signals the dns server internals to close the shared socket and abort operations (called on app shutdown)
+    static void Shutdown();
+
 protected:
     DnsServer(int port, const char *host, const char *ns, const char *mbox = nullptr, int datattl = 3600, int nsttl = 40000);
 
