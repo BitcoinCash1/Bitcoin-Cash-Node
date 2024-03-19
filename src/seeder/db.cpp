@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,7 +43,7 @@ bool CAddrDb::Get_(CServiceResult &ip) {
         return false;
     }
 
-    size_t rnd = std::rand() % tot;
+    size_t rnd = rng.randrange(tot);
     int ret;
     if (rnd < unkId.size()) {
         std::set<int>::iterator it = unkId.end();
@@ -206,7 +206,7 @@ void CAddrDb::GetIPs_(std::set<CNetAddr> &ips, uint64_t requestedFlags,
 
     std::set<int> ids;
     while (ids.size() < max) {
-        ids.insert(goodIdFiltered[std::rand() % goodIdFiltered.size()]);
+        ids.insert(goodIdFiltered[rng.randrange(goodIdFiltered.size())]);
     }
 
     for (auto &id : ids) {

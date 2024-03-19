@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 #include <chainparams.h>
 #include <netbase.h>
 #include <protocol.h>
+#include <random.h>
 #include <seeder/bitcoin.h>
 #include <seeder/util.h>
 #include <sync.h>
@@ -259,6 +260,8 @@ private:
     std::set<int> unkId;
     // set of good nodes  (d, good e)
     std::set<int> goodId;
+    // random number generator used internally
+    FastRandomContext rng;
 
 protected:
     // internal routines that assume proper locks are acquired

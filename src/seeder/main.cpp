@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 #include <fs.h>
 #include <logging.h>
 #include <protocol.h>
+#include <random.h>
 #include <seeder/bitcoin.h>
 #include <seeder/db.h>
 #include <seeder/dns.h>
@@ -24,7 +25,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <stdexcept>
 #include <typeinfo>
 
 #include <pthread.h>
@@ -165,12 +165,13 @@ CAddrDb db;
 
 extern "C" void *ThreadCrawler(void *data) {
     int *nThreads = (int *)data;
+    FastRandomContext rng;
     do {
         std::vector<CServiceResult> ips;
         db.GetMany(ips, 16);
         int64_t now = std::time(nullptr);
         if (ips.empty()) {
-            Sleep(5000 + std::rand() % (500 * *nThreads));
+            Sleep(5000 + rng.randrange(500 * *nThreads));
             continue;
         }
 
@@ -217,6 +218,7 @@ public:
     std::map<uint64_t, FlagSpecificData> perflag;
     std::atomic<uint64_t> dbQueries{0};
     std::set<uint64_t> filterWhitelist;
+    FastRandomContext rng; // rng used internally by GetIPList
 
     void cacheHit(uint64_t requestedFlags, bool force = false) {
         static bool nets[NET_MAX] = {};
@@ -310,7 +312,7 @@ uint32_t GetIPList(void *data, const char *requestedHostname, AddrGeneric *addr,
     }
     uint32_t i = 0;
     while (i < max) {
-        uint32_t j = i + (std::rand() % (size - i));
+        uint32_t j = i + thread->rng.randrange(size - i);
         do {
             bool ok = (ipv4 && thisflag.cache[j].v == 4) ||
                       (ipv6 && thisflag.cache[j].v == 6);
