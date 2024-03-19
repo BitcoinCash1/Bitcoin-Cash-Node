@@ -575,7 +575,6 @@ int main(int argc, char **argv) {
             dnsThreads.push_back(new CDnsThread(&opts, i));
             pthread_create(&threadDns, nullptr, ThreadDNS, dnsThreads.back());
             std::fprintf(stdout, ".");
-            Sleep(20);
         }
         std::fprintf(stdout, "done\n");
     }

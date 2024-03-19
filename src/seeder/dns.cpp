@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <seeder/dns.h>
+#include <sync.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -585,7 +586,15 @@ error:
     return 12;
 }
 
-static int listenSocket = -1;
+static SharedMutex listenSocketMut;
+static int listenSocket GUARDED_BY(listenSocketMut) = -1;
+
+static void closeSocket_nolock() EXCLUSIVE_LOCKS_REQUIRED(listenSocketMut) {
+    if (listenSocket > -1) {
+        close(listenSocket);
+    }
+    listenSocket = -1;
+}
 
 DnsServer::DnsServer(int port_, const char *host_, const char *ns_, const char *mbox_, int datattl_, int nsttl_)
     : port(port_), datattl(datattl_), nsttl(nsttl_), host(host_), ns(ns_), mbox(mbox_) {}
@@ -601,26 +610,28 @@ int DnsServer::run() {
     }
 
     int replySocket;
-    if (listenSocket == -1) {
-        struct sockaddr_in6 si_me;
-        if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-            return -1;
-        }
-        replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-        if (replySocket == -1) {
-            close(listenSocket);
-            return -1;
-        }
-        int sockopt = 1;
-        setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt,
-                   sizeof sockopt);
-        std::memset((char *)&si_me, 0, sizeof(si_me));
-        si_me.sin6_family = AF_INET6;
-        si_me.sin6_port = htons(this->port);
-        si_me.sin6_addr = in6addr_any;
-        if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) ==
-            -1) {
-            return -2;
+    {
+        LOCK(listenSocketMut);
+        if (listenSocket == -1) {
+            struct sockaddr_in6 si_me;
+            if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+                return -1;
+            }
+            replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+            if (replySocket == -1) {
+                closeSocket_nolock();
+                return -1;
+            }
+            const int sockopt = 1;
+            setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt, sizeof sockopt);
+            std::memset((char *)&si_me, 0, sizeof(si_me));
+            si_me.sin6_family = AF_INET6;
+            si_me.sin6_port = htons(this->port);
+            si_me.sin6_addr = in6addr_any;
+            if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
+                closeSocket_nolock();
+                return -2;
+            }
         }
     }
 
@@ -634,7 +645,7 @@ int DnsServer::run() {
     };
 
     union control_data cmsg;
-    msghdr msg;
+    msghdr msg = {};
     msg.msg_name = &si_other;
     msg.msg_namelen = sizeof(si_other);
     msg.msg_iov = iov;
@@ -643,6 +654,7 @@ int DnsServer::run() {
     msg.msg_controllen = sizeof(cmsg);
 
     for (; 1; ++this->nRequests) {
+        LOCK_SHARED(listenSocketMut);
         ssize_t insize = recvmsg(listenSocket, &msg, 0);
         //    uint8_t *addr = (uint8_t*)&si_other.sin_addr.s_addr;
         //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i
