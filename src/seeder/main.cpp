@@ -26,7 +26,10 @@
 #include <cstring>
 #include <ctime>
 #include <limits>
+#include <memory>
+#include <thread>
 #include <typeinfo>
+#include <utility>
 
 #include <pthread.h>
 #include <strings.h> // for strcasecmp
@@ -226,6 +229,8 @@ public:
     std::map<uint64_t, FlagSpecificData> perflag;
     std::atomic<uint64_t> dbQueries{0};
     std::set<uint64_t> filterWhitelist;
+    std::thread threadHandle;
+    bool hadError = false;
     FastRandomContext rng; // rng used internally by GetIPList
 
     void cacheHit(uint64_t requestedFlags, bool force = false) {
@@ -331,16 +336,14 @@ uint32_t CDnsThread::GetIPList(const char *requestedHostname, AddrGeneric *addr,
     return max;
 }
 
-std::vector<CDnsThread *> dnsThreads;
+std::vector<std::unique_ptr<CDnsThread>> dnsThreads;
 
-extern "C" void *ThreadDNS(void *arg) {
-    CDnsThread *thread = (CDnsThread *)arg;
+void ThreadDNS(CDnsThread *thread) {
     const auto optError = thread->run();
-    if (optError) {
+    if ((thread->hadError = bool(optError))) {
         std::fprintf(stderr, "\nWARNING: DNS thread %d exited with error: %s\n", thread->id, optError->c_str());
         std::abort(); // Coming soon: graceful app shutdown here
     }
-    return nullptr;
 }
 
 bool StatCompare(const CAddrReport &a, const CAddrReport &b) noexcept {
@@ -401,7 +404,7 @@ void SaveAllToDisk() {
     std::fclose(ff);
 }
 
-extern "C" void *ThreadDumper(void *) {
+void ThreadDumper() {
     int count = 0;
     do {
         // First 100s, than 200s, 400s, 800s, 1600s, and then 3200s forever
@@ -411,10 +414,9 @@ extern "C" void *ThreadDumper(void *) {
         }
         SaveAllToDisk();
     } while (1);
-    return nullptr;
 }
 
-extern "C" void *ThreadStats(void *) {
+void ThreadStats() {
     bool first = true;
     size_t lastLineLength = 0;
     auto stdoutIsTerminal = isatty(fileno(stdout)) == 1;
@@ -439,7 +441,7 @@ extern "C" void *ThreadStats(void *) {
         }
         uint64_t requests = 0;
         uint64_t queries = 0;
-        for (const auto *dnsThread : dnsThreads) {
+        for (const auto &dnsThread : dnsThreads) {
             if (!dnsThread)
                 continue;
             requests += dnsThread->nRequests;
@@ -458,24 +460,21 @@ extern "C" void *ThreadStats(void *) {
         std::fprintf(stdout, "%s%s\n", line.c_str(), stdoutIsTerminal ? pad.c_str() : "");
         Sleep(stdoutIsTerminal ? 1000 : 10000);
     } while (1);
-    return nullptr;
 }
 
 static constexpr unsigned int MAX_HOSTS_PER_SEED = 128;
 
-extern "C" void *ThreadSeeder(void *) {
+void ThreadSeeder() {
     do {
         for (const std::string &seed : Params().DNSSeeds()) {
             std::vector<CNetAddr> ips;
             LookupHost(seed.c_str(), ips, MAX_HOSTS_PER_SEED, true);
             for (auto &ip : ips) {
-                db.Add(CAddress(CService(ip, GetDefaultPort()), ServiceFlags()),
-                       true);
+                db.Add(CAddress(CService(ip, GetDefaultPort()), ServiceFlags()), true);
             }
         }
         Sleep(1800000);
     } while (1);
-    return nullptr;
 }
 
 } // namespace
@@ -566,29 +565,31 @@ int main(int argc, char **argv) {
             db.Add(CAddress(seed, ServiceFlags()), true);
         }
     }
-    pthread_t threadDns, threadSeed, threadDump, threadStats;
+    std::thread threadSeed, threadDump, threadStats;
     if (fDNS) {
         std::fprintf(stdout, "Starting %i DNS threads for %s on %s (port %i)...",
                      opts.nDnsThreads, opts.host.c_str(), opts.ns.c_str(),
                      opts.nPort);
-        dnsThreads.reserve(opts.nDnsThreads);
+        dnsThreads.reserve(std::max(0, opts.nDnsThreads));
         for (int i = 0; i < opts.nDnsThreads; i++) {
-            dnsThreads.push_back(new CDnsThread(&opts, i));
-            pthread_create(&threadDns, nullptr, ThreadDNS, dnsThreads.back());
+            auto &dnsThread = dnsThreads.emplace_back(std::make_unique<CDnsThread>(&opts, i));
+            dnsThread->threadHandle = std::thread(ThreadDNS, dnsThread.get());
             std::fprintf(stdout, ".");
         }
         std::fprintf(stdout, "done\n");
     }
     std::fprintf(stdout, "Starting seeder...");
-    pthread_create(&threadSeed, nullptr, ThreadSeeder, nullptr);
+    threadSeed = std::thread(ThreadSeeder);
     std::fprintf(stdout, "done\n");
     std::fprintf(stdout, "Starting %i crawler threads...", opts.nThreads);
     pthread_attr_t attr_crawler;
     pthread_attr_init(&attr_crawler);
     pthread_attr_setstacksize(&attr_crawler, 0x20000);
+    std::vector<pthread_t> crawlerThreads;
+    crawlerThreads.resize(std::max(0, opts.nThreads), pthread_t{});
     assert(size_t(opts.nThreads) <= std::numeric_limits<uint16_t>::max());
-    for (int i = 0; i < opts.nThreads; i++) {
-        pthread_t thread;
+    for (size_t i = 0; i < crawlerThreads.size(); ++i) {
+        auto &thread = crawlerThreads[i];
         const CrawlerArg crawlerArg = { /*.threadNum = */uint16_t(i), /* .nThreads = */ uint16_t(opts.nThreads) };
         void *arg{};
         std::memcpy(&arg, &crawlerArg, sizeof(crawlerArg)); // stuff raw bytes of CrawlerArg into a void * "pointer"
@@ -596,10 +597,20 @@ int main(int argc, char **argv) {
     }
     pthread_attr_destroy(&attr_crawler);
     std::fprintf(stdout, "done\n");
-    pthread_create(&threadStats, nullptr, ThreadStats, nullptr);
-    pthread_create(&threadDump, nullptr, ThreadDumper, nullptr);
-    void *res;
-    pthread_join(threadDump, &res);
-    SaveAllToDisk(); // Save to disk one last time after all threads are stopped (not currently reached)
-    return EXIT_SUCCESS;
+    threadStats = std::thread(ThreadStats);
+    threadDump = std::thread(ThreadDumper);
+    threadDump.join();
+    threadStats.join();
+    for (const auto &thread : crawlerThreads) {
+        void *res;
+        pthread_join(thread, &res);
+    }
+    threadSeed.join();
+    bool hadError = false;
+    for (auto &dnsThread : dnsThreads) {
+        dnsThread->threadHandle.join();
+        hadError |= dnsThread->hadError;
+    }
+    SaveAllToDisk(); // Save to disk one last time after all threads are stopped
+    return hadError ? EXIT_FAILURE : EXIT_SUCCESS;
 }
