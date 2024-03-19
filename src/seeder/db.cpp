@@ -26,10 +26,6 @@ void CAddrInfo::Update(bool good) {
     stat1D.Update(good, age, 3600 * 24);
     stat1W.Update(good, age, 3600 * 24 * 7);
     stat1M.Update(good, age, 3600 * 24 * 30);
-    int64_t ign = GetIgnoreTime();
-    if (ign && (ignoreTill == 0 || ignoreTill < ign + now)) {
-        ignoreTill = ign + now;
-    }
     //  std::fprintf(stdout, "%s: got %s result: success=%i/%i;
     //  2H:%.2f%%-%.2f%%(%.2f) 8H:%.2f%%-%.2f%%(%.2f) 1D:%.2f%%-%.2f%%(%.2f)
     //  1W:%.2f%%-%.2f%%(%.2f) \n", ToString(ip).c_str(), good ? "good" : "bad",
@@ -41,42 +37,30 @@ void CAddrInfo::Update(bool good) {
     //  + 1.0 - stat1W.weight), stat1W.count);
 }
 
-bool CAddrDb::Get_(CServiceResult &ip, int &wait) {
-    int64_t now = std::time(nullptr);
+bool CAddrDb::Get_(CServiceResult &ip) {
     size_t tot = unkId.size() + ourId.size();
     if (tot == 0) {
-        wait = 5;
         return false;
     }
 
-    do {
-        size_t rnd = std::rand() % tot;
-        int ret;
-        if (rnd < unkId.size()) {
-            std::set<int>::iterator it = unkId.end();
-            it--;
-            ret = *it;
-            unkId.erase(it);
-        } else {
-            ret = ourId.front();
-            if (std::time(nullptr) - idToInfo[ret].ourLastTry < MIN_RETRY) {
-                return false;
-            }
-            ourId.pop_front();
+    size_t rnd = std::rand() % tot;
+    int ret;
+    if (rnd < unkId.size()) {
+        std::set<int>::iterator it = unkId.end();
+        it--;
+        ret = *it;
+        unkId.erase(it);
+    } else {
+        ret = ourId.front();
+        if (std::time(nullptr) - idToInfo[ret].ourLastTry < MIN_RETRY) {
+            return false;
         }
+        ourId.pop_front();
+    }
+    ip.service = idToInfo[ret].ip;
+    ip.ourLastSuccess = idToInfo[ret].ourLastSuccess;
+    ip.lastAddressRequest = idToInfo[ret].lastAddressRequest;
 
-        if (idToInfo[ret].ignoreTill && idToInfo[ret].ignoreTill < now) {
-            ourId.push_back(ret);
-            idToInfo[ret].ourLastTry = now;
-        } else {
-            ip.service = idToInfo[ret].ip;
-            ip.ourLastSuccess = idToInfo[ret].ourLastSuccess;
-            ip.lastAddressRequest = idToInfo[ret].lastAddressRequest;
-            break;
-        }
-    } while (1);
-
-    nDirty++;
     return true;
 }
 
@@ -101,13 +85,13 @@ void CAddrDb::Good_(const CServiceResult &res) {
     info.blocks = res.nHeight;
     info.services = res.services;
     info.lastAddressRequest = res.lastAddressRequest;
+    info.checkpointVerified = res.checkpointVerified;
     info.Update(true);
     if (info.IsReliable() && goodId.count(id) == 0) {
         goodId.insert(id);
         //    std::fprintf(stdout, "%s: good; %i good nodes now\n",
         //    ToString(addr).c_str(), (int)goodId.size());
     }
-    nDirty++;
     ourId.push_back(id);
 }
 
@@ -143,7 +127,6 @@ void CAddrDb::Bad_(const CServiceResult &res) {
         }
         ourId.push_back(id);
     }
-    nDirty++;
 }
 
 void CAddrDb::Add_(const CAddress &addr, bool force) {
@@ -165,9 +148,6 @@ void CAddrDb::Add_(const CAddress &addr, bool force) {
             ai.lastTry = addr.nTime;
             //      std::fprintf(stdout, "%s: updated\n", ToString(addr).c_str());
         }
-        if (force) {
-            ai.ignoreTill = 0;
-        }
         return;
     }
 
@@ -183,7 +163,6 @@ void CAddrDb::Add_(const CAddress &addr, bool force) {
     ipToId[ipp] = id;
     //  std::fprintf(stdout, "%s: added\n", ToString(ipp).c_str(), ipToId[ipp]);
     unkId.insert(id);
-    nDirty++;
 }
 
 void CAddrDb::GetIPs_(std::set<CNetAddr> &ips, uint64_t requestedFlags,

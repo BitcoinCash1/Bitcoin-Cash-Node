@@ -137,28 +137,38 @@ PeerMessagingState CSeederNode::ProcessMessage(const std::string &msg_type,
         return PeerMessagingState::AwaitingMessages;
     }
 
+    const int64_t now = std::time(nullptr);
+
     if (msg_type == NetMsgType::VERACK) {
         vRecv.SetVersion(std::min(nVersion, PROTOCOL_VERSION));
         // std::fprintf(stdout, "\n%s: version %i\n", ToString(you).c_str(),
         //              nVersion);
-        if (vAddr) {
+        int64_t doneAfterDelta = 1;
+        if (vAddr) { // Note in the current codebase: vAddr is non-nullptr only once per day for each node we check
             BeginMessage(NetMsgType::GETADDR);
             EndMessage();
-            // request headers starting after last checkpoint (only if we have checkpoints for this network)
-            if (const auto &mapCheckpoints = Params().Checkpoints().mapCheckpoints; !mapCheckpoints.empty()) {
-                std::vector<BlockHash> locatorHash(1, mapCheckpoints.rbegin()->second);
-                BeginMessage(NetMsgType::GETHEADERS);
-                vSend << CBlockLocator(std::move(locatorHash)) << uint256();
-                EndMessage();
-            }
-            doneAfter = std::time(nullptr) + GetTimeout();
-        } else {
-            doneAfter = std::time(nullptr) + 1;
+            doneAfterDelta = GetTimeout();
+            needAddrReply = true;
         }
+        // request headers starting after last checkpoint (only if we have checkpoints for this network)
+        if (auto *pair = GetCheckpoint()) {
+            checkpointVerified = false;
+            std::vector<BlockHash> locatorHash(1, pair->second);
+            BeginMessage(NetMsgType::GETHEADERS);
+            vSend << CBlockLocator(std::move(locatorHash)) << uint256();
+            EndMessage();
+            doneAfterDelta = std::max<int64_t>(GetTimeout(), doneAfterDelta);
+        } else {
+            // There are no checkpoints that need to be reached on this network, so
+            // consider the verification passed
+            checkpointVerified = true;
+        }
+        doneAfter = now + doneAfterDelta;
         return PeerMessagingState::AwaitingMessages;
     }
 
     if (bool isV2{}; vAddr && (msg_type == NetMsgType::ADDR || (isV2 = (msg_type == NetMsgType::ADDRV2)))) {
+        needAddrReply = false;
         std::vector<CAddress> vAddrNew;
         {
             // If message is ADDRV2, add ADDRV2_FORMAT to the OverrideStream version so that the CNetAddr and CAddress
@@ -168,10 +178,9 @@ PeerMessagingState CSeederNode::ProcessMessage(const std::string &msg_type,
         }
         // std::fprintf(stdout, "%s: got %i addresses in %s format\n", ToString(you).c_str(),
         //              (int)vAddrNew.size(), isV2 ? "V2" : "V1");
-        int64_t now = std::time(nullptr);
         std::vector<CAddress>::iterator it = vAddrNew.begin();
         if (vAddrNew.size() > 1) {
-            if (doneAfter == 0 || doneAfter > now + 1) {
+            if (checkpointVerified && (doneAfter == 0 || doneAfter > now + 1)) {
                 doneAfter = now + 1;
             }
         }
@@ -189,8 +198,14 @@ PeerMessagingState CSeederNode::ProcessMessage(const std::string &msg_type,
             //              ToString(you).c_str(),
             //              addr.ToString().c_str(), (int)(vAddr->size()));
             if (vAddr->size() > ADDR_SOFT_CAP) {
-                doneAfter = 1;
-                return PeerMessagingState::Finished;
+                if (checkpointVerified) {
+                    // stop processing addresees and since we aren't waiting for headers, stop processing immediately
+                    doneAfter = now;
+                    return PeerMessagingState::Finished;
+                } else {
+                    // stop processing addresses now since we hit the soft cap, but we will continue to await headers
+                    break;
+                }
             }
         }
         return PeerMessagingState::AwaitingMessages;
@@ -208,8 +223,7 @@ PeerMessagingState CSeederNode::ProcessMessage(const std::string &msg_type,
         CBlockHeader header;
         recv >> header;
 
-        if (!Params().Checkpoints().mapCheckpoints.empty() && nStartingHeight > GetRequireHeight() &&
-            header.hashPrevBlock != Params().Checkpoints().mapCheckpoints.rbegin()->second) {
+        if (auto *pair = GetCheckpoint(); pair && nStartingHeight > pair->first && header.hashPrevBlock != pair->second) {
             /* This node is synced higher than the last checkpoint height but does not have the checkpoint block in
              * its chain. This means it must be on the wrong chain. We treat these nodes the same as nodes with
              * the wrong net magic.
@@ -219,6 +233,12 @@ PeerMessagingState CSeederNode::ProcessMessage(const std::string &msg_type,
             ban = 100000;
             return PeerMessagingState::Finished;
         }
+        checkpointVerified = true;
+        if (!needAddrReply) {
+            // we are no longer waiting for headers or addr, so we can stop processing this node
+            doneAfter = now;
+        }
+        return PeerMessagingState::AwaitingMessages;
     }
 
     return PeerMessagingState::AwaitingMessages;
@@ -291,7 +311,7 @@ CSeederNode::CSeederNode(const CService &ip, std::vector<CAddress> *vAddrIn)
     : sock(INVALID_SOCKET), vSend(SER_NETWORK, 0), vRecv(SER_NETWORK, 0),
       nHeaderStart(-1), nMessageStart(-1), nVersion(0), nStartingHeight(0),
       vAddr(vAddrIn), ban(0), doneAfter(0),
-      you(ip, ServiceFlags(NODE_NETWORK | NODE_BITCOIN_CASH)) {
+      you(ip, ServiceFlags(NODE_NETWORK | NODE_BITCOIN_CASH)), checkpointVerified(false) {
     if (std::time(nullptr) > 1329696000) {
         vSend.SetVersion(INIT_PROTO_VERSION);
         vRecv.SetVersion(INIT_PROTO_VERSION);
@@ -402,7 +422,7 @@ bool CSeederNode::Run() {
 
 bool TestNode(const CService &cip, int &ban, int &clientV,
               std::string &clientSV, int &blocks,
-              std::vector<CAddress> *vAddr, ServiceFlags &services) {
+              std::vector<CAddress> *vAddr, ServiceFlags &services, bool &checkpointVerified) {
     try {
         CSeederNode node(cip, vAddr);
         bool ret = node.Run();
@@ -415,6 +435,7 @@ bool TestNode(const CService &cip, int &ban, int &clientV,
         clientSV = node.GetClientSubVersion();
         blocks = node.GetStartingHeight();
         services = node.GetServices();
+        checkpointVerified = node.IsCheckpointVerified();
         // std::fprintf(stdout, "%s: %s!!!\n", cip.ToString().c_str(), ret ? "GOOD" :
         //              "BAD");
         return ret;

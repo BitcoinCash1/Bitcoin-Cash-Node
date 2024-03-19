@@ -40,7 +40,13 @@ TODO
 
 ## User interface changes
 
-TODO
+- The `-wipeignore` bitcoin-seeder command line option has been removed. The way the
+  list of ignored nodes is handled has been broken for many years. Rather than ignoring
+  nodes *until* a particular time, nodes were being ignored *from* that time. This meant
+  that ignored nodes that ever reached this timeout would stay ignored forever; and
+  until that point, they would be processed as often as any other node rather than
+  being ignored for a cooling-off period as intended. To resolve this, we decided to
+  simply remove this facility entirely, meaning that nodes will now never be ignored.
 
 ## Regressions
 

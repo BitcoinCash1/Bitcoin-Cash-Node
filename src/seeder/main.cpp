@@ -41,7 +41,6 @@ static constexpr int DEFAULT_NUM_THREADS = 96;
 static constexpr int DEFAULT_PORT = 53;
 static constexpr int DEFAULT_NUM_DNS_THREADS = 4;
 static constexpr bool DEFAULT_WIPE_BAN = false;
-static constexpr bool DEFAULT_WIPE_IGNORE = false;
 static constexpr bool DEFAULT_RESEED = false;
 static const std::string DEFAULT_EMAIL = "";
 static const std::string DEFAULT_NAMESERVER = "";
@@ -56,7 +55,6 @@ public:
     int nPort               = DEFAULT_PORT;
     int nDnsThreads         = DEFAULT_NUM_DNS_THREADS;
     bool fWipeBan           = DEFAULT_WIPE_BAN;
-    bool fWipeIgnore        = DEFAULT_WIPE_IGNORE;
     bool fReseed            = DEFAULT_RESEED;
     std::string mbox        = DEFAULT_EMAIL;
     std::string ns          = DEFAULT_NAMESERVER;
@@ -92,7 +90,6 @@ public:
         nPort = gArgs.GetArg("-port", DEFAULT_PORT);
         nDnsThreads = gArgs.GetArg("-dnsthreads", DEFAULT_NUM_DNS_THREADS);
         fWipeBan = gArgs.GetBoolArg("-wipeban", DEFAULT_WIPE_BAN);
-        fWipeIgnore = gArgs.GetBoolArg("-wipeignore", DEFAULT_WIPE_IGNORE);
         fReseed = gArgs.GetBoolArg("-reseed", DEFAULT_RESEED);
         mbox = gArgs.GetArg("-mbox", DEFAULT_EMAIL);
         ns = gArgs.GetArg("-ns", DEFAULT_NAMESERVER);
@@ -157,8 +154,6 @@ private:
                      OptionsCategory::OPTIONS);
         gArgs.AddArg("-wipeban", strprintf("Wipe list of banned nodes (default: %d)", DEFAULT_WIPE_BAN), ArgsManager::ALLOW_ANY,
                      OptionsCategory::CONNECTION);
-        gArgs.AddArg("-wipeignore", strprintf("Wipe list of ignored nodes (default: %d)", DEFAULT_WIPE_IGNORE), ArgsManager::ALLOW_ANY,
-                     OptionsCategory::CONNECTION);
         gArgs.AddArg("-reseed", strprintf("Reseed the database from the fixed seed list (default: %d)", DEFAULT_RESEED), ArgsManager::ALLOW_ANY,
                      OptionsCategory::CONNECTION);
         SetupChainParamsBaseOptions();
@@ -171,13 +166,10 @@ extern "C" void *ThreadCrawler(void *data) {
     int *nThreads = (int *)data;
     do {
         std::vector<CServiceResult> ips;
-        int wait = 5;
-        db.GetMany(ips, 16, wait);
+        db.GetMany(ips, 16);
         int64_t now = std::time(nullptr);
         if (ips.empty()) {
-            wait *= 1000;
-            wait += std::rand() % (500 * *nThreads);
-            Sleep(wait);
+            Sleep(5000 + std::rand() % (500 * *nThreads));
             continue;
         }
 
@@ -194,7 +186,7 @@ extern "C" void *ThreadCrawler(void *data) {
             res.fGood = TestNode(res.service, res.nBanTime, res.nClientV,
                                  res.strClientV, res.nHeight,
                                  getaddr ? &addr : nullptr,
-                                 res.services);
+                                 res.services, res.checkpointVerified);
 
             if (res.fGood && getaddr)
                 res.lastAddressRequest = now;
@@ -393,7 +385,7 @@ extern "C" void *ThreadDumper(void *) {
                     "%-47s  %4d  %11" PRId64
                     "  %6.2f%% %6.2f%% %6.2f%% %6.2f%% %6.2f%%  %6i  %08" PRIx64
                     "  %5i \"%s\"\n",
-                    rep.ip.ToString().c_str(), (int)rep.fGood, rep.lastSuccess,
+                    rep.ip.ToString().c_str(), rep.reliableness == Reliableness::OK ? 1 : 0, rep.lastSuccess,
                     100.0 * rep.uptime[0], 100.0 * rep.uptime[1],
                     100.0 * rep.uptime[2], 100.0 * rep.uptime[3],
                     100.0 * rep.uptime[4], rep.blocks, rep.services,
@@ -549,10 +541,6 @@ int main(int argc, char **argv) {
             if (opts.fWipeBan) {
                 db.banned.clear();
                 std::fprintf(stdout, "Ban list wiped...");
-            }
-            if (opts.fWipeIgnore) {
-                db.ResetIgnores();
-                std::fprintf(stdout, "Ignore list wiped...");
             }
             std::fprintf(stdout, "done\n");
         } catch (const std::exception &e) {
