@@ -7,6 +7,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 
 constexpr int MAX_LABEL_LENGTH = 63;
 constexpr int MAX_QUERY_NAME_LENGTH = 255;
@@ -35,7 +37,8 @@ struct DnsServer {
     virtual ~DnsServer();
 
     // Runs the dns server. Doesn't return until it exits (usually at app exit).
-    int run();
+    // Returns a nullopt if the server exited ok. Otherwise returns an error string if there was an error.
+    std::optional<std::string> run();
 
     virtual uint32_t GetIPList(const char *requestedHostname, AddrGeneric *addr, uint32_t max, bool ipv4, bool ipv6) = 0;
 

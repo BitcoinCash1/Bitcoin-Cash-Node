@@ -4,6 +4,7 @@
 
 #include <seeder/dns.h>
 #include <sync.h>
+#include <tinyformat.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -601,12 +602,12 @@ DnsServer::DnsServer(int port_, const char *host_, const char *ns_, const char *
 
 DnsServer::~DnsServer() {}
 
-int DnsServer::run() {
+std::optional<std::string> DnsServer::run() {
     struct sockaddr_in6 si_other;
     int senderSocket = -1;
     senderSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (senderSocket == -1) {
-        return -3;
+        return strprintf("socket (1): %s", strerror(errno));
     }
 
     int replySocket;
@@ -615,12 +616,13 @@ int DnsServer::run() {
         if (listenSocket == -1) {
             struct sockaddr_in6 si_me;
             if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-                return -1;
+                return strprintf("socket (2): %s", strerror(errno));
             }
             replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
             if (replySocket == -1) {
+                auto ret = strprintf("socket (3): %s", strerror(errno));
                 closeSocket_nolock();
-                return -1;
+                return ret;
             }
             const int sockopt = 1;
             setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt, sizeof sockopt);
@@ -629,8 +631,9 @@ int DnsServer::run() {
             si_me.sin6_port = htons(this->port);
             si_me.sin6_addr = in6addr_any;
             if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
+                auto ret = strprintf("bind: %s", strerror(errno));
                 closeSocket_nolock();
-                return -2;
+                return ret;
             }
         }
     }
@@ -687,5 +690,5 @@ int DnsServer::run() {
                    sizeof(si_other));
         }
     }
-    return 0;
+    return std::nullopt;
 }

@@ -322,7 +322,11 @@ std::vector<CDnsThread *> dnsThreads;
 
 extern "C" void *ThreadDNS(void *arg) {
     CDnsThread *thread = (CDnsThread *)arg;
-    thread->run();
+    const auto optError = thread->run();
+    if (optError) {
+        std::fprintf(stderr, "\nWARNING: DNS thread %d exited with error: %s\n", thread->id, optError->c_str());
+        std::abort(); // Coming soon: graceful app shutdown here
+    }
     return nullptr;
 }
 
