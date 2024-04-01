@@ -44,10 +44,10 @@ Development Process
 
 Bitcoin Cash Node development takes place at [https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node)
 
-This Github repository contains only source code of releases.
+There is also a source-only mirror of Bitcoin Cash Node on Github at [https://github.com/bitcoin-cash-node/bitcoin-cash-node](https://github.com/bitcoin-cash-node/bitcoin-cash-node).
 
-If you would like to contribute, please contact us directly at
-[bitcoincashnode.slack.com](https://bitcoincashnode.slack.com) or [t.me/bitcoincashnode](https://t.me/bitcoincashnode)
+If you would like to contribute, please read our [contribution guide](https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/blob/master/CONTRIBUTING.md) and feel
+free to contact us directly at [bitcoincashnode.slack.com](https://bitcoincashnode.slack.com) or [t.me/bitcoincashnode](https://t.me/bitcoincashnode).
 
 Disclosure Policy
 -----------------
