@@ -1003,12 +1003,11 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
 
                         bool fSuccess = false;
                         if (vchSig.size()) {
-                            valtype vchHash(32);
+                            uint256 sigHash{uint256::Uninitialized};
                             CSHA256()
                                 .Write(vchMessage.data(), vchMessage.size())
-                                .Finalize(vchHash.data());
-                            fSuccess = checker.VerifySignature(
-                                vchSig, CPubKey(vchPubKey), uint256(vchHash));
+                                .Finalize(sigHash.data());
+                            fSuccess = checker.VerifySignature(vchSig, CPubKey(vchPubKey), sigHash);
                             metrics.nSigChecks += 1;
 
                             if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL)) {
