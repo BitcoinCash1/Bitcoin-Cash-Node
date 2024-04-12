@@ -232,7 +232,7 @@ class BlockDataCopier:
                 continue
 
             inMagic = inhdr[:4]
-            if (inMagic != self.settings['netmagic']):
+            if (inMagic != self.settings['diskmagic']):
                 print("Invalid magic: " + inMagic.hex())
                 return
             inLenLE = inhdr[4:]
@@ -303,8 +303,8 @@ if __name__ == '__main__':
         settings['rev_hash_bytes'] = 'false'
     settings['rev_hash_bytes'] = settings['rev_hash_bytes'].lower()
 
-    if 'netmagic' not in settings:
-        settings['netmagic'] = 'f9beb4d9'
+    if 'diskmagic' not in settings:
+        settings['diskmagic'] = 'f9beb4d9'
     if 'genesis' not in settings:
         settings['genesis'] = '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
     if 'input' not in settings:
@@ -325,7 +325,7 @@ if __name__ == '__main__':
     settings['max_out_sz'] = int(settings['max_out_sz'])
     settings['split_timestamp'] = int(settings['split_timestamp'])
     settings['file_timestamp'] = int(settings['file_timestamp'])
-    settings['netmagic'] = unhexlify(settings['netmagic'].encode('utf-8'))
+    settings['diskmagic'] = unhexlify(settings['diskmagic'].encode('utf-8'))
     settings['out_of_order_cache_sz'] = int(settings['out_of_order_cache_sz'])
     settings['debug_output'] = settings['debug_output'].lower()
 
