@@ -600,6 +600,8 @@ BOOST_FIXTURE_TEST_CASE(dsproof_recursive_search_mempool, EnsureClearedMempoolTe
             dblSpendRoots.push_back(std::move(tx));
         }
     }
+    BOOST_CHECK(okCt > 0);
+    BOOST_CHECK(nokCt > 0);
     BOOST_CHECK(g_mempool.size() == dblSpendRoots.size());
     BOOST_CHECK(g_mempool.listDoubleSpendProofs().size() == dblSpendRoots.size());
 
