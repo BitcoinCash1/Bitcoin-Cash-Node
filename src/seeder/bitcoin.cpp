@@ -318,6 +318,12 @@ CSeederNode::CSeederNode(const CService &ip, std::vector<CAddress> *vAddrIn)
     }
 }
 
+CSeederNode::~CSeederNode() {
+    // Must be sure to close the socket in case Run() throws and didn't get a chance to, to prevent
+    // leaking the socket.
+    CloseSocket(sock);
+}
+
 bool CSeederNode::Run() {
     // FIXME: This logic is duplicated with CConnman::ConnectNode for no
     // good reason.
