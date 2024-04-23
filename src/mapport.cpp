@@ -299,8 +299,9 @@ static void MapPortProtoSetEnabled(MapPortProtoFlag proto, bool enabled) {
     }
 }
 
-void StartMapPort(bool use_upnp) {
+void StartMapPort(bool use_upnp, bool use_natpmp) {
     MapPortProtoSetEnabled(MapPortProtoFlag::UPNP, use_upnp);
+    MapPortProtoSetEnabled(MapPortProtoFlag::NAT_PMP, use_natpmp);
     DispatchMapPort();
 }
 
@@ -319,7 +320,7 @@ void StopMapPort() {
 }
 
 #else  // #if defined(USE_NATPMP) || defined(USE_UPNP)
-void StartMapPort(bool use_upnp [[maybe_unused]]) {
+void StartMapPort(bool use_upnp [[maybe_unused]], bool use_natpmp [[maybe_unused]]) {
     // Intentionally left blank.
 }
 void InterruptMapPort() {
