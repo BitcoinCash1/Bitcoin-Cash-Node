@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2023 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,6 +27,7 @@
 #include <ui_interface.h>
 #include <util/bit_cast.h>
 #include <util/strencodings.h>
+#include <util/thread.h>
 
 #ifdef WIN32
 #include <cstring>
@@ -1614,8 +1615,7 @@ static void ThreadMapPort() {
 void StartMapPort() {
     if (!g_upnp_thread.joinable()) {
         assert(!g_upnp_interrupt);
-        g_upnp_thread = std::thread(
-            (std::bind(&TraceThread<void (*)()>, "upnp", &ThreadMapPort)));
+        g_upnp_thread = std::thread(util::TraceThread, "upnp", ThreadMapPort);
     }
 }
 
@@ -2439,24 +2439,16 @@ bool CConnman::Start(CScheduler &scheduler, const Options &connOptions) {
     }
 
     // Send and receive from sockets, accept connections
-    threadSocketHandler = std::thread(
-        &TraceThread<std::function<void()>>, "net",
-        std::function<void()>(std::bind(&CConnman::ThreadSocketHandler, this)));
+    threadSocketHandler = std::thread(util::TraceThread, "net", [this] { ThreadSocketHandler(); });
 
     if (!gArgs.GetBoolArg("-dnsseed", true)) {
         LogPrintf("DNS seeding disabled\n");
     } else {
-        threadDNSAddressSeed =
-            std::thread(&TraceThread<std::function<void()>>, "dnsseed",
-                        std::function<void()>(
-                            std::bind(&CConnman::ThreadDNSAddressSeed, this)));
+        threadDNSAddressSeed = std::thread(util::TraceThread, "dnsseed", [this] { ThreadDNSAddressSeed(); });
     }
 
     // Initiate outbound connections from -addnode
-    threadOpenAddedConnections =
-        std::thread(&TraceThread<std::function<void()>>, "addcon",
-                    std::function<void()>(std::bind(
-                        &CConnman::ThreadOpenAddedConnections, this)));
+    threadOpenAddedConnections = std::thread(util::TraceThread, "addcon", [this] { ThreadOpenAddedConnections(); });
 
     if (connOptions.m_use_addrman_outgoing &&
         !connOptions.m_specified_outgoing.empty()) {
@@ -2467,20 +2459,14 @@ bool CConnman::Start(CScheduler &scheduler, const Options &connOptions) {
         }
         return false;
     }
-    if (connOptions.m_use_addrman_outgoing ||
-        !connOptions.m_specified_outgoing.empty()) {
-        threadOpenConnections =
-            std::thread(&TraceThread<std::function<void()>>, "opencon",
-                        std::function<void()>(
-                            std::bind(&CConnman::ThreadOpenConnections, this,
-                                      connOptions.m_specified_outgoing)));
+    if (connOptions.m_use_addrman_outgoing || !connOptions.m_specified_outgoing.empty()) {
+        threadOpenConnections = std::thread(
+            util::TraceThread, "opencon",
+            [this, connect = connOptions.m_specified_outgoing] { ThreadOpenConnections(connect); });
     }
 
     // Process messages
-    threadMessageHandler =
-        std::thread(&TraceThread<std::function<void()>>, "msghand",
-                    std::function<void()>(
-                        std::bind(&CConnman::ThreadMessageHandler, this)));
+    threadMessageHandler = std::thread(util::TraceThread, "msghand", [this] { ThreadMessageHandler(); });
 
     // Dump network addresses
     scheduler.scheduleEvery(

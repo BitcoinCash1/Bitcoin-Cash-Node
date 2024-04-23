@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -60,6 +60,7 @@
 #include <util/string.h>
 #include <util/syserror.h>
 #include <util/system.h>
+#include <util/thread.h>
 #include <util/threadnames.h>
 #include <validation.h>
 #include <validationinterface.h>
@@ -2113,8 +2114,7 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
     }
 
     // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
-    schedulerThread = std::thread(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop);
+    schedulerThread = std::thread(util::TraceThread, "scheduler", []{ scheduler.serviceQueue(); });
 
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
     GetMainSignals().RegisterWithMempoolSignals(g_mempool);

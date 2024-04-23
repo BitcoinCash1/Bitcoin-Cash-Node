@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 The Bitcoin Core developers
-// Copyright (c) 2019-2023 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,6 +12,7 @@
 #include <tinyformat.h>
 #include <ui_interface.h>
 #include <util/system.h>
+#include <util/thread.h>
 #include <validation.h>
 #include <warnings.h>
 
@@ -288,8 +289,7 @@ void BaseIndex::Start() {
         return;
     }
 
-    m_thread_sync = std::thread(&TraceThread<std::function<void()>>, GetName(),
-                                std::bind(&BaseIndex::ThreadSync, this));
+    m_thread_sync = std::thread(util::TraceThread, GetName(), [this] { ThreadSync(); });
 }
 
 void BaseIndex::Stop() {

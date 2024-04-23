@@ -1,6 +1,6 @@
 // Copyright (c) 2015-2016 The Bitcoin Core developers
 // Copyright (c) 2017 The Zcash developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +13,7 @@
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/system.h>
+#include <util/thread.h>
 
 #include <boost/signals2/signal.hpp>
 
@@ -861,7 +862,7 @@ void StartTorControl(CService onion_service_target) {
         return;
     }
 
-    torControlThread = std::thread(&TraceThread<std::function<void()>>, "torcontrol",
+    torControlThread = std::thread(util::TraceThread, "torcontrol",
                                    [onion_service_target] { TorControlThread(onion_service_target); });
 }
 
