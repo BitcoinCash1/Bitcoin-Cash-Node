@@ -55,6 +55,9 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet)
 #ifndef USE_UPNP
     ui->mapPortUpnp->setEnabled(false);
 #endif
+#ifndef USE_NATPMP
+    ui->mapPortNatpmp->setEnabled(false);
+#endif
     connect(this, &QDialog::accepted, [this]() {
         QSettings settings;
         model->node().mapPort(settings.value("fUseUPnP").toBool(), settings.value("fUseNatpmp").toBool());
@@ -254,6 +257,7 @@ void OptionsDialog::setMapper() {
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
+    mapper->addMapping(ui->mapPortNatpmp, OptionsModel::MapPortNatpmp);
     mapper->addMapping(ui->allowIncoming, OptionsModel::Listen);
 
     mapper->addMapping(ui->connectSocks, OptionsModel::ProxyUse);
