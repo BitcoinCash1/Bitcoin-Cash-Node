@@ -1,6 +1,6 @@
 // Copyright (c) 2018 The Bitcoin Core developers
 // Copyright (c) 2021-2023 The Bitcoin developers
-// Copyright (c) 2022 The Bitcoin Cash Node developers
+// Copyright (c) 2024 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,6 +16,7 @@
 #include <interfaces/chain.h>
 #include <interfaces/handler.h>
 #include <interfaces/wallet.h>
+#include <mapport.h>
 #include <net.h>
 #include <net_processing.h>
 #include <netaddress.h>
