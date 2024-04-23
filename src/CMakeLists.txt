@@ -25,8 +25,10 @@ option(ENABLE_STATIC_LIBSTDCXX "Statically link libstdc++" OFF)
 option(ENABLE_GLIBC_BACK_COMPAT "Enable Glibc compatibility features" OFF)
 option(ENABLE_QRCODE "Enable QR code display" ON)
 option(ENABLE_UPNP "Enable UPnP support" ON)
-option(ENABLE_WERROR "Promote some compiler warnings to errors" OFF)
 option(START_WITH_UPNP "Make UPnP the default to map ports" OFF)
+option(ENABLE_NATPMP "Enable NAT-PMP support" ON)
+option(START_WITH_NATPMP "Make NAT-PMP the default to map ports" OFF)
+option(ENABLE_WERROR "Promote some compiler warnings to errors" OFF)
 option(ENABLE_CLANG_TIDY "Enable clang-tidy checks for Bitcoin Cash Node" OFF)
 option(ENABLE_PROFILING "Select the profiling tool to use" OFF)
 option(USE_JEMALLOC_EXPERIMENTAL "Use jemalloc as an allocation library (experimental)" OFF)
@@ -52,6 +54,7 @@ native_add_cmake_flags(
   "-DBUILD_BITCOIN_ZMQ=OFF"
   "-DENABLE_MAN=OFF"
   "-DENABLE_QRCODE=OFF"
+  "-DENABLE_NATPMP=OFF"
   "-DENABLE_UPNP=OFF"
   # Forward the current setting for clang-tidy
   "-DENABLE_CLANG_TIDY=${ENABLE_CLANG_TIDY}"
@@ -632,6 +635,18 @@ if(ENABLE_UPNP)
       PUBLIC -DMINIUPNP_STATICLIB
     )
   endif()
+endif()
+
+if(ENABLE_NATPMP)
+    find_package(NATPMP REQUIRED)
+    target_link_libraries(server NATPMP::natpmp)
+
+    if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+        target_compile_definitions(server
+            PUBLIC -DSTATICLIB
+            PUBLIC -DNATPMP_STATICLIB
+        )
+    endif()
 endif()
 
 # Test suite.

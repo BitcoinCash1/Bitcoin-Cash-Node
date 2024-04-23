@@ -7,11 +7,11 @@
 Minimal build requirements:
 
 ```bash
-sudo dnf install boost-devel cmake gcc-c++ git libevent-devel miniupnpc-devel ninja-build openssl-devel python3 zeromq-devel help2man
+sudo dnf install boost-devel cmake gcc-c++ git libevent-devel miniupnpc-devel libnatpmp-devel ninja-build openssl-devel python3 zeromq-devel help2man
 ```
 
-You can do without the `miniupnpc-devel`, `zeromq-devel`, and `help2man`
-packages, then you just need to respectively pass `-DENABLE_UPNP=OFF`,
+You can do without the `miniupnpc-devel`, `libnatpmp-devel`, `zeromq-devel`, and `help2man`
+packages, then you just need to respectively pass `-DENABLE_UPNP=OFF`, `-DENABLE_NATPMP=OFF`,
 `-DBUILD_BITCOIN_ZMQ=OFF`, or `-DENABLE_MAN=OFF` on the `cmake` command line.
 
 BerkeleyDB 5.3 or later is required for the wallet. This can be installed with:

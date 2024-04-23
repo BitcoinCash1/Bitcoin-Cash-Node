@@ -9,11 +9,11 @@ about obtaining the required version of `cmake`.
 Minimal build requirements
 
 ```bash
-    sudo apt-get install build-essential cmake git libboost-chrono-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libevent-dev libminiupnpc-dev libssl-dev libzmq3-dev help2man ninja-build python3
+    sudo apt-get install build-essential cmake git libboost-chrono-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libevent-dev libminiupnpc-dev libnatpmp-dev libssl-dev libzmq3-dev help2man ninja-build python3
 ```
 
-You can do without the `libminiupnpc-dev`, `libzmq3-dev`, and `help2man`
-packages, then you just need to respectively pass `-DENABLE_UPNP=OFF`,
+You can do without the `libminiupnpc-dev`, `libnatpmp-dev`, `libzmq3-dev`, and `help2man`
+packages, then you just need to respectively pass `-DENABLE_UPNP=OFF`, `-DENABLE_NATPMP=OFF`,
 `-DBUILD_BITCOIN_ZMQ=OFF`, or `-DENABLE_MAN=OFF` on the `cmake` command line.
 
 BerkeleyDB 5.3 or later is required for the wallet. This can be installed with:

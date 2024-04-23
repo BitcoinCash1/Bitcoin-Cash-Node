@@ -25,6 +25,15 @@ pkg install miniupnpc
 If not installed, UPnP support should be disabled by passing
 `-DENABLE_UPNP=OFF` to `cmake`.
 
+To enable NAT-PMP:
+
+```bash
+pkg install libnatpmp
+```
+
+If not installed, NAT-PMP support should be disabled by passing
+`-DENABLE_NATPMP=OFF` to `cmake`.
+
 To enable ZeroMQ:
 
 ```bash
