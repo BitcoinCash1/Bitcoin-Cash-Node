@@ -16,6 +16,12 @@ EXPECTED_WRONG_SHEBANG_SCRIPTS=(
     src/secp256k1/autogen.sh
     src/univalue/autogen.sh
     test/lint/git-subtree-check.sh
+    contrib/gitian-builder/contrib/verify-commits/gpg.sh
+    contrib/gitian-builder/contrib/verify-commits/pre-push-hook.sh
+    contrib/gitian-builder/contrib/verify-commits/verify-commits.sh
+    contrib/gitian-builder/target-bin/grab-packages.sh
+    contrib/gitian-builder/target-bin/init-build.sh
+    contrib/gitian-builder/target-bin/upgrade-system.sh
 )
 
 EXIT_CODE=0

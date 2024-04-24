@@ -96,7 +96,7 @@ OLDIFS=$IFS
 IFS=$'\n'
 file_list=($(
     if [[ $# == 0 ]]; then
-        git ls-files "*.py"
+        git ls-files "*.py" -- ":^contrib/gitian-builder/"
     else
         echo "$@"
     fi
