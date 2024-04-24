@@ -130,7 +130,8 @@ script: |
   pushd source_package
   cmake -GNinja .. \
     -DBUILD_LIBBITCOINCONSENSUS=OFF \
-    -DENABLE_CLANG_TIDY=OFF
+    -DENABLE_CLANG_TIDY=OFF \
+    -DENABLE_NATPMP=OFF
 
   # Also generate manpages here, because they cannot be generated during cross-compilation
   ninja package_source doc-man
