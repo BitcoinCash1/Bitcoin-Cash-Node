@@ -35,3 +35,6 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
 string(APPEND CMAKE_C_FLAGS_INIT " -m32")
 string(APPEND CMAKE_CXX_FLAGS_INIT " -m32")
+
+# Tell cmake to use the static lib otherwise it may error out
+set(Boost_USE_STATIC_LIBS ON)

@@ -49,3 +49,6 @@ find_program(CMAKE_OBJDUMP ${TOOLCHAIN_PREFIX}-objdump)
 find_program(CMAKE_OTOOL ${TOOLCHAIN_PREFIX}-otool)
 find_program(CMAKE_RANLIB ${TOOLCHAIN_PREFIX}-ranlib)
 find_program(CMAKE_STRIP ${TOOLCHAIN_PREFIX}-strip)
+
+# Tell cmake to use the static lib otherwise it may error out
+set(Boost_USE_STATIC_LIBS ON)
