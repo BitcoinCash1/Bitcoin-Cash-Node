@@ -39,7 +39,10 @@
 #include <poll.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
+#include <type_traits>
 #include <unordered_map>
 
 // Dump addresses to peers.dat every 15 minutes (900s)
@@ -722,10 +725,20 @@ size_t CConnman::SocketSendData(CNode *pnode) const
     EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend) {
     size_t nSentSize = 0;
     size_t nMsgCount = 0;
+    // Note that on win32 the send() function takes and returns 32-bit int lengths, even on a 64-bit build, whereas on
+    // Unix it takes and returns a ssize_t. We abstract these differences away here, in order to have this code support
+    // >2GiB msg sizes even on win32.
+    using SendSizeT = decltype(send(INVALID_SOCKET, nullptr, 0, 0)); // send()'s size type: ssize_t on unix, int on win32
+    static_assert(std::is_integral_v<SendSizeT> && std::is_signed_v<SendSizeT>, "send() should return a signed integer");
+    using USendSizeT = std::make_unsigned_t<SendSizeT>; // ends up being: unsigned int or size_t
+    static_assert(std::numeric_limits<uint64_t>::max() >= static_cast<USendSizeT>(std::numeric_limits<SendSizeT>::max()),
+                  "SendSizeT's maximum value must fit into a uint64_t");
+    static_assert(std::numeric_limits<size_t>::max() >= static_cast<USendSizeT>(std::numeric_limits<SendSizeT>::max()),
+                  "SendSizeT's maximum value must fit into a size_t");
 
     for (const auto &data : pnode->vSendMsg) {
         assert(data.size() > pnode->nSendOffset);
-        int nBytes = 0;
+        SendSizeT nBytes = 0;
 
         {
             LOCK(pnode->cs_hSocket);
@@ -733,10 +746,15 @@ size_t CConnman::SocketSendData(CNode *pnode) const
                 break;
             }
 
+            // Ensure we don't overflow SendSizeT (2GiB on win32). If the message exceeds SendSizeT on win32, we will
+            // just send it in two parts.
+            const SendSizeT bytesToSend = std::min<size_t>(data.size() - pnode->nSendOffset,
+                                                           std::numeric_limits<SendSizeT>::max());
+
             nBytes = send(pnode->hSocket,
                           reinterpret_cast<const char *>(data.data()) +
                               pnode->nSendOffset,
-                          data.size() - pnode->nSendOffset,
+                          bytesToSend,
                           MSG_NOSIGNAL | MSG_DONTWAIT);
         }
 
