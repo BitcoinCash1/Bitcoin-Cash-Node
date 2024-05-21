@@ -78,6 +78,7 @@ protected:
 
 public:
     CSeederNode(const CService &ip, std::vector<CAddress> *vAddrIn);
+    ~CSeederNode();
 
     bool Run();
 
