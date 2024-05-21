@@ -23,7 +23,7 @@ code_quality:
     artifacts:
         paths: [gl-code-quality-report.json]
 
-image: bitcoincashnode/buildenv:debian-v2
+image: bitcoincashnode/buildenv:debian-v3
 
 stages:
     - static_checks
@@ -59,7 +59,7 @@ static-checks-master:
         GIT_STRATEGY: clone
         GIT_LFS_SKIP_SMUDGE: 1
     script:
-        - pip3 install -r .static-checks-python-requirements.txt
+        - pip3 install --break-system-packages -r .static-checks-python-requirements.txt
         - git clone https://github.com/ekho/checkstyle2junit.git --branch master --single-branch --depth=1 build-aux/checkstyle2junit
         - echo "running static checks for CI_COMMIT_REF_NAME $CI_COMMIT_REF_NAME"
         - arc lint --outfile $CI_PROJECT_DIR/arc_lint-checkstyle.xml --output xml --everything && true; arc_lint_exit_code=$?
@@ -92,7 +92,7 @@ static-checks-branch:
         # Last merge commit is used as reference for branch starts.
         # MR's should not have merges within them.
         - export MR_START=`git show :/^Merge --format=format:%H`
-        - pip3 install -r .static-checks-python-requirements.txt
+        - pip3 install --break-system-packages -r .static-checks-python-requirements.txt
         - git clone https://github.com/ekho/checkstyle2junit.git --branch master --single-branch --depth=1 build-aux/checkstyle2junit
         - echo "running static checks for CI_COMMIT_REF_NAME $CI_COMMIT_REF_NAME from $MR_START"
         - arc lint --outfile $CI_PROJECT_DIR/arc_lint-checkstyle.xml --output xml --rev $MR_START^ && true; arc_lint_exit_code=$?
@@ -209,14 +209,14 @@ static-run-linters:
 .debian-clang-env:
     extends: .cache-debian-clang
     variables:
-        CC: clang-11
-        CXX: clang++-11
+        CC: clang-18
+        CXX: clang++-18
 
 .sanitizer-common:
     needs: []
     variables:
-        CC: clang-11
-        CXX: clang++-11
+        CC: clang-18
+        CXX: clang++-18
         ASAN_OPTIONS: log_path=stdout
         LSAN_OPTIONS: log_path=stdout
         TSAN_OPTIONS: log_path=stdout
@@ -570,8 +570,8 @@ test-debian-debug-unittests:
 .debian-debug-clang-env:
     extends: .cache-debian-debug-clang
     variables:
-        CC: clang-11
-        CXX: clang++-11
+        CC: clang-18
+        CXX: clang++-18
 
 build-debian-debug-clang:
     stage: build
@@ -802,8 +802,8 @@ pages:
         paths:
             - .cache/pip
     before_script:
-        - pip3 install wheel
-        - pip3 install jinja2==3.0.0 mkdocs pymdown-extensions==10.2.1 mkdocs-material
+        - pip3 install --break-system-packages wheel
+        - pip3 install --break-system-packages jinja2==3.0.0 mkdocs pymdown-extensions==10.2.1 mkdocs-material
     script:
         - (cd build; ninja -t restat)
         - (cd build; ninja doc-html)
