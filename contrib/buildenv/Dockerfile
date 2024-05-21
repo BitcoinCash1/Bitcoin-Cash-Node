@@ -71,6 +71,7 @@ apt-get -y install bison \
     libdb-dev \
     libevent-dev \
     libminiupnpc-dev \
+    libnatpmp-dev \
     libprotobuf-dev \
     libqrencode-dev \
     libqt5core5a \
