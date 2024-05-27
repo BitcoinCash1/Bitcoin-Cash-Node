@@ -22,7 +22,7 @@ class CValidationState;
 /// For FEATURE tests, subclasses must reimplement "ActivateFeature()" (see libauth_tests.cpp for examples that use
 /// this setup)
 class LibauthTestingSetup : public TestChain100Setup {
-protected:
+public:
     enum TxStandard { INVALID, NONSTANDARD, STANDARD };
 
     // A structure to hold all failure reason messages for all tests for all test packs
@@ -126,7 +126,6 @@ private:
     static AllReasonsDict allLibauthReasons; // All error messages suggested by Libauth
     static AllReasonsDict bchnProducedReasons; // All error messages actually produced
 
-    static void LoadAllTestPacks();
     static void RunTestVector(const TestVector &test, const std::string &packName);
     static bool RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state);
 
@@ -137,15 +136,18 @@ protected:
     /// test packs of type TestPack::FEATURE.
     virtual void ActivateFeature(bool) {}
 
-    /// Returns the TestPack named `name`, or `nullptr` if no such TestPack exists
-    static const TestPack *GetTestPack(const std::string &name);
-
 public:
     LibauthTestingSetup();
     ~LibauthTestingSetup() override;
 
+    /// Explicitly load all test packs, optionally specifying the height for all coins internally.
+    static void LoadAllTestPacks(std::optional<unsigned> coinHeights = std::nullopt);
+
     /// Run all tests for the test pack named `name`.
     void RunTestPack(const std::string &name);
+
+    /// Returns the TestPack named `name`, or `nullptr` if no such TestPack exists
+    static const TestPack *GetTestPack(const std::string &name);
 
     /// Generate the reasons lookup table and compare it against the currently loaded table. Returns false and outputs
     /// the corrected version to a file if it differs, and includes a human-readable checklist file to help with manual

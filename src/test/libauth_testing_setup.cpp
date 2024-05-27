@@ -37,7 +37,7 @@ LibauthTestingSetup::AllReasonsDict LibauthTestingSetup::bchnProducedReasons;
 UniValue::Object LibauthTestingSetup::reasonsLookupTable;
 
 /* static */
-void LibauthTestingSetup::LoadAllTestPacks() {
+void LibauthTestingSetup::LoadAllTestPacks(std::optional<unsigned> optCoinHeights) {
     if (!allTestPacks.empty()) return;
 
     static_assert(sizeof(json_tests::libauth_test_vectors[0]) == 1 && sizeof(json_tests::libauth_expected_test_fail_reasons[0]) == 1,
@@ -58,7 +58,7 @@ void LibauthTestingSetup::LoadAllTestPacks() {
     }
     // Load the test pack vectors, and Libauth suggested failure reasons
     BOOST_CHECK( ! testPacksUV.empty());
-    unsigned coinHeights = []{
+    unsigned coinHeights = optCoinHeights ? *optCoinHeights : []{
         LOCK(cs_main);
         return ::ChainActive().Tip()->nHeight;
     }();

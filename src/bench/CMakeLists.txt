@@ -47,6 +47,7 @@ add_executable(bench_bitcoin
 	gcs_filter.cpp
 	json.cpp
 	json_util.cpp
+	libauth_bench.cpp
 	lockedpool.cpp
 	mempool_eviction.cpp
 	merkle_root.cpp
