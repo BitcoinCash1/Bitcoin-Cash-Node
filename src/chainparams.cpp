@@ -303,8 +303,9 @@ public:
                 // Upgrade 9; May 15, 2023 (MTP time >= 1684152000), first upgrade block: 792773
                 {792773, BlockHash::fromHex("000000000000000002fc0cdadaef1857bbd2936d37ea94f80ba3db4a5e8353e8")},
 
-                // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
-                {823112, BlockHash::fromHex("0000000000000000014e75464739e2b6f12a756f0d749cc15c243adb73ffbd5b")},
+                // Upgrade 10; May 15, 2024 (MTP time >= 1715774400), first block after upgrade: 845891
+                {845891, BlockHash::fromHex("0000000000000000017012058e7b67032926f1f20f96d1a2cd66abff9aaf8244")},
+                {853417, BlockHash::fromHex("000000000000000001c97a4c91c7a85d5f56a7ecd119f21abffdc6987a1be792")},
             }};
 
         // Data as of block
@@ -508,6 +509,10 @@ public:
 
                 // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
                 {1582896, BlockHash::fromHex("000000000000088ef4d908ed35dc511b97fe4df78d5e37ab1e1aea4084d19506")},
+
+                // Upgrade 10; May 15, 2024 (MTP time >= 1715774400), first block after upgrade: 1605521
+                {1605521, BlockHash::fromHex("000000000000007d4c561056e9bcb3ab7591d024b18fff4bc27cca4d51d4780e")},
+                {1610899, BlockHash::fromHex("00000000e2f5dde96179ea278285118ad69e5d94b9269fef63c604b3d551a5d0")},
             }};
 
         // Data as of block
@@ -684,8 +689,9 @@ public:
                 // Upgrade 9; May 15, 2023 (MTP time >= 1684152000), first upgrade block: 148044
                 {148044, BlockHash::fromHex("0000000008d96c4423ac92aa200af82819339435251736b08babde1ecaf8a5b6")},
 
-                // prior to upgrade 10 (to be replaced with a real upgrade 10 checkpoint after May 15, 2024
-                {178150, BlockHash::fromHex("00000000bd585ef9f37712bca4539acd8ec7c3b02620186dda1ee880bc07ba71")},
+                // Upgrade 10; May 15, 2024 (MTP time >= 1715774400), first block after upgrade: 200741
+                {200741, BlockHash::fromHex("0000000007d8ccbb767c269551dd81c520463066bec8654a18f4106aa53dc816")},
+                {206379, BlockHash::fromHex("000000001d44ca6c351af579f81703c0a175d1d4554db70ae7b7f7df2919eaf9")},
             }};
 
         // Data as of block
@@ -1017,8 +1023,9 @@ public:
                 {128042, BlockHash::fromHex("0000000010e506eeb528dd8238947c6fcdf8d752ece66517eea778650600edae")},
                 {148000, BlockHash::fromHex("000000009788ecce39b046caab3cf0f72e8c5409df23454679dbdcae2bd4dded")},
 
-                // A block significantly after Upgrade 10 activated (which activated on Nov. 15, 2023)
+                // A block after Upgrade 10 activated (Nov. 15, 2023), first block after upgrade: 174520
                 {178140, BlockHash::fromHex("000000003c37cc0372a5b9ccacca921786bbfc699722fc41e9fdbb1de4146ef1")},
+                {206364, BlockHash::fromHex("00000000146a073b9d4e172adbee5252014a8b4d75c56cce36858311565ae251")},
             }};
 
         // Data as of block
