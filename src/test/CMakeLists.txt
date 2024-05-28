@@ -34,7 +34,7 @@ gen_json_header(JSON_HEADERS
   data/base58_encode_decode.json
   data/blockfilters.json
   data/cashaddr_token_types.json
-  data/expected_test_fail_reasons.json
+  data/libauth_expected_test_fail_reasons.json
   data/key_io_valid.json
   data/key_io_invalid.json
   data/script_tests.json
@@ -45,23 +45,38 @@ gen_json_header(JSON_HEADERS
   data/tx_valid.json
 )
 
-function(gen_chip_tests_header NAME)
-  set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/chip_test_vectors.json.h")
-  file(GLOB chip_files "${CMAKE_CURRENT_SOURCE_DIR}/data/CHIPs/bch_vmb_tests_*chip_*.json")
+function(gen_libauth_tests_autogen NAME)
+  set(combined_vec_cpp "${CMAKE_CURRENT_BINARY_DIR}/data/libauth_test_vectors.json.cpp")
+  set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/libauth_test_vectors.json.h")
+  file(GLOB_RECURSE test_files LIST_DIRECTORIES false
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/libauth_test_vectors/bch_vmb_tests_*.json"
+  )
+  # We run the generate_libauth_test_vectors.py script twice, once to generate the header, and once for the .cpp file
+  add_custom_command(OUTPUT ${combined_vec_cpp}
+    COMMAND
+      "${Python_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_libauth_test_vectors.py"
+      "--encode" ${test_files} > ${combined_vec_cpp}
+    DEPENDS
+      "data/generate_libauth_test_vectors.py"
+      ${test_files}
+    VERBATIM
+  )
   add_custom_command(OUTPUT ${combined_vec_h}
     COMMAND
       "${Python_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_chip_test_vectors.py"
-      "--encode" ${chip_files} > ${combined_vec_h}
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_libauth_test_vectors.py"
+      "--encode" "--header-only" ${test_files} > ${combined_vec_h}
     DEPENDS
-      "data/generate_chip_test_vectors.py"
-      ${chip_files}
+      "data/generate_libauth_test_vectors.py"
+      ${test_files}
     VERBATIM
   )
-  set(${NAME} "${combined_vec_h}" PARENT_SCOPE)
+  # Export both .cpp and .h files to outer scope to be added to build
+  set(${NAME} "${combined_vec_cpp}" "${combined_vec_h}" PARENT_SCOPE)
 endfunction()
 
-gen_chip_tests_header(CHIP_HEADER)
+gen_libauth_tests_autogen(LIBAUTH_TESTS_AUTOGEN)
 
 function(gen_abla_tests_header NAME)
     set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/abla_test_vectors.json.h")
@@ -140,7 +155,7 @@ gen_asmap_headers(ASMAP_HEADERS
 
 add_boost_unit_tests_to_suite(bitcoin test_bitcoin
   check_assert.cpp
-  chip_testing_setup.cpp
+  libauth_testing_setup.cpp
   jsonutil.cpp
   lib/transaction_utils.cpp
   main.cpp
@@ -152,7 +167,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
 
   # Tests generated from JSON
   ${JSON_HEADERS}
-  ${CHIP_HEADER}
+  ${LIBAUTH_TESTS_AUTOGEN}
   ${ABLA_HEADER}
 
   # Wallet test fixture
@@ -216,7 +231,7 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     key_io_tests.cpp
     key_tests.cpp
     lcg_tests.cpp
-    libauth_chip_tests.cpp
+    libauth_tests.cpp
     mempool_tests.cpp
     merkleblock_tests.cpp
     merkle_tests.cpp

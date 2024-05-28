@@ -1,7 +1,7 @@
 [{
   "mappings": {
   },
-  "chips": {
+  "testpacks": {
     "cashtokens": {
       "mappings": {
         "Error in evaluating input index 0: Encountered an improperly encoded signature. Transaction signature (including signing serialization type): 304402201abdee2065015cee372e4679cb2893faed0a4fc590339ba5b66283a99b465518022000984ae7087a95006995b957b0d55d752eac27b30b86646d79a9ba338ebccd8be2": "mandatory-script-verify-flag-failed (Signature hash type missing or not understood)",

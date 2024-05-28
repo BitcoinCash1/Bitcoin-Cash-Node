@@ -8,7 +8,7 @@
 #include <util/system.h>
 #include <validation.h>
 
-#include <test/chip_testing_setup.h>
+#include <test/libauth_testing_setup.h>
 #include <test/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
@@ -21,7 +21,7 @@ namespace {
 
 /// Test fixture that:
 /// - tracks if we set the upgrade 9 activation height override, and resets it on test end
-struct TokenTransactionTestingSetup : ChipTestingSetup {
+struct TokenTransactionTestingSetup : LibauthTestingSetup {
     std::optional<int32_t> upgrade9OriginalOverride;
     bool touchedUpgrade9{};
 
@@ -47,24 +47,25 @@ struct TokenTransactionTestingSetup : ChipTestingSetup {
     }
 
 protected:
-    /// Concrete implementation of abstract base pure virtual method
-    void ActivateChip(bool active) override { SetUpgrade9Active(active); }
+    /// For the cashtoken tests, we need to activate/deactivate the CHIP, so we implement this optional function.
+    void ActivateFeature(bool active) override { SetUpgrade9Active(active); }
 };
 
 } // namespace
 
 
-BOOST_AUTO_TEST_SUITE(libauth_chip_tests)
+BOOST_AUTO_TEST_SUITE(libauth_tests)
 
 BOOST_FIXTURE_TEST_CASE(cashtokens, TokenTransactionTestingSetup) {
-    RunTestsForChip("cashtokens");
+    RunTestPack("cashtokens");
 }
 
-// This test relies on all Libauth's CHIP tests having previously completed as part of this run
+// Precondition: This test *requires* that all Libauth test packs have previously completed as part of this
+// test_bitcoin run.
 BOOST_FIXTURE_TEST_CASE(test_lookup_table, TestingSetup) {
-    bool match = ChipTestingSetup::ProcessReasonsLookupTable();
-    BOOST_CHECK_MESSAGE(match, (match ? "The error messages resulting from the Libauth CHIP tests are as expected"
-                               : "Some of the error messages resulting from the Libauth CHIP tests are unexpected. See: "
+    bool match = LibauthTestingSetup::ProcessReasonsLookupTable();
+    BOOST_CHECK_MESSAGE(match, (match ? "The error messages resulting from the Libauth test vectors are as expected"
+                               : "Some of the error messages resulting from the Libauth test vectors are unexpected. See: "
                                  "doc/libauth-test-reasons.html"));
 }
 

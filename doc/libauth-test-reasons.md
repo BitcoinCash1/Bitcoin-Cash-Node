@@ -1,4 +1,4 @@
-# Libauth CHIP test expected failure reasons
+# Libauth test expected failure reasons
 
 ## Background: The difficulty of checking Libauth test errors
 
@@ -17,7 +17,7 @@ along with the pass/fail state when running tests under different conditions.
 
 BCHN directly imports certain
 [Libauth cross-platform transaction tests](https://github.com/bitauth/libauth/tree/master/src/lib/vmb-tests#readme)
-for testing CHIPs, which poses a complication. These tests are externally supplied and as a result the error messages
+which poses a complication. These tests are externally supplied and as a result the error messages
 expected from BCHN are not recorded/assigned to the tests; since the error messages are platform specific. Rather than
 ignore the error messages for these tests, we develop our own list of expected error messages for each test.
 
@@ -35,11 +35,12 @@ specific failure reasons where BCHN gives only general error messages, for examp
 
 To address this, we prepare a lookup table with the most common mapping between Libauth suggested reasons and
 BCHN errors, with overrides provided for specific tests. This is broken up by testing context (otherwise there would be
-so much inconsistency that overrides would outnumber rules). Testing context here means; which CHIP is being tested,
-whether or not the CHIP is pre- or post-activation in the testing environment, and whether standard or non-standard
-validation is enabled. Those context permutations are represented as numbers in the table below for simplicity. Also for
-simplicity, there is only a single rule for each Libauth reason. There are no rules covering more specific contexts that
-override more general rules. Only overrides do this, and overrides always target a specific context.
+so much inconsistency that overrides would outnumber rules). Testing context here means; which test pack is being
+tested, whether or not the test pack includes a feature that is pre- or post-activation in the testing environment, and
+whether standard or non-standard validation is enabled. Those context permutations are represented as numbers in the
+table below for simplicity. Also for simplicity, there is only a single rule for each Libauth reason. There are no rules
+covering more specific contexts that override more general rules. Only overrides do this, and overrides always target a
+specific context.
 
 This allows for many matches to be captured by general rules while allowing for a minimized set of test-specific
 overrides for odd cases.
@@ -59,26 +60,27 @@ suggested reason and testing context.
 
 ## Manual oversight process
 
-This table is generated automatically when the Libauth CHIP tests are run. As with normal test development, the produced
+This table is generated automatically when the Libauth tests are run. As with normal test development, the produced
 BCHN error messages need to be manually checked to ensure they make sense given the context. To help with this, a
 special human-readable checklist is automatically generated that includes more context information and individual test
 details alongside each rule/override. If going from scratch, all of the BCHN error messages in each row need to be
 manually checked to ensure they make sense given the context. However, once this is done, any subsequent additions or
-modifications to the Libauth CHIP tests are automatically marked up in the checklist as "new", allowing the reviewer to
-avoid rechecking rules that have already been confirmed.
+modifications to the Libauth tests are automatically marked up in the checklist as "new", allowing the reviewer to avoid
+rechecking rules that have already been confirmed.
 
-The lookup table itself is stored in a JSON file: `expected_test_fail_reasons.json` and the human-readable checklist is
-stored in a CSV file: `expected_reasons_checklist.csv`. These are written to the current directory from where
-`test_bitcoin` is run. For instance, if running locally from your build directory with
-`src/test/test_bitcoin –run_test=libauth_chip_tests` then the two files will appear in your build directory. Note; these
+The lookup table itself is stored in a JSON file: `libauth_expected_test_fail_reasons.json` and the human-readable
+checklist is stored in a CSV file: `libauth_expected_reasons_checklist.csv`. These are written to the current directory
+from where `test_bitcoin` is run. For instance, if running locally from your build directory with
+`src/test/test_bitcoin --run_test=libauth_tests` then the two files will appear in your build directory. Note; these
 are only output if the lookup table does not exactly match the expected lookup table. To force generation, just make a
-minor edit to `expected_test_fail_reasons.json`, such as adding a fake override entry, then recompile and rerun the
-tests.
+minor edit to `libauth_expected_test_fail_reasons.json`, such as adding a fake override entry, then recompile and rerun
+the tests.
 
 While working your way through the checklist, the task is simply to confirm that each entry in the "BCHN error
 message" column makes sense given the row's "Libauth suggested reason" and testing context.  If any match seems
 suspect, check details of the specific tests that the rule applies to, which are given in the last columns of each row.
 If any match is wrong, fix the bug with the associated tests before proceeding.
 
-Once confirming that every new match makes sense, simply copy the generated `expected_test_fail_reasons.json` file into
-`src/test/data/`, overwriting the original.  Finally, recompile and rerun the tests to confirm the tests now pass.
+Once confirming that every new match makes sense, simply copy the generated `libauth_expected_test_fail_reasons.json`
+file into `src/test/data/`, overwriting the original.  Finally, recompile and rerun the tests to confirm the tests now
+pass.
