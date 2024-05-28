@@ -58,8 +58,17 @@ bool IsUpgrade9Enabled(const Consensus::Params &params, const CBlockIndex *pinde
 /** Returns the height of the activation block. This is one less than the actual block for which the new rules apply. */
 int32_t GetUpgrade9ActivationHeight(const Consensus::Params &params);
 
+/**
+ *  Global: If set, the user overrode the -upgrade10activationheight from the command-line or config file. Unit tests
+ *  also may temporarily set this value. If this is not set, the *Upgrade10*() functions use hard-coded chain params for
+ *  the activation height rather than this override.
+ */
+extern std::optional<int32_t> g_Upgrade10HeightOverride;
+
 /** Check if May 15th, 2024 protocol upgrade has activated. */
 bool IsUpgrade10Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);
+/** Returns the height of the activation block. This is one less than the actual block for which the new rules apply. */
+int32_t GetUpgrade10ActivationHeight(const Consensus::Params &params);
 
 /** Check if May 15th, 2025 protocol upgrade has activated. */
 bool IsUpgrade11Enabled(const Consensus::Params &params, const CBlockIndex *pindexPrev);

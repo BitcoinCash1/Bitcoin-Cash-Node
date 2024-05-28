@@ -968,11 +968,15 @@ void SetupServerArgs() {
                   regtestChainParams->GetConsensus().upgrade9Height),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
-        "-upgrade10activationtime=<n>",
-        strprintf("Activation time of the May 2024 Bitcoin Cash Network Upgrade (<n> seconds since epoch, "
-                  "default: %d, chipnet: %d)",
-                  defaultChainParams->GetConsensus().upgrade10ActivationTime,
-                  chipnetChainParams->GetConsensus().upgrade10ActivationTime),
+        "-upgrade10activationheight=<n>",
+        strprintf("Activation height of the May 2024 Bitcoin Cash Network Upgrade; first block using new rules will be"
+                  " after this height (default: %d, testnet: %d, testnet4: %d, scalenet: %d, chipnet: %d, regtest: %d)",
+                  defaultChainParams->GetConsensus().upgrade10Height,
+                  testnetChainParams->GetConsensus().upgrade10Height,
+                  testnet4ChainParams->GetConsensus().upgrade10Height,
+                  scalenetChainParams->GetConsensus().upgrade10Height,
+                  chipnetChainParams->GetConsensus().upgrade10Height,
+                  regtestChainParams->GetConsensus().upgrade10Height),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg(
         "-upgrade11activationtime=<n>",
@@ -1946,6 +1950,16 @@ bool AppInitParameterInteraction(Config &config) {
         }
         ::g_Upgrade9HeightOverride.emplace(static_cast<int32_t>(height));
         LogPrintf("Using upgrade 9 activation height override: %d\n", height);
+    }
+
+    // Process CLI/conf override for the upgrade10 activation height
+    if (gArgs.IsArgSet("-upgrade10activationheight")) {
+        const auto height = gArgs.GetArg("-upgrade10activationheight", 0);
+        if (height < 0 || height > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
+            return InitError("Invalid -upgrade10activationheight, must be a positive integer in the 32-bit range");
+        }
+        ::g_Upgrade10HeightOverride.emplace(static_cast<int32_t>(height));
+        LogPrintf("Using upgrade 10 activation height override: %d\n", height);
     }
 
     return true;

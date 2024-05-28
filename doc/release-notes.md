@@ -28,7 +28,8 @@ TODO
 
 ## Modified functionality
 
-TODO
+The command-line option -upgrade10activationtime has been renamed to -upgrade10activationheight and is now height-based,
+rather than MTP time-based.
 
 ## Removed functionality
 

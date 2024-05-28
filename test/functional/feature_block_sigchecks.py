@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2023 The Bitcoin Developers
+# Copyright (c) 2020-2024 The Bitcoin Developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """
@@ -109,7 +109,7 @@ class BlockSigChecksTest(BitcoinTestFramework):
         self.block_heights = {}
         # Note that for this test, since we want to control the blocksize, we turn ABLA off (no upgrade 10). This test
         # is still valid, however, since it tests that sigchecks are what we expect given a particular max block size.
-        self.base_extra_args = ['-acceptnonstdtxn=1', '-upgrade10activationtime=2000000000']
+        self.base_extra_args = ['-acceptnonstdtxn=1', '-upgrade10activationheight=2147483647']
         self.extra_args = [self.base_extra_args +
                            ["-excessiveblocksize={}".format(EXCESSIVEBLOCKSIZE),
                             "-blockmaxsize={}".format(MAXGENERATEDBLOCKSIZE)]]

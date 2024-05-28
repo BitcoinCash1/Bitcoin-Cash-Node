@@ -816,8 +816,8 @@ private:
     const Predicate predicate;
 };
 
-/// Global object to track the exact height when Upgrade 10 activated (may be needed for some consensus rules).
-extern ActivationBlockTracker g_upgrade10_block_tracker;
+/// Global object to track the exact height when Upgrade 11 activated (may be needed for some consensus rules).
+extern ActivationBlockTracker g_upgrade11_block_tracker;
 
 /// Returns the script flags which are basically nextBlockScriptFlags | STANDARD_SCRIPT_VERIFY_FLAGS
 uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex,

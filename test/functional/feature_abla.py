@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-# Copyright (c) 2023 The Bitcoin developers
+# Copyright (c) 2023-2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test support for ABLA EBAA which activates with Upgrade10."""
-import time
-
 from test_framework.abla import AblaState
 from test_framework.cdefs import (
     BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO,
@@ -27,9 +25,9 @@ class AblaTest(BitcoinTestFramework):
         self.num_nodes = 2
         self.setup_clean_chain = True
         self.base_extra_args = ['-expire=0', '-checkmempool=0', '-allowunconnectedmining=1']
-        self.extra_args = [['-upgrade10activationtime=2000000000', '-percentblockmaxsize=100']
+        self.extra_args = [['-upgrade10activationheight=2147483647', '-percentblockmaxsize=100']
                            + self.base_extra_args,
-                           ['-upgrade10activationtime=0']]
+                           ['-upgrade10activationheight=0']]
         # We need a long rpc timeout here so that the sanitizer-undefined CI job may pass
         self.rpc_timeout = 600
 
@@ -38,8 +36,8 @@ class AblaTest(BitcoinTestFramework):
             blockhash = self.nodes[0].getblockchaininfo()['bestblockhash']
         return self.nodes[0].getblockheader(blockhash, verbose)
 
-    def get_mtp(self, blockhash=None):
-        return self.get_header(blockhash, True)['mediantime']
+    def get_height(self, blockhash=None) -> int:
+        return self.get_header(blockhash, True)['height']
 
     def get_abla_activation_height(self):
         """Walk backwards from tip, finding ABLA activation height. Returns the height or None if ABLA not activated."""
@@ -77,26 +75,21 @@ class AblaTest(BitcoinTestFramework):
         # Check that blocksize limit is at the consensus default
         assert_equal(node.getblocktemplatelight({})['sizelimit'], DEFAULT_CONSENSUS_BLOCK_SIZE)
 
-        mtp = self.get_mtp()
+        saved_height = self.get_height()
 
         # Now, enable the upgrade
-        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationtime={mtp + 1}',
+        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationheight={saved_height + 1}',
                                                                 '-percentblockmaxsize=100'])
 
         # No ABLA yet
         assert_equal(self.get_abla_activation_height(), None)
 
-        saved_height = self.get_header()['height']
-
-        # Mine 6 blocks (maybe sleep to advance the clock past activation NTP)
-        t_diff = max(self.get_header()['time'], time.time()) - mtp
-        if t_diff < 0:
-            time.sleep(abs(t_diff) + 1)
-        node.generatetoaddress(6, addr)
+        # Mine 2 blocks to ensure activation
+        node.generatetoaddress(2, addr)
 
         activation_height = self.get_abla_activation_height()
         assert_not_equal(activation_height, None)
-        assert_greater_than(activation_height, saved_height)
+        assert_equal(activation_height, saved_height + 1)
 
         node.fillmempool(290)  # Put 290 MB unserialized =~ 70 MB serialized tx data into mempool
 
@@ -127,7 +120,7 @@ class AblaTest(BitcoinTestFramework):
         assert_equal(gbtl['sigoplimit'], expected_sigops)
 
         # Next, restart node, specifying -precentmaxblocksize=50. `getmininginfo` limits should reflect this
-        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationtime={mtp + 1}',
+        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationheight={activation_height}',
                                                                 '-percentblockmaxsize=50'])
 
         mining_limit = next_block_size_limit // 2
@@ -147,7 +140,7 @@ class AblaTest(BitcoinTestFramework):
         assert_equal(gbtl['sigoplimit'], expected_sigops)
 
         # Mine beyond the initial 32 MB limit to test ABLA actually allowing for bigger blocks.
-        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationtime={mtp + 1}',
+        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationheight={activation_height}',
                                                                 '-percentblockmaxsize=100'])
         assert_greater_than_or_equal(node.getmempoolinfo()['bytes'], DEFAULT_CONSENSUS_BLOCK_SIZE * 2)
         new_block_hash = node.generatetoaddress(2, addr)[1]  # Mine 2 full blocks to bump ABLA state >32MB
@@ -159,9 +152,9 @@ class AblaTest(BitcoinTestFramework):
         assert_greater_than(new_abla_state.GetNextBlockSizeLimit(), DEFAULT_CONSENSUS_BLOCK_SIZE)
         assert_greater_than(new_block_size, DEFAULT_CONSENSUS_BLOCK_SIZE)
 
-        # "Abusing" the node by restarting it again with upgrade10 activation at the beginning of time should make the
+        # "Abusing" the node by restarting it again with upgrade10 activation at the first block height should make the
         # node figure out how to recover and have the correct abla state for the activation block, which is now genesis.
-        self.restart_node(0, extra_args=self.base_extra_args + ['-upgrade10activationtime=0'])
+        self.restart_node(0, extra_args=self.base_extra_args + ['-upgrade10activationheight=0'])
 
         assert_equal(self.get_abla_activation_height(), 0)
         genesis_size = node.getblock(node.getblockhash(0), 1)['size']

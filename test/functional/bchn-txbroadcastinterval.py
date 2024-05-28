@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2023 The Bitcoin Cash Node developers
+# Copyright (c) 2020-2024 The Bitcoin Cash Node developers
 # Author matricz
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -90,10 +90,10 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
         args = [
             ["-txbroadcastinterval={}".format(self.options.interval),
                 "-txbroadcastrate=1", "-excessiveblocksize=2000000",
-                "-blockmaxsize=2000000", "-upgrade10activationtime=2000000000"],
+                "-blockmaxsize=2000000", "-upgrade10activationheight=2147483647"],
             ["-txbroadcastinterval=1",
                 "-txbroadcastrate=1", "-excessiveblocksize=2000000",
-                "-blockmaxsize=2000000", "-upgrade10activationtime=2000000000"],
+                "-blockmaxsize=2000000", "-upgrade10activationheight=2147483647"],
             []
         ]
         self.extra_args = args

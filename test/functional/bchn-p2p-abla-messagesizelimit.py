@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2023 The Bitcoin developers
+# Copyright (c) 2023-2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test support for ABLA-related p2p 'block' message size limits."""
@@ -64,7 +64,7 @@ class P2PAblaMessageSizeLimitTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.base_extra_args = ['-expire=0', '-checkmempool=0', '-allowunconnectedmining=1', '-whitelist=127.0.0.1',
                                 '-percentblockmaxsize=100']
-        self.extra_args = [['-upgrade10activationtime=999999999999'] + self.base_extra_args] * self.num_nodes
+        self.extra_args = [['-upgrade10activationheight=2147483647'] + self.base_extra_args] * self.num_nodes
         # We need a long rpc timeout here so that the sanitizer-undefined CI job may pass
         self.rpc_timeout = 600
 
@@ -73,8 +73,8 @@ class P2PAblaMessageSizeLimitTest(BitcoinTestFramework):
             blockhash = self.nodes[0].getblockchaininfo()['bestblockhash']
         return self.nodes[0].getblockheader(blockhash, verbose)
 
-    def get_mtp(self, blockhash=None):
-        return self.get_header(blockhash, True)['mediantime']
+    def get_height(self, blockhash=None):
+        return self.get_header(blockhash, True)['height']
 
     def get_abla_activation_height(self):
         """Walk backwards from tip, finding ABLA activation height. Returns the height or None if ABLA not activated."""
@@ -185,10 +185,12 @@ class P2PAblaMessageSizeLimitTest(BitcoinTestFramework):
         self.test_block_msgs_around_size(default_lookahead)
 
         # Activate upgrade 10
-        mtp = self.get_mtp()
+        current_height = self.get_height()
 
-        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationtime={mtp + 1}'])
+        self.restart_node(0, extra_args=self.base_extra_args + [f'-upgrade10activationheight={current_height + 1}'])
         self.reconnect_p2p()
+
+        assert self.get_abla_activation_height() is None
 
         # Mine until activated
         while self.get_abla_activation_height() is None:

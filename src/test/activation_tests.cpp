@@ -166,30 +166,38 @@ BOOST_AUTO_TEST_CASE(isupgrade9enabled) {
 }
 
 BOOST_AUTO_TEST_CASE(isupgrade10enabled) {
-    // test with no hard-coded activation height (activation based on MTP)
+    // test with hard-coded activation height, also test the upgrade height override mechanism
+    Defer d([orig_override = g_Upgrade10HeightOverride] { g_Upgrade10HeightOverride = orig_override; });
     const auto pparams = CreateChainParams(CBaseChainParams::MAIN);
     const Consensus::Params &params = pparams->GetConsensus();
-    const auto activation = gArgs.GetArg("-upgrade10activationtime", params.upgrade10ActivationTime);
-    const auto origMockTime = GetMockTime();
-    Defer d([origMockTime] { SetMockTime(origMockTime); });
-    SetMockTime(activation - 1000000);
 
-    BOOST_CHECK(!IsUpgrade10Enabled(params, nullptr));
+           // check with no override (params.upgrade9height), and with a bunch of overrides spanning the int32 range ...
+    for (const int32_t override : {-1, 0, 1000, 1'000'000, 1'000'000'000 }) {
+        if (override < 0) {
+            // no override, use consensus params
+            g_Upgrade10HeightOverride.reset();
+            BOOST_CHECK_EQUAL(GetUpgrade10ActivationHeight(params), params.upgrade10Height);
+        } else {
+            // with override
+            g_Upgrade10HeightOverride = override;
+            BOOST_CHECK_EQUAL(GetUpgrade10ActivationHeight(params), override);
+        }
+        const int32_t activation_height = GetUpgrade10ActivationHeight(params);
 
-    std::array<CBlockIndex, 12> blocks;
-    for (size_t i = 1; i < blocks.size(); ++i) {
-        blocks[i].pprev = &blocks[i - 1];
+        BOOST_CHECK(!IsUpgrade10Enabled(params, nullptr));
+
+        std::array<CBlockIndex, 4> blocks;
+        blocks[0].nHeight = activation_height - 2;
+
+        for (size_t i = 1; i < blocks.size(); ++i) {
+            blocks[i].pprev = &blocks[i - 1];
+            blocks[i].nHeight = blocks[i - 1].nHeight + 1;
+        }
+        BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks[0]));
+        BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks[1]));
+        BOOST_CHECK(IsUpgrade10Enabled(params, &blocks[2]));
+        BOOST_CHECK(IsUpgrade10Enabled(params, &blocks[3]));
     }
-    BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks.back()));
-
-    SetMTP(blocks, activation - 1);
-    BOOST_CHECK(!IsUpgrade10Enabled(params, &blocks.back()));
-
-    SetMTP(blocks, activation);
-    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks.back()));
-
-    SetMTP(blocks, activation + 1);
-    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks.back()));
 }
 
 BOOST_AUTO_TEST_CASE(isupgrade11enabled) {
@@ -219,24 +227,24 @@ BOOST_AUTO_TEST_CASE(isupgrade11enabled) {
     BOOST_CHECK(IsUpgrade11Enabled(params, &blocks.back()));
 }
 
-// Test that the upgrade9 activation height tracker mechanism works, even if examining blocks that are not the
+// Test that the upgrade11 activation height tracker mechanism works, even if examining blocks that are not the
 // active chain.
-BOOST_AUTO_TEST_CASE(test_upgrade10_activation_block_tracking) {
+BOOST_AUTO_TEST_CASE(test_upgrade11_activation_block_tracking) {
     LOCK(cs_main); // needed to access the g_upgrade10_block_tracker and ::ChainActive()
     CBlockIndex * const origTip = ::ChainActive().Tip();
     const auto pparams = CreateChainParams(CBaseChainParams::MAIN);
     const Consensus::Params &params = pparams->GetConsensus();
-    const auto activation = gArgs.GetArg("-upgrade10activationtime", params.upgrade10ActivationTime);
+    const auto activation = gArgs.GetArg("-upgrade11activationtime", params.upgrade11ActivationTime);
     const auto origMockTime = GetMockTime();
     SetMockTime(activation - 1000000);
     Defer d([&] {
         LOCK(cs_main); // to suppress warnings
         SetMockTime(origMockTime);
         ::ChainActive().SetTip(origTip);
-        g_upgrade10_block_tracker.ResetActivationBlockCache();
+        g_upgrade11_block_tracker.ResetActivationBlockCache();
     });
 
-    BOOST_CHECK(!IsUpgrade10Enabled(params, nullptr));
+    BOOST_CHECK(!IsUpgrade11Enabled(params, nullptr));
 
     std::array<CBlockIndex, 12> blocks, blocks2, blocksFork;
     for (size_t i = 1; i < blocks.size(); ++i) {
@@ -259,76 +267,76 @@ BOOST_AUTO_TEST_CASE(test_upgrade10_activation_block_tracking) {
         blocksFork[i].nTime = blocksFork[i-1].nTime + 1;
     }
 
-    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks.back()));
-    BOOST_CHECK(IsUpgrade10Enabled(params, &blocks2.back()));
+    BOOST_CHECK(IsUpgrade11Enabled(params, &blocks.back()));
+    BOOST_CHECK(IsUpgrade11Enabled(params, &blocks2.back()));
 
     // test that it returns what we expect when the active chain is `blocks`
     ::ChainActive().SetTip(&blocks.back());
 
-    auto *block = g_upgrade10_block_tracker.GetActivationBlock(&blocks.back(), params);
+    auto *block = g_upgrade11_block_tracker.GetActivationBlock(&blocks.back(), params);
     BOOST_CHECK(block == &blocks[5]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks2.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks2.back(), params);
     BOOST_CHECK(block == &blocks2[9]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
     BOOST_CHECK(block == &blocks[5]); // the chain we forked off of is still the activation block
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
 
     // switch to another tip
     ::ChainActive().SetTip(origTip);
 
     // both should still work even if non-main chain and if the upgrade is not activated!
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks.back(), params);
     BOOST_CHECK(block == &blocks[5]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks2.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks2.back(), params);
     BOOST_CHECK(block == &blocks2[9]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
     BOOST_CHECK(block == &blocks[5]); // the chain we forked off of is still the activation block
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
 
     // switch to another tip
     ::ChainActive().SetTip(&blocks2.back());
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks.back(), params);
     BOOST_CHECK(block == &blocks[5]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks2.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks2.back(), params);
     BOOST_CHECK(block == &blocks2[9]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
     BOOST_CHECK(block == &blocks[5]); // the chain we forked off of is still the activation block
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
     // switch to the fork tip
     ::ChainActive().SetTip(&blocksFork.back());
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks.back(), params);
     BOOST_CHECK(block == &blocks[5]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocks2.back(), params);
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocks2.back(), params);
     BOOST_CHECK(block == &blocks2[9]);
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocksFork.back(), params); // check fork
     BOOST_CHECK(block == &blocks[5]); // the chain we forked off of is still the activation block
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 
     // Call it again against another block to test caching works
-    block = g_upgrade10_block_tracker.GetActivationBlock(&blocksFork[5], params); // check fork
+    block = g_upgrade11_block_tracker.GetActivationBlock(&blocksFork[5], params); // check fork
     BOOST_CHECK(block == &blocks[5]); // the chain we forked off of is still the activation block
-    BOOST_CHECK(IsUpgrade10Enabled(params, block) && !IsUpgrade10Enabled(params, block->pprev));
+    BOOST_CHECK(IsUpgrade11Enabled(params, block) && !IsUpgrade11Enabled(params, block->pprev));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
