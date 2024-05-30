@@ -4,10 +4,14 @@
 
 #include <test/libauth_testing_setup.h>
 
+#include <chainparams.h>
 #include <config.h>
 #include <consensus/validation.h>
 #include <core_io.h>
 #include <fs.h>
+#include <policy/policy.h>
+#include <script/interpreter.h>
+#include <script/script_error.h>
 #include <streams.h>
 #include <txmempool.h>
 #include <util/defer.h>
@@ -22,6 +26,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -126,6 +131,11 @@ void LibauthTestingSetup::LoadAllTestPacks() {
                                     }
                                 }
                             }
+                            // Read the "scriptonly" list and put into a set (may be empty)
+                            std::set<std::string> scriptOnlyOverrides;
+                            for (const auto &identUV : uvObj.at("scriptonly").get_array()) {
+                                scriptOnlyOverrides.insert(identUV.get_str());
+                            }
                             for (const auto &t : uvObj.at("tests").get_array()) {
                                 const UniValue::Array &vec = t.get_array();
                                 BOOST_CHECK_GE(vec.size(), 6);
@@ -134,10 +144,15 @@ void LibauthTestingSetup::LoadAllTestPacks() {
                                 test.description = vec.at(1).get_str();
                                 test.stackAsm = vec.at(2).get_str();
                                 test.scriptAsm = vec.at(3).get_str();
+                                test.scriptOnly = scriptOnlyOverrides.count(test.ident);
+                                if (vec.size() >= 7) {
+                                    test.inputNum = vec.at(6).get_int();
+                                }
 
                                 CMutableTransaction mtx;
                                 BOOST_CHECK(DecodeHexTx(mtx, vec.at(4).get_str()));
                                 test.tx = MakeTransactionRef(std::move(mtx));
+                                BOOST_REQUIRE(test.inputNum < test.tx->vin.size());
                                 const auto serinputs = ParseHex(vec.at(5).get_str());
                                 std::vector<CTxOut> utxos;
                                 {
@@ -196,6 +211,40 @@ void LibauthTestingSetup::LoadAllTestPacks() {
 }
 
 /* static */
+bool LibauthTestingSetup::RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state) {
+    AssertLockHeld(cs_main);
+    const uint32_t flags = [&] {
+        uint32_t blockFlags{};
+        uint32_t stdFlags = GetMemPoolScriptFlags(GetConfig().GetChainParams().GetConsensus(), ChainActive().Tip(),
+                                                  &blockFlags);
+        return standard ? stdFlags : blockFlags;
+    }();
+    state = {};
+    if (standard) {
+        // If caller wants standardness, do rudimentary checks anyway even in "scriptonly" mode
+        if (std::string reason; !IsStandardTx(*tv.tx, reason, flags)) {
+            return state.Invalid(false, REJECT_NONSTANDARD, reason);
+        }
+        if (!AreInputsStandard(*tv.tx, *pcoinsTip, flags)) {
+            return state.Invalid(false, REJECT_NONSTANDARD, "bad-txns-nonstandard-inputs");
+        }
+    }
+    auto const contexts = ScriptExecutionContext::createForAllInputs(*tv.tx, *pcoinsTip);
+    auto const &context = contexts.at(tv.inputNum);
+    const PrecomputedTransactionData txdata{context};
+    const TransactionSignatureChecker checker(context, txdata);
+    ScriptExecutionMetrics metrics;
+    ScriptError serror{};
+    const bool ret = VerifyScript(context.scriptSig(), context.coinScriptPubKey(), flags, checker, metrics, &serror);
+    if (!ret) {
+        state.Invalid(false, REJECT_INVALID, ScriptErrorString(serror));
+    }
+    BOOST_TEST_MESSAGE(strprintf("\"%s\" *scriptonly* eval input number: %i, nSigChecks: %i, result: %i, error: \"%s\"",
+                                 tv.ident, tv.inputNum, metrics.nSigChecks, ret, state.GetRejectReason()));
+    return ret;
+}
+
+/* static */
 void LibauthTestingSetup::RunTestVector(const TestVector &test, const std::string &packName) {
     std::string activeStr = test.featureActive ? "postactivation" : "preactivation";
     const bool expectStd = test.standardness == STANDARD;
@@ -205,9 +254,10 @@ void LibauthTestingSetup::RunTestVector(const TestVector &test, const std::strin
     size_t num = 0;
     for (const auto &tv : test.vec) {
         ++num;
-        BOOST_TEST_MESSAGE(strprintf("Executing \"%s\" test %i \"%s\": \"%s\", tx-size: %i, nInputs: %i ...\n",
+        const std::string scriptOnlyBlurb = tv.scriptOnly ? strprintf(" (scriptonly, input number %i)", tv.inputNum) : std::string{};
+        BOOST_TEST_MESSAGE(strprintf("Executing \"%s\" test %i \"%s\": \"%s\", tx-size: %i, nInputs: %i%s ...\n",
                                      test.name, num, tv.ident, tv.description, ::GetSerializeSize(*tv.tx),
-                                     tv.inputCoins.size()));
+                                     tv.inputCoins.size(), scriptOnlyBlurb));
         Defer cleanup([&]{
             LOCK(cs_main);
             g_mempool.clear();
@@ -225,16 +275,21 @@ void LibauthTestingSetup::RunTestVector(const TestVector &test, const std::strin
         ::fRequireStandard = true;
         CValidationState state;
         bool missingInputs{};
-        bool const ok1 = AcceptToMemoryPool(GetConfig(), g_mempool, state, tv.tx, &missingInputs,
-                                            false          /* bypass_limits */,
-                                            Amount::zero() /* nAbsurdFee    */,
-                                            false          /* test_accept   */);
+        bool ok1;
+        if (tv.scriptOnly) {
+            ok1 = RunScriptOnlyTest(tv, ::fRequireStandard, state);
+        } else {
+            ok1 = AcceptToMemoryPool(GetConfig(), g_mempool, state, tv.tx, &missingInputs,
+                                     false          /* bypass_limits */,
+                                     Amount::zero() /* nAbsurdFee    */,
+                                     false          /* test_accept   */);
+        }
         std::string standardReason = state.GetRejectReason();
         std::string nonstandardReason{""};
         if (standardReason.empty() && !ok1 && missingInputs) standardReason = "Missing inputs";
         BOOST_CHECK_MESSAGE(ok1 == expectStd, strprintf("(%s standard) %s Wrong result. %s.", activeStr, tv.ident,
-                                                        expectStd ? "Pass expected, test failed." :
-                                                                    "Fail expected, test passed."));
+                                                        expectStd ? strprintf("Pass expected, test failed (%s)", standardReason)
+                                                                  : "Fail expected, test passed"));
         bool goodStandardReason = expectStd || tv.standardReason == standardReason;
         bool goodNonstandardReason = true;
         BOOST_CHECK_MESSAGE(goodStandardReason,
@@ -247,16 +302,20 @@ void LibauthTestingSetup::RunTestVector(const TestVector &test, const std::strin
             state = {};
             missingInputs = false;
             ::fRequireStandard = false;
-            ok2 = AcceptToMemoryPool(GetConfig(), g_mempool, state, tv.tx, &missingInputs,
-                                     true           /* bypass_limits */,
-                                     Amount::zero() /* nAbsurdFee    */,
-                                     false          /* test_accept   */);
+            if (tv.scriptOnly) {
+                ok2 = RunScriptOnlyTest(tv, ::fRequireStandard, state);
+            } else {
+                ok2 = AcceptToMemoryPool(GetConfig(), g_mempool, state, tv.tx, &missingInputs,
+                                         true           /* bypass_limits */,
+                                         Amount::zero() /* nAbsurdFee    */,
+                                         false          /* test_accept   */);
+            }
             nonstandardReason = state.GetRejectReason();
             if (nonstandardReason.empty() && !ok2 && missingInputs) nonstandardReason = "Missing inputs";
             BOOST_CHECK_MESSAGE(ok2 == expectNonStd,
                                 strprintf("(%s nonstandard) %s Wrong result. %s.", activeStr, tv.ident,
-                                          expectNonStd ? "Pass expected, test failed."
-                                                       : "Fail expected, test passed."));
+                                          expectNonStd ? strprintf("Pass expected, test failed (%s)", nonstandardReason)
+                                                       : "Fail expected, test passed"));
             goodNonstandardReason = expectNonStd || tv.nonstandardReason == nonstandardReason;
             BOOST_CHECK_MESSAGE(goodNonstandardReason,
                                 strprintf("(%s nonstandard) %s Unexpected reject reason. Expected \"%s\", got \"%s\". "
