@@ -59,13 +59,9 @@ add_executable(bench_bitcoin
 	util_string.cpp
 	util_time.cpp
 	verify_script.cpp
-
-	# TODO: make a test library
-	../test/setup_common.cpp
-	../test/util.cpp
 )
 
-target_link_libraries(bench_bitcoin common bitcoinconsensus server)
+target_link_libraries(bench_bitcoin common bitcoinconsensus server test_common)
 
 if(BUILD_BITCOIN_WALLET)
 	target_sources(bench_bitcoin PRIVATE coin_selection.cpp keypool.cpp)
