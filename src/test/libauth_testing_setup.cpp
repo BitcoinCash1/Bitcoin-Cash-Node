@@ -148,6 +148,8 @@ void LibauthTestingSetup::LoadAllTestPacks() {
                                 if (vec.size() >= 7) {
                                     test.inputNum = vec.at(6).get_int();
                                 }
+                                test.benchmark = test.description.find("[benchmark]") != std::string::npos;
+                                test.baselineBench = test.benchmark && test.description.find("[baseline]") != std::string::npos;
 
                                 CMutableTransaction mtx;
                                 BOOST_CHECK(DecodeHexTx(mtx, vec.at(4).get_str()));
@@ -181,7 +183,19 @@ void LibauthTestingSetup::LoadAllTestPacks() {
                                 if ( ! skipReason.empty()) {
                                     BOOST_WARN_MESSAGE(false, strprintf("Skipping test \"%s\": %s", test.ident, skipReason));
                                 } else {
+                                    if (test.benchmark) {
+                                        testVec.benchmarks.push_back(testVec.vec.size());
+                                        if (test.baselineBench) {
+                                            testVec.baselineBench = testVec.benchmarks.back();
+                                        }
+                                    }
                                     testVec.vec.push_back(std::move(test));
+                                }
+                            }
+                            if (!testVec.benchmarks.empty()) {
+                                testPack.benchmarkVectors.push_back(packVec.size());
+                                if (!testPack.baselineBenchmark && testVec.baselineBench) {
+                                    testPack.baselineBenchmark.emplace(testPack.benchmarkVectors.back(), *testVec.baselineBench);
                                 }
                             }
                             packVec.push_back(std::move(testVec));
@@ -356,11 +370,19 @@ LibauthTestingSetup::~LibauthTestingSetup() {
     ::fRequireStandard = saved_fRequireStandard;
 }
 
-void LibauthTestingSetup::RunTestPack(const std::string &packName) {
+/* static */
+const LibauthTestingSetup::TestPack *LibauthTestingSetup::GetTestPack(const std::string &packName) {
     LoadAllTestPacks();
     const auto it = std::as_const(allTestPacks).find(packName);
     if (it != allTestPacks.cend()) {
-        const TestPack &pack = it->second;
+        return &it->second;
+    }
+    return nullptr;
+}
+
+void LibauthTestingSetup::RunTestPack(const std::string &packName) {
+    if (auto *ppack = GetTestPack(packName)) {
+        const TestPack &pack = *ppack;
         BOOST_CHECK_EQUAL(packName, pack.name); // paranoia, should always match
         BOOST_TEST_MESSAGE(strprintf("----- Running '%s' tests -----", packName));
         for (const TestVector &testVector : pack.testVectors) {
