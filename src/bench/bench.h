@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,6 @@
 #include <cassert>
 #include <chrono>
 #include <functional>
-#include <limits>
 #include <map>
 #include <string>
 #include <type_traits>
@@ -58,13 +57,21 @@ class State {
     uint64_t m_num_iters_left = 0;
     std::vector<double> m_elapsed_results;
     time_point m_start_time;
+    // below 4 are calculated by calling CalcStats()
+    double m_total = 0.;
+    double m_min = 0.;
+    double m_max = 0.;
+    double m_median = 0.;
+    // Calculates the above 4 stats. Called by the engine after the benchmark finishes all evaluations.
+    void CalcStats();
+    bool m_calced_stats = false;
 
 public:
     const uint64_t m_num_iters;
 
     void UpdateTimer(const time_point &finish_time);
 
-    State(const std::string &name, double num_iters, Printer &printer)
+    State(const std::string &name, uint64_t num_iters, Printer &)
         : m_name(name),
           m_num_iters(num_iters) {}
 
@@ -84,24 +91,34 @@ public:
         return false;
     }
 
+    const std::string &GetName() const { return m_name; }
+    uint64_t GetNumIters() const { return m_num_iters; }
+    const std::vector<double> &GetResults() const { return m_elapsed_results; }
+
+    // The below 4 stats are only valid after CalcStats() has been called by the engine.
+    double GetTotal() const { assert(m_calced_stats); return m_total; }
+    double GetMin() const { assert(m_calced_stats); return m_min; }
+    double GetMax() const { assert(m_calced_stats); return m_max; }
+    double GetMedian() const { assert(m_calced_stats); return m_max; }
+
     friend class BenchRunner;
-    friend class ConsolePrinter;
-    friend class PlotlyPrinter;
 };
 
-typedef std::function<void(State &)> BenchFunction;
+using BenchFunction = std::function<void(State &)>;
+using CompletionFunction = std::function<void(const State &, Printer &)>;
 
 class BenchRunner {
     struct Bench {
         BenchFunction func;
         uint64_t num_iters_for_one_second;
+        CompletionFunction completionFunc;
     };
-    typedef std::map<std::string, Bench> BenchmarkMap;
+    using BenchmarkMap = std::map<std::string, Bench>;
     static BenchmarkMap &benchmarks();
 
 public:
     BenchRunner(const std::string &name, BenchFunction func,
-                uint64_t num_iters_for_one_second);
+                uint64_t num_iters_for_one_second, CompletionFunction = {});
 
     static void RunAll(Printer &printer, uint64_t num_evals, double scaling,
                        const std::string &filter, bool is_list_only);
@@ -114,6 +131,18 @@ public:
     virtual void header() = 0;
     virtual void result(const State &state, uint64_t num_evals) = 0;
     virtual void footer() = 0;
+
+    // Extra data rows that may go into a supplemental table printed e.g. after the primary bench table.
+    using ExtraData = std::vector<std::pair<std::string, std::string>>; // name-value pairs
+
+    // Call this from a completion function to append a row to the supplemental table for a benchmark category.
+    // For an example of a suite of benches that uses this mechanism, see: libauth_bench.cpp
+    void appendExtraDataForCategory(const std::string &categoryName, ExtraData data) {
+        extraDataByCategory[categoryName].push_back(std::move(data));
+    }
+
+protected:
+    std::map<std::string, std::vector<ExtraData>> extraDataByCategory;
 };
 
 // default printer to console, shows min, max, median.

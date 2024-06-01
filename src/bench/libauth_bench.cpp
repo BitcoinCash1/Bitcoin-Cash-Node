@@ -12,7 +12,9 @@
 #include <util/string.h>
 #include <validation.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -22,7 +24,8 @@
 namespace {
 
 inline constexpr auto testPackName = "2023"; // we run the 2023 pack
-inline constexpr size_t NITERS = 10; // how many iterations per bench eval to do
+inline constexpr size_t NITERS = 1000; // Number of iterations for the "[baseline]" benchmark
+                                       // We scale other benchmark iters. up or down according to txSize
 
 class Registerer {
     static void registerBenches();
@@ -37,8 +40,10 @@ using TestVector = LibauthTestingSetup::TestVector;
 using Test = TestVector::Test;
 using TxStandard = LibauthTestingSetup::TxStandard;
 using State = benchmark::State;
+using Printer = benchmark::Printer;
 
 void RunBench(State &state, const Test &test, TxStandard txStd, bool checkSigs = true);
+void BenchCompleted(const State &state, Printer &printer, const Test &test);
 
 /* static */
 void Registerer::registerBenches() {
@@ -47,33 +52,33 @@ void Registerer::registerBenches() {
     auto *pack = LibauthTestingSetup::GetTestPack(testPackName);
     assert(pack != nullptr);
     assert(pack->type != LibauthTestingSetup::TestPack::FEATURE);
-    const auto MkName = [](const std::string &ident, const std::string &descr) {
-        std::vector<std::string> parts;
-        std::string tmp;
-        Split(parts, descr, ":", true);
-        tmp = parts.back();
-        Split(parts, tmp, "(", true);
-        tmp = parts.front();
-        Split(parts, tmp, ",", true);
-        tmp = parts.back();
-        tmp = TrimString(tmp);
-        auto str = "[" + ident + "]_[" + tmp.substr(0, 80) + "]";
-        ReplaceAll(str, " ", "_");
-        return str;
-    };
     if (!pack->benchmarkVectors.empty()) {
+        // count how many benches total
+        size_t numBenches = 0;
+        for (const size_t idx : pack->benchmarkVectors)
+            numBenches += pack->testVectors.at(idx).benchmarks.size();
+        assert(numBenches > 0u);
         // add baseline first
         const LibauthTestingSetup::TestVector::Test *alreadyAdded = nullptr;
+        size_t addCt = 0;
+        auto MkName = [&addCt, numBenches](const std::string &ident) {
+            const int padding = std::log10(numBenches) + 1; // dynamically determine how many 0's to pad with
+            return strprintf("%0*d_%s", padding, addCt, ident);
+        };
+        size_t baselineTxSize = 366; // not critical that this matches, since it is set below; but pre-set it anyway.
         if (const auto &baseline = pack->baselineBenchmark) {
             auto &testVec = pack->testVectors.at(baseline->first);
             auto &test = testVec.vec.at(baseline->second);
             assert(test.benchmark && test.baselineBench);
             benchmark::BenchRunner( // implicitly adds to benchmarks map
-                "LibAuth[baseline]_" + MkName(test.ident, test.description),
+                "LibAuth_" + MkName(test.ident), // We must ensure this sorts first!
                 [test, txStd = testVec.standardness](State &state){ RunBench(state, test, txStd); },
-                NITERS
+                NITERS,
+                [test](const State &s, Printer &p) { BenchCompleted(s, p, test); }
             );
+            baselineTxSize = test.txSize;
             alreadyAdded = &test;
+            ++addCt;
         }
         // next add everything but baseline
         for (const size_t idx : pack->benchmarkVectors) {
@@ -82,11 +87,15 @@ void Registerer::registerBenches() {
                 const auto &test = testVec.vec.at(tidx);
                 if (&test == alreadyAdded) continue;
                 assert(test.benchmark);
+                static_assert(NITERS >= 10, "Below code assumes NITERS is at least 10");
                 benchmark::BenchRunner( // implicitly adds to benchmarks map
-                    "LibAuth_" + MkName(test.ident, test.description),
+                    "LibAuth_" + MkName(test.ident),
                     [test, txStd = testVec.standardness](State &state){ RunBench(state, test, txStd);},
-                    NITERS
+                    // number of iterations is based off the txSize, clamped to the range [10, NITERS]
+                    std::clamp<size_t>(NITERS * (baselineTxSize / double(test.txSize)), 10, NITERS),
+                    [test](const State &s, Printer &p) { BenchCompleted(s, p, test); }
                 );
+                ++addCt;
             }
         }
     }
@@ -172,6 +181,41 @@ void RunBench(State &state, const Test &test, const TxStandard txStd, const bool
             }
         }
     }
+}
+
+// Completion function called once after each LibAuth bench completes all evaluations; pushes supplemental stats to be
+// printed in a table at the end.
+void BenchCompleted(const State &state, Printer &printer, const Test &test) {
+    struct Cost {
+        size_t txSize;
+        double perIter;
+    };
+    static std::optional<Cost> baseline;
+    assert(test.benchmark);
+    assert(state.m_num_iters); // cannot proceed if no iters!
+    assert(state.GetResults().size()); // cannot proceed if no results!
+    const Cost cost{test.txSize, state.GetMedian()};
+    if (test.baselineBench) baseline = cost; // save baseline (should be first one seen)
+    if (!baseline) return; // cannot do anything without the baseline result!
+    const double relCost = cost.perIter / baseline->perIter;
+    auto MkDesc = [](std::string s) {
+        // Keep everything after the first ':' char, trim the resulting string, then wrap the result in quotes.
+        std::vector<std::string> parts;
+        Split(parts, s, ":", true);
+        if (!parts.empty()) {
+            parts.erase(parts.begin());
+            s = Join(parts, ":");
+        }
+        return "\"" + TrimString(s) + "\"";
+    };
+    printer.appendExtraDataForCategory("LibAuth", {{
+        {"ID", test.ident},
+        {"TxByteLen", strprintf("%i", cost.txSize)},
+        {"Hz", strprintf("%1.1f", 1.0 / cost.perIter)},
+        {"Cost", strprintf("%1.3f", relCost)},
+        {"CostPerByte", strprintf("%1.6f", relCost * baseline->txSize / test.txSize)},
+        {"Description", MkDesc(test.description)},
+    }});
 }
 
 } // namespace
