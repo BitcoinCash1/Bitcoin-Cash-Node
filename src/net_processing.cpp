@@ -2643,8 +2643,11 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
     }
 
     if (msg_type == NetMsgType::INV) {
-        std::vector<CInv> vInv;
-        vRecv >> vInv;
+        const std::vector<CInv> vInv = [&vRecv]{
+            std::vector<CInv> vInvMutable;
+            vRecv >> vInvMutable;
+            return vInvMutable;
+        }();
         if (vInv.size() > MAX_INV_SZ) {
             LOCK(cs_main);
             Misbehaving(pfrom, 20, "oversized-inv");
@@ -2662,8 +2665,9 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
         LOCK(cs_main);
 
         int64_t nNow = GetTimeMicros();
+        const uint256 *best_block = nullptr; /* may point into vInv */
 
-        for (CInv &inv : vInv) {
+        for (const CInv &inv : vInv) {
             if (interruptMsgProc) {
                 return true;
             }
@@ -2673,25 +2677,14 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
                      fAlreadyHave ? "have" : "new", pfrom->GetId());
 
             if (inv.type == MSG_BLOCK) {
-                const BlockHash hash(inv.hash);
-                UpdateBlockAvailability(pfrom->GetId(), hash);
-                if (!fAlreadyHave && !fImporting && !fReindex &&
-                    !mapBlocksInFlight.count(hash)) {
-                    // We used to request the full block here, but since
-                    // headers-announcements are now the primary method of
-                    // announcement on the network, and since, in the case that
-                    // a node fell back to inv we probably have a reorg which we
-                    // should get the headers for first, we now only provide a
-                    // getheaders response here. When we receive the headers, we
-                    // will then ask for the blocks we need.
-                    connman->PushMessage(
-                        pfrom, msgMaker.Make(
-                                   NetMsgType::GETHEADERS,
-                                   ::ChainActive().GetLocator(pindexBestHeader),
-                                   hash));
-                    LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n",
-                             pindexBestHeader->nHeight, hash.ToString(),
-                             pfrom->GetId());
+                UpdateBlockAvailability(pfrom->GetId(), BlockHash{inv.hash});
+                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash)) {
+                    // Headers-first is the primary method of announcement on
+                    // the network. If a node fell back to sending blocks by inv,
+                    // it's probably for a re-org. The final block hash
+                    // provided should be the highest, so send a getheaders and
+                    // then fetch the blocks we need to catch up.
+                    best_block = &inv.hash;
                 }
             } else {
                 pfrom->AddInventoryKnown(inv);
@@ -2720,6 +2713,12 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
                 }
             }
         }
+
+        if (best_block != nullptr) {
+            connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::GETHEADERS, ::ChainActive().GetLocator(pindexBestHeader), *best_block));
+            LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n", pindexBestHeader->nHeight, best_block->ToString(), pfrom->GetId());
+        }
+
         return true;
     }
 
