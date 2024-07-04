@@ -590,6 +590,7 @@ add_library(server
   torcontrol.cpp
   txdb.cpp
   txmempool.cpp
+  txrequest.cpp
   ui_interface.cpp
   validation.cpp
   validationinterface.cpp
