@@ -1071,46 +1071,55 @@ PeerLogicValidation::~PeerLogicValidation() {
 
 /**
  * Evict orphan txn pool entries (EraseOrphanTx) based on a newly connected
- * block. Also save the time of the last tip update.
+ * block, and also delete tracked announcements for recently confirmed transactions.
+ * Also save the time of the last tip update.
  */
 void PeerLogicValidation::BlockConnected(
     const std::shared_ptr<const CBlock> &pblock, const CBlockIndex *pindex,
     const std::vector<CTransactionRef> &vtxConflicted) {
-    LOCK(internal::g_cs_orphans);
+    {
+        LOCK(internal::g_cs_orphans);
 
-    std::vector<TxId> vOrphanErase;
+        std::vector<TxId> vOrphanErase;
 
-    for (const CTransactionRef &ptx : pblock->vtx) {
-        const CTransaction &tx = *ptx;
+        for (const CTransactionRef &ptx : pblock->vtx) {
+            const CTransaction &tx = *ptx;
 
-        // Which orphan pool entries must we evict?
-        for (const auto &txin : tx.vin) {
-            auto itByPrev = internal::mapOrphanTransactionsByPrev.find(txin.prevout);
-            if (itByPrev == internal::mapOrphanTransactionsByPrev.end()) {
-                continue;
-            }
+            // Which orphan pool entries must we evict?
+            for (const auto &txin : tx.vin) {
+                auto itByPrev = internal::mapOrphanTransactionsByPrev.find(txin.prevout);
+                if (itByPrev == internal::mapOrphanTransactionsByPrev.end()) {
+                    continue;
+                }
 
-            for (auto mi = itByPrev->second.begin();
-                 mi != itByPrev->second.end(); ++mi) {
-                const CTransaction &orphanTx = *(*mi)->second.tx;
-                const TxId &orphanId = orphanTx.GetId();
-                vOrphanErase.push_back(orphanId);
+                for (auto mi = itByPrev->second.begin();
+                     mi != itByPrev->second.end(); ++mi) {
+                    const CTransaction &orphanTx = *(*mi)->second.tx;
+                    const TxId &orphanId = orphanTx.GetId();
+                    vOrphanErase.push_back(orphanId);
+                }
             }
         }
-    }
 
-    // Erase orphan transactions included or precluded by this block
-    if (vOrphanErase.size()) {
-        int nErased = 0;
-        for (const auto &orphanId : vOrphanErase) {
-            nErased += EraseOrphanTx(orphanId);
+        // Erase orphan transactions included or precluded by this block
+        if (vOrphanErase.size()) {
+            int nErased = 0;
+            for (const auto &orphanId : vOrphanErase) {
+                nErased += EraseOrphanTx(orphanId);
+            }
+            LogPrint(BCLog::MEMPOOL,
+                     "Erased %d orphan tx included or conflicted by block\n",
+                     nErased);
         }
-        LogPrint(BCLog::MEMPOOL,
-                 "Erased %d orphan tx included or conflicted by block\n",
-                 nErased);
     }
+    {
+        LOCK(cs_main);
+        for (const auto &ptx : pblock->vtx) {
+            m_txrequest.ForgetTxId(ptx->GetId());
+        }
 
-    g_last_tip_update = GetTime();
+        g_last_tip_update = GetTime();
+    }
 }
 
 // All of the following cache a recent block, and are protected by
@@ -2938,6 +2947,9 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
                                false /* bypass_limits */,
                                Amount::zero() /* nAbsurdFee */)) {
             g_mempool.check(pcoinsTip.get());
+            // As this version of the transaction was acceptable, we can forget about any
+            // requests for it.
+            txrequest.ForgetTxId(tx.GetId());
             RelayTransaction(tx, connman);
             for (size_t i = 0; i < tx.vout.size(); ++i) {
                 auto it_by_prev = internal::mapOrphanTransactionsByPrev.find(COutPoint(txid, i));
@@ -2983,6 +2995,9 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
                 }
                 internal::AddOrphanTx(ptx, pfrom->GetId());
 
+                // Once added to the orphan pool, a tx is considered AlreadyHave, and we shouldn't request it anymore.
+                txrequest.ForgetTxId(tx.GetId());
+
                 // DoS prevention: do not allow mapOrphanTransactions to grow
                 // unbounded
                 unsigned int nMaxOrphanTx = (unsigned int)std::max(
@@ -3000,11 +3015,13 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
                 // We will continue to reject this tx since it has rejected
                 // parents so avoid re-requesting it from other peers.
                 recentRejects->insert(tx.GetId());
+                txrequest.ForgetTxId(tx.GetId());
             }
         } else {
             if (!state.CorruptionPossible()) {
                 assert(recentRejects);
                 recentRejects->insert(tx.GetId());
+                txrequest.ForgetTxId(tx.GetId());
                 if (RecursiveDynamicUsage(*ptx) < 100000) {
                     AddToCompactExtraTransactions(ptx);
                 }
@@ -4847,7 +4864,8 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
             }
             m_txrequest.RequestedTx(pto->GetId(),txid, current_time + GETDATA_TX_INTERVAL);
         } else {
-            // We have already seen this transaction, no need to download.
+            // We have already seen this transaction, no need to download. This is just a belt-and-suspenders, as
+            // this should already be called whenever a transaction becomes Already().
             m_txrequest.ForgetTxId(txid);
         }
     }
