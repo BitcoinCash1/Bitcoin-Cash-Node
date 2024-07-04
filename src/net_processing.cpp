@@ -4852,8 +4852,12 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
     //
     // Message: getdata (transactions)
     //
-
-    for (const TxId &txid : m_txrequest.GetRequestable(pto->GetId(), current_time)) {
+    std::vector<std::pair<NodeId, TxId>> expired;
+    const auto requestable = m_txrequest.GetRequestable(pto->GetId(), current_time, &expired);
+    for (const auto & [nodeid, txid] : expired) {
+        LogPrint(BCLog::NET, "timeout of inflight tx %s from peer=%d\n", txid.ToString(), nodeid);
+    }
+    for (const TxId &txid : requestable) {
         const CInv inv(MSG_TX, txid);
         if (!AlreadyHave(inv)) {
             LogPrint(BCLog::NET, "Requesting tx %s peer=%d\n", txid.ToString(), pto->GetId());

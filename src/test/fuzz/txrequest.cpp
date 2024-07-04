@@ -70,7 +70,7 @@ class Tester
     //! TxRequestTracker object being tested.
     TxRequestTracker m_tracker;
 
-           //! States for txid/peer combinations in the naive data structure.
+    //! States for txid/peer combinations in the naive data structure.
     enum class State {
         NOTHING, //!< Absence of this txid/peer combination
 
@@ -169,7 +169,7 @@ public:
             }
         }
 
-               // Call TxRequestTracker's implementation.
+        // Call TxRequestTracker's implementation.
         m_tracker.DisconnectedPeer(peer);
     }
 
@@ -181,7 +181,7 @@ public:
         }
         Cleanup(txhash);
 
-               // Call TxRequestTracker's implementation.
+        // Call TxRequestTracker's implementation.
         m_tracker.ForgetTxId(TXIDS[txhash]);
     }
 
@@ -197,11 +197,11 @@ public:
             ann.m_sequence = m_current_sequence++;
             ann.m_priority = m_tracker.ComputePriority(TXIDS[txhash], peer, ann.m_preferred);
 
-                   // Add event so that AdvanceToEvent can quickly jump to the point where its reqtime passes.
+            // Add event so that AdvanceToEvent can quickly jump to the point where its reqtime passes.
             if (reqtime > m_now) m_events.push(reqtime);
         }
 
-               // Call TxRequestTracker's implementation.
+        // Call TxRequestTracker's implementation.
         m_tracker.ReceivedInv(peer, TXIDS[txhash], preferred, reqtime);
     }
 
@@ -219,10 +219,10 @@ public:
             m_announcements[txhash][peer].m_time = exptime;
         }
 
-               // Add event so that AdvanceToEvent can quickly jump to the point where its exptime passes.
+        // Add event so that AdvanceToEvent can quickly jump to the point where its exptime passes.
         if (exptime > m_now) m_events.push(exptime);
 
-               // Call TxRequestTracker's implementation.
+        // Call TxRequestTracker's implementation.
         m_tracker.RequestedTx(peer, TXIDS[txhash], exptime);
     }
 
@@ -234,7 +234,7 @@ public:
             Cleanup(txhash);
         }
 
-               // Call TxRequestTracker's implementation.
+        // Call TxRequestTracker's implementation.
         m_tracker.ReceivedResponse(peer, TXIDS[txhash]);
     }
 
@@ -242,13 +242,15 @@ public:
     {
         // Implement using naive structure:
 
-        //! list of (sequence number, txhash, is_wtxid) tuples.
+        //! list of (sequence number, txhash) tuples.
         std::vector<std::tuple<uint64_t, int>> result;
+        std::vector<std::pair<NodeId, TxId>> expected_expired;
         for (int txhash = 0; txhash < MAX_TXIDS; ++txhash) {
             // Mark any expired REQUESTED announcements as COMPLETED.
             for (int peer2 = 0; peer2 < MAX_PEERS; ++peer2) {
                 Announcement& ann2 = m_announcements[txhash][peer2];
                 if (ann2.m_state == State::REQUESTED && ann2.m_time <= m_now) {
+                    expected_expired.emplace_back(peer2, TXIDS[txhash]);
                     ann2.m_state = State::COMPLETED;
                     break;
                 }
@@ -263,9 +265,13 @@ public:
         }
         // Sort the results by sequence number.
         std::sort(result.begin(), result.end());
+        std::sort(expected_expired.begin(), expected_expired.end());
 
-               // Compare with TxRequestTracker's implementation.
-        const auto actual = m_tracker.GetRequestable(peer, m_now);
+        // Compare with TxRequestTracker's implementation.
+        std::vector<std::pair<NodeId, TxId>> expired;
+        const auto actual = m_tracker.GetRequestable(peer, m_now, &expired);
+        std::sort(expired.begin(), expired.end());
+        assert(expired == expected_expired);
 
         m_tracker.PostGetRequestableSanityCheck(m_now);
         assert(result.size() == actual.size());
@@ -295,7 +301,7 @@ public:
         // Compare Size.
         assert(m_tracker.Size() == total);
 
-               // Invoke internal consistency check of TxRequestTracker object.
+        // Invoke internal consistency check of TxRequestTracker object.
         m_tracker.SanityCheck();
     }
 };
@@ -306,7 +312,7 @@ void test_one_input(Span<const uint8_t> buffer)
     // Tester object (which encapsulates a TxRequestTracker).
     Tester tester;
 
-           // Decode the input as a sequence of instructions with parameters
+    // Decode the input as a sequence of instructions with parameters
     auto it = buffer.begin();
     while (it != buffer.end()) {
         int cmd = *(it++) % 11;

@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <utility>
 #include <vector>
 
 /** Data structure to keep track of, and schedule, transaction downloads from peers.
@@ -140,6 +141,7 @@ public:
      *
      * It does the following:
      *  - Convert all REQUESTED announcements (for all txids/peers) with (expiry <= now) to COMPLETED ones.
+     *    These are returned in expired, if non-nullptr.
      *  - Requestable announcements are selected: CANDIDATE announcements from the specified peer with
      *    (reqtime <= now) for which no existing REQUESTED announcement with the same txid from a different peer
      *    exists, and for which the specified peer is the best choice among all (reqtime <= now) CANDIDATE
@@ -151,7 +153,8 @@ public:
      *    simultaneously by one peer, and end up being requested from them, the requests will happen in announcement
      *    order.
      */
-    std::vector<TxId> GetRequestable(NodeId peer, std::chrono::microseconds now);
+    std::vector<TxId> GetRequestable(NodeId peer, std::chrono::microseconds now,
+                                     std::vector<std::pair<NodeId, TxId>>* expired = nullptr);
 
     /** Marks a transaction as requested, with a specified expiry.
      *
