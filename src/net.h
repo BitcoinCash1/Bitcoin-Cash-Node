@@ -16,7 +16,6 @@
 #include <dsproof/dspid.h>
 #include <extversion.h>
 #include <hash.h>
-#include <limitedmap.h>
 #include <net_nodeid.h>
 #include <net_permissions.h>
 #include <netaddress.h>
