@@ -2061,7 +2061,7 @@ static void AddTxAnnouncement(TxRequestTracker &txrequest, const CNode& node, co
                               std::chrono::microseconds current_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     AssertLockHeld(cs_main); // For txrequest
     NodeId nodeid = node.GetId();
-    if (txrequest.Count(nodeid) >= MAX_PEER_TX_ANNOUNCEMENTS) {
+    if (!node.HasPermission(PF_RELAY) && txrequest.Count(nodeid) >= MAX_PEER_TX_ANNOUNCEMENTS) {
         // Too many queued announcements from this peer
         return;
     }
@@ -2072,11 +2072,12 @@ static void AddTxAnnouncement(TxRequestTracker &txrequest, const CNode& node, co
     // - "reqtime": current time plus delays for:
     //   - NONPREF_PEER_TX_DELAY for announcements from non-preferred connections
     //   - OVERLOADED_PEER_TX_DELAY for announcements from peers which have at least
-    //     MAX_PEER_TX_REQUEST_IN_FLIGHT requests in flight.
+    //     MAX_PEER_TX_REQUEST_IN_FLIGHT requests in flight (and don't have PF_RELAY).
     auto delay = std::chrono::microseconds{0};
     const bool preferred = state->fPreferredDownload;
     if (!preferred) delay += NONPREF_PEER_TX_DELAY;
-    const bool overloaded = txrequest.CountInFlight(nodeid) >= MAX_PEER_TX_REQUEST_IN_FLIGHT;
+    const bool overloaded = !node.HasPermission(PF_RELAY)
+                            && txrequest.CountInFlight(nodeid) >= MAX_PEER_TX_REQUEST_IN_FLIGHT;
     if (overloaded) delay += OVERLOADED_PEER_TX_DELAY;
     txrequest.ReceivedInv(nodeid, txid, preferred, current_time + delay);
 }

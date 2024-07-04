@@ -12,6 +12,7 @@ from test_framework.messages import (
     CInv,
     CTransaction,
     FromHex,
+    MAX_INV_SZ,
     MSG_TX,
     MSG_TYPE_MASK,
     msg_inv,
@@ -48,6 +49,7 @@ INBOUND_PEER_TX_DELAY = 2  # seconds
 TXID_RELAY_DELAY = 2 # seconds
 OVERLOADED_PEER_DELAY = 2 # seconds
 MAX_GETDATA_IN_FLIGHT = 100
+MAX_PEER_TX_ANNOUNCEMENTS = 100_000
 
 # Python test constants
 NUM_INBOUND = 10
@@ -218,6 +220,26 @@ class TxDownloadTest(BitcoinTestFramework):
         with p2p_lock:
             assert_equal(peer.tx_getdata_count, 1)
 
+    def test_large_inv_batch(self):
+        self.log.info('Test how large inv batches are handled with relay permission')
+        self.restart_node(0, extra_args=['-whitelist=relay@127.0.0.1'])
+        peer = self.nodes[0].add_p2p_connection(TestP2PConn())
+        invs = [CInv(t=MSG_TX, h=txid) for txid in range(MAX_PEER_TX_ANNOUNCEMENTS + 1)]
+        for i in range(0, len(invs), MAX_INV_SZ):
+            peer.send_message(msg_inv(invs[i:i+MAX_INV_SZ]))
+        peer.wait_until(lambda: peer.tx_getdata_count == MAX_PEER_TX_ANNOUNCEMENTS + 1)
+
+        self.log.info('Test how large inv batches are handled without relay permission')
+        self.restart_node(0)
+        peer = self.nodes[0].add_p2p_connection(TestP2PConn())
+        invs = [CInv(t=MSG_TX, h=txid) for txid in range(MAX_PEER_TX_ANNOUNCEMENTS + 1)]
+        for i in range(0, len(invs), MAX_INV_SZ):
+            peer.send_message(msg_inv(invs[i:i+MAX_INV_SZ]))
+        peer.wait_until(lambda: peer.tx_getdata_count == MAX_PEER_TX_ANNOUNCEMENTS)
+        peer.sync_with_ping()
+        with p2p_lock:
+            assert_equal(peer.tx_getdata_count, MAX_PEER_TX_ANNOUNCEMENTS)
+
     def test_spurious_notfound(self):
         self.log.info('Check that spurious notfound is ignored')
         self.nodes[0].p2ps[0].send_message(msg_notfound(vec=[CInv(MSG_TX, 1)]))
@@ -229,6 +251,7 @@ class TxDownloadTest(BitcoinTestFramework):
         self.test_disconnect_fallback()
         self.test_notfound_fallback()
         self.test_preferred_inv()
+        self.test_large_inv_batch()
         self.test_spurious_notfound()
 
         # Run each test against new bitcoind instances, as setting mocktimes has long-term effects on when
