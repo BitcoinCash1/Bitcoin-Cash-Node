@@ -75,29 +75,37 @@ struct Announcement {
     /** Whether the request is preferred. */
     const bool m_preferred : 1;
 
-    /** What state this announcement is in. */
-    State m_state : 3;
+    /** What state this announcement is in.
+     *  This is a uint8_t instead of a State to silence a GCC warning in versions prior to 8.4 and 9.3.
+     *  See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=61414 */
+    uint8_t m_state : 3;
+
+    /** Convert m_state to a State enum. */
+    State GetState() const { return static_cast<State>(m_state); }
+
+    /** Convert a State enum to a uint8_t and store it in m_state. */
+    void SetState(State state) { m_state = static_cast<uint8_t>(state); }
 
     /** Whether this announcement is selected. There can be at most 1 selected peer per txid. */
     bool IsSelected() const {
-        return m_state == State::CANDIDATE_BEST || m_state == State::REQUESTED;
+        return GetState() == State::CANDIDATE_BEST || GetState() == State::REQUESTED;
     }
 
     /** Whether this announcement is waiting for a certain time to pass. */
     bool IsWaiting() const {
-        return m_state == State::REQUESTED || m_state == State::CANDIDATE_DELAYED;
+        return GetState() == State::REQUESTED || GetState() == State::CANDIDATE_DELAYED;
     }
 
     /** Whether this announcement can feasibly be selected if the current IsSelected() one disappears. */
     bool IsSelectable() const {
-        return m_state == State::CANDIDATE_READY || m_state == State::CANDIDATE_BEST;
+        return GetState() == State::CANDIDATE_READY || GetState() == State::CANDIDATE_BEST;
     }
 
     /** Construct a new announcement from scratch, initially in CANDIDATE_DELAYED state. */
     Announcement(const TxId& txid, NodeId peer, bool preferred, std::chrono::microseconds reqtime,
                  SequenceNumber sequence)
           : m_txid(txid), m_time(reqtime), m_peer(peer), m_sequence(sequence), m_preferred(preferred),
-            m_state(State::CANDIDATE_DELAYED) {}
+            m_state(static_cast<uint8_t>(State::CANDIDATE_DELAYED)) {}
 };
 
 //! Type alias for priorities.
@@ -142,7 +150,7 @@ using ByPeerView = std::tuple<NodeId, bool, const TxId&>;
 struct ByPeerViewExtractor {
     using result_type = ByPeerView;
     result_type operator()(const Announcement& ann) const {
-        return ByPeerView{ann.m_peer, ann.m_state == State::CANDIDATE_BEST, ann.m_txid};
+        return ByPeerView{ann.m_peer, ann.GetState() == State::CANDIDATE_BEST, ann.m_txid};
     }
 };
 
@@ -164,8 +172,8 @@ public:
     ByTxIdViewExtractor(const PriorityComputer& computer) : m_computer(computer) {}
     using result_type = ByTxIdView;
     result_type operator()(const Announcement& ann) const {
-        const Priority prio = (ann.m_state == State::CANDIDATE_READY) ? m_computer(ann) : 0;
-        return ByTxIdView{ann.m_txid, ann.m_state, prio};
+        const Priority prio = (ann.GetState() == State::CANDIDATE_READY) ? m_computer(ann) : 0;
+        return ByTxIdView{ann.m_txid, ann.GetState(), prio};
     }
 };
 
@@ -255,8 +263,8 @@ std::unordered_map<NodeId, PeerInfo> RecomputePeerInfo(const Index& index) {
     for (const Announcement& ann : index) {
         PeerInfo& info = ret[ann.m_peer];
         ++info.m_total;
-        info.m_requested += (ann.m_state == State::REQUESTED);
-        info.m_completed += (ann.m_state == State::COMPLETED);
+        info.m_requested += (ann.GetState() == State::REQUESTED);
+        info.m_completed += (ann.GetState() == State::COMPLETED);
     }
     return ret;
 }
@@ -267,15 +275,15 @@ std::map<TxId, TxIdInfo> ComputeTxIdInfo(const Index& index, const PriorityCompu
     for (const Announcement& ann : index) {
         TxIdInfo& info = ret[ann.m_txid];
         // Classify how many announcements of each state we have for this txid.
-        info.m_candidate_delayed += (ann.m_state == State::CANDIDATE_DELAYED);
-        info.m_candidate_ready += (ann.m_state == State::CANDIDATE_READY);
-        info.m_candidate_best += (ann.m_state == State::CANDIDATE_BEST);
-        info.m_requested += (ann.m_state == State::REQUESTED);
+        info.m_candidate_delayed += (ann.GetState() == State::CANDIDATE_DELAYED);
+        info.m_candidate_ready += (ann.GetState() == State::CANDIDATE_READY);
+        info.m_candidate_best += (ann.GetState() == State::CANDIDATE_BEST);
+        info.m_requested += (ann.GetState() == State::REQUESTED);
         // And track the priority of the best CANDIDATE_READY/CANDIDATE_BEST announcements.
-        if (ann.m_state == State::CANDIDATE_BEST) {
+        if (ann.GetState() == State::CANDIDATE_BEST) {
             info.m_priority_candidate_best = computer(ann);
         }
-        if (ann.m_state == State::CANDIDATE_READY) {
+        if (ann.GetState() == State::CANDIDATE_READY) {
             info.m_priority_best_candidate_ready = std::max(info.m_priority_best_candidate_ready, computer(ann));
         }
         // Also keep track of which peers this txid has an announcement for (so we can detect duplicates).
@@ -355,8 +363,8 @@ private:
     Iter<Tag> Erase(Iter<Tag> it) {
         auto peerit = m_peerinfo.find(it->m_peer);
         if (peerit != m_peerinfo.end()) {
-            peerit->second.m_completed -= it->m_state == State::COMPLETED;
-            peerit->second.m_requested -= it->m_state == State::REQUESTED;
+            peerit->second.m_completed -= it->GetState() == State::COMPLETED;
+            peerit->second.m_requested -= it->GetState() == State::REQUESTED;
             if (--peerit->second.m_total == 0) m_peerinfo.erase(peerit);
         }
         return m_index.get<Tag>().erase(it);
@@ -368,13 +376,13 @@ private:
         auto peerit = m_peerinfo.find(it->m_peer);
         const bool found = peerit != m_peerinfo.end(); // should always be true, but we check to prevent UB
         if (found) {
-            peerit->second.m_completed -= it->m_state == State::COMPLETED;
-            peerit->second.m_requested -= it->m_state == State::REQUESTED;
+            peerit->second.m_completed -= it->GetState() == State::COMPLETED;
+            peerit->second.m_requested -= it->GetState() == State::REQUESTED;
         }
         m_index.get<Tag>().modify(it, std::move(modifier));
         if (found) {
-            peerit->second.m_completed += it->m_state == State::COMPLETED;
-            peerit->second.m_requested += it->m_state == State::REQUESTED;
+            peerit->second.m_completed += it->GetState() == State::COMPLETED;
+            peerit->second.m_requested += it->GetState() == State::REQUESTED;
         }
     }
 
@@ -383,26 +391,26 @@ private:
     //! CANDIDATE_BEST.
     void PromoteCandidateReady(Iter<ByTxId> it) {
         assert(it != m_index.get<ByTxId>().end());
-        assert(it->m_state == State::CANDIDATE_DELAYED);
+        assert(it->GetState() == State::CANDIDATE_DELAYED);
         // Convert CANDIDATE_DELAYED to CANDIDATE_READY first.
-        Modify<ByTxId>(it, [](Announcement& ann){ ann.m_state = State::CANDIDATE_READY; });
+        Modify<ByTxId>(it, [](Announcement& ann){ ann.SetState(State::CANDIDATE_READY); });
         // The following code relies on the fact that the ByTxId is sorted by txid, and then by state (first
         // _DELAYED, then _READY, then _BEST/REQUESTED). Within the _READY announcements, the best one (highest
         // priority) comes last. Thus, if an existing _BEST exists for the same txid that this announcement may
         // be preferred over, it must immediately follow the newly created _READY.
         auto it_next = std::next(it);
         if (it_next == m_index.get<ByTxId>().end() || it_next->m_txid != it->m_txid ||
-            it_next->m_state == State::COMPLETED) {
+            it_next->GetState() == State::COMPLETED) {
             // This is the new best CANDIDATE_READY, and there is no IsSelected() announcement for this txid
             // already.
-            Modify<ByTxId>(it, [](Announcement& ann){ ann.m_state = State::CANDIDATE_BEST; });
-        } else if (it_next->m_state == State::CANDIDATE_BEST) {
+            Modify<ByTxId>(it, [](Announcement& ann){ ann.SetState(State::CANDIDATE_BEST); });
+        } else if (it_next->GetState() == State::CANDIDATE_BEST) {
             Priority priority_old = m_computer(*it_next);
             Priority priority_new = m_computer(*it);
             if (priority_new > priority_old) {
                 // There is a CANDIDATE_BEST announcement already, but this one is better.
-                Modify<ByTxId>(it_next, [](Announcement& ann){ ann.m_state = State::CANDIDATE_READY; });
-                Modify<ByTxId>(it, [](Announcement& ann){ ann.m_state = State::CANDIDATE_BEST; });
+                Modify<ByTxId>(it_next, [](Announcement& ann){ ann.SetState(State::CANDIDATE_READY); });
+                Modify<ByTxId>(it, [](Announcement& ann){ ann.SetState(State::CANDIDATE_BEST); });
             }
         }
     }
@@ -416,18 +424,18 @@ private:
             auto it_prev = std::prev(it);
             // The next best CANDIDATE_READY, if any, immediately precedes the REQUESTED or CANDIDATE_BEST
             // announcement in the ByTxId index.
-            if (it_prev->m_txid == it->m_txid && it_prev->m_state == State::CANDIDATE_READY) {
+            if (it_prev->m_txid == it->m_txid && it_prev->GetState() == State::CANDIDATE_READY) {
                 // If one such CANDIDATE_READY exists (for this txid), convert it to CANDIDATE_BEST.
-                Modify<ByTxId>(it_prev, [](Announcement& ann){ ann.m_state = State::CANDIDATE_BEST; });
+                Modify<ByTxId>(it_prev, [](Announcement& ann){ ann.SetState(State::CANDIDATE_BEST); });
             }
         }
-        Modify<ByTxId>(it, [new_state](Announcement& ann){ ann.m_state = new_state; });
+        Modify<ByTxId>(it, [new_state](Announcement& ann){ ann.SetState(new_state); });
     }
 
     //! Check if 'it' is the only announcement for a given txid that isn't COMPLETED.
     bool IsOnlyNonCompleted(ConstIter<ByTxId> it) const {
         assert(it != m_index.get<ByTxId>().end());
-        assert(it->m_state != State::COMPLETED); // Not allowed to call this on COMPLETED announcements.
+        assert(it->GetState() != State::COMPLETED); // Not allowed to call this on COMPLETED announcements.
 
         // This announcement has a predecessor that belongs to the same txid. Due to ordering, and the
         // fact that 'it' is not COMPLETED, its predecessor cannot be COMPLETED here.
@@ -438,7 +446,7 @@ private:
         // This announcement has a successor that belongs to the same txid, and is not COMPLETED.
         if (const auto next_it = std::next(it); next_it != m_index.get<ByTxId>().end()
                                                 && next_it->m_txid == it->m_txid
-                                                && next_it->m_state != State::COMPLETED) {
+                                                && next_it->GetState() != State::COMPLETED) {
             return false;
         }
 
@@ -452,7 +460,7 @@ private:
         assert(it != m_index.get<ByTxId>().end());
 
         // Nothing to be done if it's already COMPLETED.
-        if (it->m_state == State::COMPLETED) return true;
+        if (it->GetState() == State::COMPLETED) return true;
 
         if (IsOnlyNonCompleted(it)) {
             // This is the last non-COMPLETED announcement for this txid. Delete all.
@@ -480,9 +488,9 @@ private:
         // and convert them to CANDIDATE_READY and COMPLETED respectively.
         while (!m_index.empty()) {
             auto it = m_index.get<ByTime>().begin();
-            if (it->m_state == State::CANDIDATE_DELAYED && it->m_time <= now) {
+            if (it->GetState() == State::CANDIDATE_DELAYED && it->m_time <= now) {
                 PromoteCandidateReady(m_index.project<ByTxId>(it));
-            } else if (it->m_state == State::REQUESTED && it->m_time <= now) {
+            } else if (it->GetState() == State::REQUESTED && it->m_time <= now) {
                 if (expired) expired->emplace_back(it->m_peer, it->m_txid);
                 MakeCompleted(m_index.project<ByTxId>(it));
             } else {
@@ -581,7 +589,7 @@ public:
         std::vector<const Announcement*> selected;
         auto it_peer = m_index.get<ByPeer>().lower_bound(ByPeerView{peer, true, kTxIdZero});
         while (it_peer != m_index.get<ByPeer>().end() && it_peer->m_peer == peer
-               && it_peer->m_state == State::CANDIDATE_BEST) {
+               && it_peer->GetState() == State::CANDIDATE_BEST) {
             selected.push_back(&*it_peer);
             ++it_peer;
         }
@@ -609,8 +617,8 @@ public:
             // returned by GetRequestable always correspond to CANDIDATE_BEST announcements).
 
             it = m_index.get<ByPeer>().find(ByPeerView{peer, false, txid});
-            if (it == m_index.get<ByPeer>().end() || (it->m_state != State::CANDIDATE_DELAYED
-                                                      && it->m_state != State::CANDIDATE_READY)) {
+            if (it == m_index.get<ByPeer>().end() || (it->GetState() != State::CANDIDATE_DELAYED
+                                                      && it->GetState() != State::CANDIDATE_READY)) {
                 // There is no CANDIDATE announcement tracked for this peer, so we have nothing to do. Either this
                 // txid wasn't tracked at all (and the caller should have called ReceivedInv), or it was already
                 // requested and/or completed for other reasons and this is just a superfluous RequestedTx call.
@@ -622,24 +630,24 @@ public:
             // other CANDIDATE_BEST or REQUESTED can exist.
             auto it_old = m_index.get<ByTxId>().lower_bound(ByTxIdView{txid, State::CANDIDATE_BEST, 0});
             if (it_old != m_index.get<ByTxId>().end() && it_old->m_txid == txid) {
-                if (it_old->m_state == State::CANDIDATE_BEST) {
+                if (it_old->GetState() == State::CANDIDATE_BEST) {
                     // The data structure's invariants require that there can be at most one CANDIDATE_BEST or one
                     // REQUESTED announcement per txid (but not both simultaneously), so we have to convert any
                     // existing CANDIDATE_BEST to another CANDIDATE_* when constructing another REQUESTED.
                     // It doesn't matter whether we pick CANDIDATE_READY or _DELAYED here, as SetTimePoint()
                     // will correct it at GetRequestable() time. If time only goes forward, it will always be
                     // _READY, so pick that to avoid extra work in SetTimePoint().
-                    Modify<ByTxId>(it_old, [](Announcement& ann) { ann.m_state = State::CANDIDATE_READY; });
-                } else if (it_old->m_state == State::REQUESTED) {
+                    Modify<ByTxId>(it_old, [](Announcement& ann) { ann.SetState(State::CANDIDATE_READY); });
+                } else if (it_old->GetState() == State::REQUESTED) {
                     // As we're no longer waiting for a response to the previous REQUESTED announcement, convert it
                     // to COMPLETED. This also helps guaranteeing progress.
-                    Modify<ByTxId>(it_old, [](Announcement& ann) { ann.m_state = State::COMPLETED; });
+                    Modify<ByTxId>(it_old, [](Announcement& ann) { ann.SetState(State::COMPLETED); });
                 }
             }
         }
 
         Modify<ByPeer>(it, [expiry](Announcement& ann) {
-            ann.m_state = State::REQUESTED;
+            ann.SetState(State::REQUESTED);
             ann.m_time = expiry;
         });
     }
