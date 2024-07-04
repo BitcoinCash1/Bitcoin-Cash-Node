@@ -404,8 +404,8 @@ bool ReadBlockFromDisk(CBlock &block, const CBlockIndex *pindex,
 }
 
 static std::optional<CAutoFile> ReadBlockSizeCommon(uint64_t &blockSizeOut, const CBlockIndex *pindex,
-                                                    const CChainParams &chainParams,
-                                                    FlatFilePos *blockPosOut = nullptr) {
+                                                    const CChainParams &chainParams, FlatFilePos *blockPosOut = nullptr,
+                                                    const bool logErrorIfMissing = true) {
 
     FlatFilePos blockPos;
     {
@@ -413,6 +413,13 @@ static std::optional<CAutoFile> ReadBlockSizeCommon(uint64_t &blockSizeOut, cons
         blockPos = pindex->GetBlockPos();
     }
     if (blockPosOut) *blockPosOut = blockPos;
+    if (blockPos.IsNull()) {
+        if (logErrorIfMissing) {
+            error("%s: Block file missing for block %s (height: %i)", __func__, pindex->GetBlockHash().ToString(),
+                  pindex->nHeight);
+        }
+        return std::nullopt;
+    }
 
     CAutoFile filein(OpenBlockFile(blockPos, true), SER_DISK, CLIENT_VERSION);
     if (filein.IsNull()) {
@@ -455,7 +462,7 @@ static std::optional<CAutoFile> ReadBlockSizeCommon(uint64_t &blockSizeOut, cons
 
 std::optional<uint64_t> ReadBlockSizeFromDisk(const CBlockIndex *pindex, const CChainParams &chainParams) {
     uint64_t blockSize;
-    if (!ReadBlockSizeCommon(blockSize, pindex, chainParams)) {
+    if (!ReadBlockSizeCommon(blockSize, pindex, chainParams, nullptr, /* logErrorIfMissing = */ false)) {
         return std::nullopt;
     }
     return blockSize;
