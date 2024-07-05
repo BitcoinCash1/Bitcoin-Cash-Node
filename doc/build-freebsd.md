@@ -56,7 +56,7 @@ If you also want to build the GUI client `bitcoin-qt` Qt 5 is necessary.
 To build with Qt 5 you need the following packages installed:
 
 ```bash
-pkg install qt5-qmake qt5-buildtools qt5-linguisttools qt5-widgets protobuf qt5-testlib libqrencode-4.0.0
+pkg install qt5-qmake qt5-buildtools qt5-linguisttools qt5-widgets qt5-testlib libqrencode-4.0.0
 ```
 
 You can do without the `libqrencode-4.0.0` package, just pass `-DENABLE_QRCODE=OFF`

@@ -1,4 +1,4 @@
-# Copyright (c) 2018 The Bitcoin developers
+# Copyright (c) 2018-2024 The Bitcoin developers
 
 project(test_bitcoin-qt)
 
@@ -31,13 +31,6 @@ if(BUILD_BITCOIN_WALLET)
 			wallettests.cpp
 			../../wallet/test/wallet_test_fixture.cpp
 	)
-
-	if(ENABLE_BIP70)
-		target_sources(test_bitcoin-qt
-			PRIVATE
-				paymentservertests.cpp
-		)
-	endif()
 
 	target_link_libraries(test_bitcoin-qt wallet)
 endif()

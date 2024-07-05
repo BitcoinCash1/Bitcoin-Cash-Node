@@ -317,10 +317,6 @@ void SendCoinsDialog::on_sendButton_clicked() {
         QString recipientElement;
         recipientElement = "<br />";
 
-#ifdef ENABLE_BIP70
-        // normal payment
-        if (!rcp.paymentRequest.IsInitialized())
-#endif
         {
             if (rcp.label.length() > 0) {
                 // label with address
@@ -332,19 +328,6 @@ void SendCoinsDialog::on_sendButton_clicked() {
                 recipientElement.append(tr("%1 to %2").arg(amount, address));
             }
         }
-#ifdef ENABLE_BIP70
-        // authenticated payment request
-        else if (!rcp.authenticatedMerchant.isEmpty()) {
-            recipientElement.append(
-                tr("%1 to %2")
-                    .arg(amount,
-                         GUIUtil::HtmlEscape(rcp.authenticatedMerchant)));
-        } else {
-            // unauthenticated payment request
-            recipientElement.append(tr("%1 to %2").arg(amount, address));
-        }
-#endif
-
         formatted.append(recipientElement);
     }
 

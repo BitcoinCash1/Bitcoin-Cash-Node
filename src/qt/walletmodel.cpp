@@ -139,37 +139,6 @@ WalletModel::prepareTransaction(WalletModelTransaction &transaction,
             fSubtractFeeFromAmount = true;
         }
 
-#ifdef ENABLE_BIP70
-        // PaymentRequest...
-        if (rcp.paymentRequest.IsInitialized()) {
-            Amount subtotal = Amount::zero();
-            const payments::PaymentDetails &details =
-                rcp.paymentRequest.getDetails();
-            for (int i = 0; i < details.outputs_size(); i++) {
-                const payments::Output &out = details.outputs(i);
-                if (out.amount() <= 0) {
-                    continue;
-                }
-
-                subtotal += int64_t(out.amount()) * SATOSHI;
-                const uint8_t *scriptStr = (const uint8_t *)out.script().data();
-                CScript scriptPubKey(scriptStr,
-                                     scriptStr + out.script().size());
-                Amount nAmount = int64_t(out.amount()) * SATOSHI;
-                CRecipient recipient = {scriptPubKey, nAmount, {},
-                                        rcp.fSubtractFeeFromAmount};
-                vecSend.push_back(recipient);
-            }
-
-            if (subtotal <= Amount::zero()) {
-                return InvalidAmount;
-            }
-            total += subtotal;
-        }
-
-        // User-entered Bitcoin Cash address / amount:
-        else
-#endif
         {
             if (!validateAddress(rcp.address)) {
                 return InvalidAddress;
@@ -238,19 +207,6 @@ WalletModel::sendCoins(WalletModelTransaction &transaction) {
 
     std::vector<std::pair<std::string, std::string>> vOrderForm;
     for (const SendCoinsRecipient &rcp : transaction.getRecipients()) {
-#ifdef ENABLE_BIP70
-        if (rcp.paymentRequest.IsInitialized()) {
-            // Make sure any payment requests involved are still valid.
-            if (PaymentServer::verifyExpired(rcp.paymentRequest.getDetails())) {
-                return PaymentRequestExpired;
-            }
-
-            // Store PaymentRequests in wtx.vOrderForm in wallet.
-            std::string value;
-            rcp.paymentRequest.SerializeToString(&value);
-            vOrderForm.emplace_back("PaymentRequest", std::move(value));
-        } else
-#endif
         {
             if (!rcp.message.isEmpty()) {
                 // Message from normal bitcoincash:URI
@@ -275,10 +231,6 @@ WalletModel::sendCoins(WalletModelTransaction &transaction) {
     // Add addresses / update labels that we've sent to the address book, and
     // emit coinsSent signal for each recipient
     for (const SendCoinsRecipient &rcp : transaction.getRecipients()) {
-        // Don't touch the address book when we have a payment request
-#ifdef ENABLE_BIP70
-        if (!rcp.paymentRequest.IsInitialized())
-#endif
         {
             std::string strAddress = rcp.address.toStdString();
             CTxDestination dest =

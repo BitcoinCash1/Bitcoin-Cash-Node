@@ -397,7 +397,7 @@ void BitcoinGUI::createActions() {
     openAction = new QAction(platformStyle->TextColorIcon(":/icons/open"),
                              tr("Open &URI..."), this);
     openAction->setStatusTip(
-        tr("Open a %1: URI or payment request")
+        tr("Open a %1: URI")
             .arg(QString::fromStdString(
                 config->GetChainParams().CashAddrPrefix())));
 

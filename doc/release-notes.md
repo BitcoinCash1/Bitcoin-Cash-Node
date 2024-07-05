@@ -32,7 +32,12 @@ TODO
 
 ## Removed functionality
 
-TODO
+BIP70 payment request support has been removed from the Qt-based GUI. The
+reason for this is that BIP70 payment requests have historically suffered
+from a number of security flaws and maintainence of this feature poses a
+risk to full node software. Users wishing to use a GUI wallet that supports
+BIP70  are recommended to use one of the many light wallets such as Electron
+Cash or Bitcoin.com that continue to support BIP70 payment requests.
 
 ## New RPC methods
 

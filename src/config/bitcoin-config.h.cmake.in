@@ -59,7 +59,6 @@
 
 #define FDELT_TYPE ${FDELT_TYPE}
 
-#cmakedefine ENABLE_BIP70 1
 #cmakedefine ENABLE_WALLET 1
 #cmakedefine ENABLE_ZMQ 1
 

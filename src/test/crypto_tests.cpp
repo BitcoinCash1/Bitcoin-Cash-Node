@@ -20,9 +20,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <openssl/aes.h>
-#include <openssl/evp.h>
-
 #include <algorithm>
 #include <vector>
 

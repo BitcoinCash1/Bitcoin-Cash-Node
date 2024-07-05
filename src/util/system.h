@@ -285,8 +285,7 @@ public:
                           const std::string &strValue);
 
     /**
-     * Looks for -regtest, -testnet and returns the appropriate BIP70 chain
-     * name.
+     * Looks for -regtest, -testnet and returns the appropriate chain name.
      * @return CBaseChainParams::MAIN by default; raises runtime error if an
      * invalid combination is given.
      */

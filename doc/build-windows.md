@@ -81,8 +81,7 @@ First, install the general dependencies:
 ```
 
 A host toolchain (`build-essential`) is necessary because some dependency
-packages (such as `protobuf`) need to build host utilities that are used in the
-build process.
+packages need to build host utilities that are used in the build process.
 
 See also: [dependencies.md](dependencies.md).
 
@@ -194,8 +193,7 @@ Bitcoin Cash Node. To install the latest version:
 ```
 
 A host toolchain (`build-essential`) is necessary because some dependency
-packages (such as `protobuf`) need to build host utilities that are used in the
-build process.
+packages need to build host utilities that are used in the build process.
 
 See also: [dependencies.md](dependencies.md).
 

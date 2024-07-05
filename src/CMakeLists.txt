@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2023 The Bitcoin developers
+# Copyright (c) 2017-2024 The Bitcoin developers
 
 project(bitcoind)
 
@@ -18,7 +18,6 @@ option(BUILD_BITCOIN_TX "Build bitcoin-tx" ON)
 option(BUILD_BITCOIN_QT "Build bitcoin-qt" ON)
 option(BUILD_BITCOIN_SEEDER "Build bitcoin-seeder" ON)
 option(BUILD_LIBBITCOINCONSENSUS "Build the bitcoinconsenus shared library" ON)
-option(ENABLE_BIP70 "Enable BIP70 (payment protocol) support in GUI" ON)
 option(ENABLE_HARDENING "Harden the executables" ON)
 option(ENABLE_REDUCE_EXPORTS "Reduce the amount of exported symbols" OFF)
 option(ENABLE_STATIC_LIBGCC "Statically link libgcc" OFF)
