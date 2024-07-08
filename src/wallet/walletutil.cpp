@@ -72,7 +72,7 @@ std::vector<fs::path> ListWalletDir() {
             // Found a directory which contains wallet.dat btree file, add it as
             // a wallet.
             paths.emplace_back(path);
-        } else if (it.level() == 0 &&
+        } else if (fsbridge::get_dir_iterator_level(it) == 0 &&
                    it->symlink_status().type() == fs::regular_file &&
                    IsBerkeleyBtree(it->path())) {
             if (it->path().filename() == "wallet.dat") {

@@ -10,11 +10,12 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
+#include <boost/version.hpp>
 
 /** Filesystem operations and types */
 namespace fs = boost::filesystem;
 
-/** Bridge operations to C stdio */
+/** Bridge operations to C stdio + various versions of boost::filesystem */
 namespace fsbridge {
 FILE *fopen(const fs::path &p, const char *mode);
 
@@ -39,4 +40,20 @@ private:
 };
 
 std::string get_filesystem_error_message(const fs::filesystem_error &e);
+
+inline auto get_overwrite_if_exists_option() {
+#if BOOST_VERSION >= 108500
+    return fs::copy_options::overwrite_existing;
+#else
+    return fs::copy_option::overwrite_if_exists;
+#endif
+}
+
+inline int get_dir_iterator_level(const fs::recursive_directory_iterator &it) {
+#if BOOST_VERSION >= 108500
+    return it.depth();
+#else
+    return it.level();
+#endif
+}
 }; // namespace fsbridge

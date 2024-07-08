@@ -392,13 +392,6 @@ bool BerkeleyBatch::VerifyEnvironment(const fs::path &file_path,
               DbEnv::version(nullptr, nullptr, nullptr));
     LogPrintf("Using wallet %s\n", walletFile);
 
-    // Wallet file must be a plain filename without a directory
-    if (walletFile != fs::basename(walletFile) + fs::extension(walletFile)) {
-        errorStr = strprintf(_("Wallet %s resides outside wallet directory %s"),
-                             walletFile, walletDir.string());
-        return false;
-    }
-
     if (!env->Open(true /* retry */)) {
         errorStr = strprintf(
             _("Error initializing wallet database environment %s!"), walletDir);
@@ -928,7 +921,7 @@ bool BerkeleyDatabase::Backup(const std::string &strDest) {
                     }
 
                     fs::copy_file(pathSrc, pathDest,
-                                  fs::copy_option::overwrite_if_exists);
+                                  fsbridge::get_overwrite_if_exists_option());
                     LogPrintf("copied %s to %s\n", strFile, pathDest.string());
                     return true;
                 } catch (const fs::filesystem_error &e) {
