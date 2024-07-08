@@ -1,6 +1,6 @@
-# Release Notes for Bitcoin Cash Node version 27.0.1
+# Release Notes for Bitcoin Cash Node version 27.1.0
 
-Bitcoin Cash Node version 27.0.1 is now available from:
+Bitcoin Cash Node version 27.1.0 is now available from:
 
   <https://bitcoincashnode.org>
 
@@ -50,7 +50,7 @@ TODO
 
 ## Regressions
 
-(TODO) Bitcoin Cash Node 27.0.1 does not introduce any known regressions as compared
+(TODO) Bitcoin Cash Node 27.1.0 does not introduce any known regressions as compared
 to 27.0.0.
 
 ## Limitations
