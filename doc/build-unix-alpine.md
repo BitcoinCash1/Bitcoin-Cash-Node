@@ -22,7 +22,7 @@ If you want to build the GUI client `bitcoin-qt` Qt 5 is necessary.
 To build with Qt 5 you need the following packages installed:
 
 ```sh
-apk add qt5-qtbase qt5-qttools-dev protobuf-dev libqrencode-dev
+apk add qt5-qtbase qt5-qttools-dev  libqrencode-dev
 ```
 
 You can do without the `libqrencode-dev` package, just pass `-DENABLE_QRCODE=OFF` on

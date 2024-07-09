@@ -10,7 +10,7 @@ Preparation
 Install [Homebrew](https://brew.sh), and install dependencies:
 
 ```
-brew install berkeley-db boost cmake libevent librsvg miniupnpc ninja openssl protobuf python qrencode qt5 zeromq help2man
+brew install berkeley-db boost cmake libevent librsvg miniupnpc ninja openssl python qrencode qt5 zeromq help2man
 ```
 
 You can do without the `miniupnpc`, `zeromq`, and `help2man` packages, then you

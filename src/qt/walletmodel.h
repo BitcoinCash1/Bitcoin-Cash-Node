@@ -12,9 +12,6 @@
 #include <config/bitcoin-config.h>
 #endif
 
-#ifdef ENABLE_BIP70
-#include <qt/paymentrequestplus.h>
-#endif
 #include <qt/walletmodeltransaction.h>
 #include <support/allocators/secure.h>
 
@@ -67,14 +64,10 @@ public:
     // If from a payment request, this is used for storing the memo
     QString message;
 
-#ifdef ENABLE_BIP70
-    // If from a payment request, paymentRequest.IsInitialized() will be true
-    PaymentRequestPlus paymentRequest;
-#else
-    // If building with BIP70 is disabled, keep the payment request around as
+    // BIP70 is no longer supported, but we keep the payment request around as
     // serialized string to ensure load/store is lossless
     std::string sPaymentRequest;
-#endif
+
     // Empty if no authentication or invalid signature/cert/etc.
     QString authenticatedMerchant;
 
@@ -90,13 +83,7 @@ public:
         SER_WRITE(obj, address_str = obj.address.toStdString());
         SER_WRITE(obj, label_str = obj.label.toStdString());
         SER_WRITE(obj, message_str = obj.message.toStdString());
-#ifdef ENABLE_BIP70
-        if (obj.paymentRequest.IsInitialized()) {
-            SER_WRITE(obj, obj.paymentRequest.SerializeToString(&payment_request_str));
-        }
-#else
         SER_WRITE(obj, payment_request_str = obj.sPaymentRequest);
-#endif
         SER_WRITE(obj, auth_merchant_str = obj.authenticatedMerchant.toStdString());
 
         READWRITE(obj.nVersion, address_str, label_str, obj.amount, message_str, payment_request_str, auth_merchant_str);
@@ -104,14 +91,7 @@ public:
         SER_READ(obj, obj.address = QString::fromStdString(address_str));
         SER_READ(obj, obj.label = QString::fromStdString(label_str));
         SER_READ(obj, obj.message = QString::fromStdString(message_str));
-#ifdef ENABLE_BIP70
-        if (!payment_request_str.empty()) {
-            SER_READ(obj,
-                     obj.paymentRequest.parse(QByteArray::fromRawData(payment_request_str.data(), payment_request_str.size())));
-        }
-#else
         SER_READ(obj, obj.sPaymentRequest = payment_request_str);
-#endif
         SER_READ(obj, obj.authenticatedMerchant = QString::fromStdString(auth_merchant_str));
     }
 };

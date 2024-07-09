@@ -40,30 +40,6 @@ void WalletModelTransaction::reassignAmounts(int nChangePosRet) {
     const CTransaction *walletTransaction = &wtx->get();
     int i = 0;
     for (SendCoinsRecipient &rcp : recipients) {
-#ifdef ENABLE_BIP70
-        if (rcp.paymentRequest.IsInitialized()) {
-            Amount subtotal = Amount::zero();
-            const payments::PaymentDetails &details =
-                rcp.paymentRequest.getDetails();
-            for (int j = 0; j < details.outputs_size(); j++) {
-                const payments::Output &out = details.outputs(j);
-                if (out.amount() <= 0) {
-                    continue;
-                }
-
-                if (i == nChangePosRet) {
-                    i++;
-                }
-
-                subtotal += walletTransaction->vout[i].nValue;
-                i++;
-            }
-            rcp.amount = subtotal;
-        }
-
-        // normal recipient (no payment request)
-        else
-#endif
         {
             if (i == nChangePosRet) {
                 i++;

@@ -394,8 +394,8 @@ void SetupServerArgs() {
     std::vector<std::string> hidden_args = {
         "-dbcrashratio", "-forcecompactdb", "-expirerpc",
         // GUI args. These will be overwritten by SetupUIArgs for the GUI
-        "-allowselfsignedrootcertificates", "-choosedatadir", "-lang=<lang>",
-        "-min", "-resetguisettings", "-rootcertificates=<file>", "-splash",
+        "-choosedatadir", "-lang=<lang>",
+        "-min", "-resetguisettings", "-splash",
         "-uiplatform"};
 
     // Set all of the args and their help

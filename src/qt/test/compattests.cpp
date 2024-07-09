@@ -9,11 +9,6 @@
 
 #include <qt/test/compattests.h>
 
-#if defined(ENABLE_WALLET) && defined(ENABLE_BIP70)
-// this includes protobuf's port.h which defines its own bswap macos
-#include <qt/paymentrequestplus.h>
-#endif
-
 #include <compat/byteswap.h>
 
 void CompatTests::bswapTests() {

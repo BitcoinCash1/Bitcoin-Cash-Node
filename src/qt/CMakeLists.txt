@@ -1,4 +1,4 @@
-# Copyright (c) 2018 The Bitcoin developers
+# Copyright (c) 2018-2024 The Bitcoin developers
 
 project(bitcoin-qt)
 
@@ -232,70 +232,6 @@ if(ENABLE_DBUS_NOTIFICATIONS)
 	target_link_libraries(bitcoin-qt-base Qt5::DBus)
 endif()
 
-if(ENABLE_BIP70)
-	# Do protobuf codegen.
-	# The protobuf-config.cmake file is used here as the recent (version > 21)
-	# protobuf might not play nicely with the cmake-supplied FindProtobuf.cmake.
-	# This is due to cmake (at the time of writing, v3.26) not pulling the
-	# required Abseil dependencies properly (and not managing the new protobuf
-	# versioning scheme either).
-	# In the event it is not found, fallback to the FindProtobuf version.
-	# Documentation can be found here:
-	# https://github.com/protocolbuffers/protobuf/blob/main/docs/cmake_protobuf_generate.md
-	find_package(Protobuf CONFIG)
-	if(NOT Protobuf_FOUND)
-		find_package(Protobuf REQUIRED)
-	endif()
-
-	add_library(
-		bitcoin-qt-protobuf OBJECT
-		paymentrequest.proto
-	)
-	target_link_libraries(bitcoin-qt-protobuf PUBLIC protobuf::libprotobuf)
-
-	# Where protoc will put the generated files
-	set(PROTOC_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-	# Where the proto files are located
-	set(PROTO_IMPORT_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
-
-	# Include the generated headers path
-	target_include_directories(
-		bitcoin-qt-protobuf
-		PUBLIC "$<BUILD_INTERFACE:${PROTOC_OUTPUT_DIRECTORY}>"
-	)
-
-	protobuf_generate(
-		LANGUAGE cpp
-		TARGET bitcoin-qt-protobuf
-		IMPORT_DIRS "${PROTO_IMPORT_DIRECTORY}"
-		PROTOC_OUT_DIR "${PROTOC_OUTPUT_DIRECTORY}"
-	)
-
-	# Don't run clang-tidy on generated files
-	if(ENABLE_CLANG_TIDY)
-		include(ClangTidy)
-		target_disable_clang_tidy(bitcoin-qt-protobuf)
-	endif()
-
-	# OpenSSL functionality
-	include(BrewHelper)
-	find_brew_prefix(OPENSSL_ROOT_DIR openssl)
-	find_package(OpenSSL REQUIRED)
-
-	include(CheckSymbolExists)
-	set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
-	set(CMAKE_REQUIRED_LIBRARIES ${OPENSSL_CRYPTO_LIBRARY})
-	check_symbol_exists(EVP_MD_CTX_new "openssl/evp.h" HAVE_DECL_EVP_MD_CTX_NEW)
-	if(HAVE_DECL_EVP_MD_CTX_NEW)
-		target_compile_definitions(bitcoin-qt-base PRIVATE HAVE_DECL_EVP_MD_CTX_NEW=1)
-	endif()
-
-	target_link_libraries(bitcoin-qt-base
-		OpenSSL::SSL
-		bitcoin-qt-protobuf
-	)
-endif()
-
 # Wallet
 if(BUILD_BITCOIN_WALLET)
 	# Automoc option.
@@ -333,14 +269,6 @@ if(BUILD_BITCOIN_WALLET)
 			walletmodeltransaction.cpp
 			walletview.cpp
 	)
-
-	# Add BIP70 functionality to bitcoin-qt
-	if(ENABLE_BIP70)
-		target_sources(bitcoin-qt-base
-			PRIVATE
-				paymentrequestplus.cpp
-		)
-	endif()
 
 	target_link_libraries(bitcoin-qt-base wallet)
 

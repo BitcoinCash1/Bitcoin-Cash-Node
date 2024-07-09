@@ -26,7 +26,6 @@ These dependencies are required:
 | Ninja |  | [1.5.1](https://github.com/ninja-build/ninja/releases) |  |  |  |  |  |
 | OpenSSL | [1.1.1n](https://www.openssl.org/source) |  | Yes |  |  | Crypto | Random Number Generation, Elliptic Curve Cryptography
 | PCRE |  |  |  |  | Yes |  |  |
-| protobuf | [2.6.1](https://github.com/google/protobuf/releases) |  | No |  |  |  Payments in GUI  | Data interchange format used for payment protocol (only needed when BIP70 enabled)
 | Python (tests) |  | [3.6](https://www.python.org/downloads) |  |  |  |  |  |
 | qrencode | [3.4.4](https://fukuchi.org/works/qrencode) |  | No |  |  | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
 | Qt | [5.15.3](https://download.qt.io/official_releases/qt/) | 5.5.1 | No |  |  |  GUI              | GUI toolkit (only needed when GUI enabled) |

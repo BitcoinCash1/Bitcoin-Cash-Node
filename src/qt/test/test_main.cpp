@@ -22,19 +22,12 @@
 #include <qt/test/uritests.h>
 #ifdef ENABLE_WALLET
 #include <qt/test/addressbooktests.h>
-#ifdef ENABLE_BIP70
-#include <qt/test/paymentservertests.h>
-#endif // ENABLE_BIP70
 #include <qt/test/wallettests.h>
 #endif // ENABLE_WALLET
 
 #include <QApplication>
 #include <QObject>
 #include <QTest>
-
-#ifdef ENABLE_BIP70
-#include <openssl/ssl.h>
-#endif
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
@@ -79,12 +72,6 @@ int main(int argc, char *argv[]) {
     BitcoinApplication app(*node, argc, argv);
     app.setApplicationName("BitcoinCashNode-Qt-test");
 
-#ifdef ENABLE_BIP70
-    // This is necessary to initialize openssl on the test framework
-    // (at least on Darwin).
-    SSL_library_init();
-#endif
-
     AppTests app_tests(app);
     if (QTest::qExec(&app_tests) != 0) {
         fInvalid = true;
@@ -93,12 +80,6 @@ int main(int argc, char *argv[]) {
     if (QTest::qExec(&test1) != 0) {
         fInvalid = true;
     }
-#if defined(ENABLE_WALLET) && defined(ENABLE_BIP70)
-    PaymentServerTests test2;
-    if (QTest::qExec(&test2) != 0) {
-        fInvalid = true;
-    }
-#endif
     RPCNestedTests test3;
     if (QTest::qExec(&test3) != 0) {
         fInvalid = true;

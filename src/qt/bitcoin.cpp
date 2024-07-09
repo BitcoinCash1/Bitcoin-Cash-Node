@@ -381,15 +381,8 @@ void BitcoinApplication::initializeResult(bool success) {
 #ifdef ENABLE_WALLET
     m_wallet_controller =
         new WalletController(m_node, platformStyle, optionsModel, this);
-#ifdef ENABLE_BIP70
-    PaymentServer::LoadRootCAs();
-#endif
     if (paymentServer) {
         paymentServer->setOptionsModel(optionsModel);
-#ifdef ENABLE_BIP70
-        connect(m_wallet_controller, &WalletController::coinsSent,
-                paymentServer, &PaymentServer::fetchPaymentACK);
-#endif
     }
 #endif
 
@@ -451,12 +444,6 @@ WId BitcoinApplication::getMainWinId() const {
 }
 
 static void SetupUIArgs() {
-#if defined(ENABLE_WALLET) && defined(ENABLE_BIP70)
-    gArgs.AddArg("-allowselfsignedrootcertificates",
-                 strprintf("Allow self signed root certificates (default: %d)",
-                           DEFAULT_SELFSIGNED_ROOTCERTS),
-                 ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::GUI);
-#endif
     gArgs.AddArg("-choosedatadir",
                  strprintf("Choose data directory on startup (default: %d)",
                            DEFAULT_CHOOSE_DATADIR),
@@ -465,10 +452,6 @@ static void SetupUIArgs() {
                  "Set language, for example \"de_DE\" (default: system locale)",
                  ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     gArgs.AddArg("-min", strprintf("Start minimized (default: %d)", DEFAULT_START_MINIMIZED), ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
-    gArgs.AddArg(
-        "-rootcertificates=<file>",
-        "Set SSL root certificates for payment request (default: -system-)",
-        ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     gArgs.AddArg("-splash",
                  strprintf("Show splash screen on startup (default: %d)",
                            DEFAULT_SPLASHSCREEN),

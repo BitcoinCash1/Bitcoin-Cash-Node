@@ -1,8 +1,5 @@
 packages:=boost openssl libevent
 
-protobuf_native_packages = native_protobuf
-protobuf_packages = protobuf
-
 qt_packages = qrencode zlib
 
 qt_linux_packages:=qt expat libxcb xcb_proto libXau xproto freetype fontconfig libxkbcommon libxcb_util libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
