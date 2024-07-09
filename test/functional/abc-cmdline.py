@@ -27,6 +27,8 @@ class ABC_CmdLine_Test (BitcoinTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 1
+        # This test is for deprecated functionality, and it requires ABLA not be activated for it to work.
+        self.extra_args = [['-upgrade10activationheight=2147483647']]
         self.setup_clean_chain = False
 
     def check_excessive(self, expected_value):
@@ -48,7 +50,7 @@ class ABC_CmdLine_Test (BitcoinTestFramework):
         self.log.info("  Set to default max generated block size, i.e. {} bytes".format(
             DEFAULT_MAX_GENERATED_BLOCK_SIZE))
         self.stop_node(0)
-        self.start_node(0, ["-excessiveblocksize={}".format(
+        self.start_node(0, self.extra_args[0] + ["-excessiveblocksize={}".format(
             DEFAULT_MAX_GENERATED_BLOCK_SIZE)])
         self.check_excessive(DEFAULT_MAX_GENERATED_BLOCK_SIZE)
         # Check for EB correctness in the subver string
@@ -58,7 +60,7 @@ class ABC_CmdLine_Test (BitcoinTestFramework):
 
         self.log.info("  Set to limit, i.e. {} bytes".format(MAX_CONSENSUS_BLOCK_SIZE))
         self.stop_node(0)
-        self.start_node(0, ["-excessiveblocksize={}".format(MAX_CONSENSUS_BLOCK_SIZE)])
+        self.start_node(0, self.extra_args[0] + ["-excessiveblocksize={}".format(MAX_CONSENSUS_BLOCK_SIZE)])
         self.check_excessive(MAX_CONSENSUS_BLOCK_SIZE)
         # Check for EB correctness in the subver string
         self.check_subversion(r"/Bitcoin Cash Node:.*\(EB" + str(MAX_CONSENSUS_BLOCK_SIZE // ONE_MEGABYTE)
@@ -68,26 +70,27 @@ class ABC_CmdLine_Test (BitcoinTestFramework):
             LEGACY_MAX_BLOCK_SIZE))
         self.stop_node(0)
         self.nodes[0].assert_start_raises_init_error(
-            ["-excessiveblocksize={}".format(LEGACY_MAX_BLOCK_SIZE)],
+            self.extra_args[0] + ["-excessiveblocksize={}".format(LEGACY_MAX_BLOCK_SIZE)],
             "Error: Excessive block size must be > 1,000,000 bytes (1MB) and <= 2,000,000,000 bytes (2GB).")
 
         self.log.info("  Attempt to set above limit of 2GB - try {} bytes".format(MAX_CONSENSUS_BLOCK_SIZE + 1))
         self.stop_node(0)
         self.nodes[0].assert_start_raises_init_error(
-            ["-excessiveblocksize={}".format(MAX_CONSENSUS_BLOCK_SIZE + 1)],
+            self.extra_args[0] + ["-excessiveblocksize={}".format(MAX_CONSENSUS_BLOCK_SIZE + 1)],
             "Error: Excessive block size must be > 1,000,000 bytes (1MB) and <= 2,000,000,000 bytes (2GB).")
 
         self.log.info("  Attempt to set below blockmaxsize (mining limit)")
         self.nodes[0].assert_start_raises_init_error(
-            ['-blockmaxsize=1500000', '-excessiveblocksize=1300000'], 'Error: ' + MAX_GENERATED_BLOCK_SIZE_ERROR)
+            self.extra_args[0] + ['-blockmaxsize=1500000', '-excessiveblocksize=1300000'],
+            'Error: ' + MAX_GENERATED_BLOCK_SIZE_ERROR)
 
         self.log.info("  Attempt to set invalid blockmaxsize (mining limit)")
         self.nodes[0].assert_start_raises_init_error(
-            ['-blockmaxsize=-1'], 'Error: ' + INVALID_GENERATED_BLOCK_SIZE_ERROR)
+            self.extra_args[0] + ['-blockmaxsize=-1'], 'Error: ' + INVALID_GENERATED_BLOCK_SIZE_ERROR)
 
-        # Make sure we leave the test with a node running as this is what thee
+        # Make sure we leave the test with a node running as this is what the
         # framework expects.
-        self.start_node(0, [])
+        self.start_node(0, self.extra_args[0])
 
     def run_test(self):
         # Run tests on -excessiveblocksize option

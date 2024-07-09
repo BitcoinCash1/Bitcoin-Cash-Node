@@ -1615,7 +1615,7 @@ bool CChainState::ConnectBlock(const CBlock &block, CValidationState &state,
     if (block.GetHash() == consensusParams.hashGenesisBlock) {
         if (!fJustCheck) {
             view.SetBestBlock(pindex->GetBlockHash());
-            // Ensure ABLA state is updated just in case -upgrade10activationtime=<before genesis>
+            // Ensure ABLA state is updated just in case activation height is genesis (such as on regtest).
             MaintainAblaState(consensusParams, block, pindex, __func__, nThisBlockSize);
         }
 
@@ -4580,7 +4580,7 @@ static bool VerifyAblaStateForChain(const Config &config, CChain &chain) EXCLUSI
     if (!IsUpgrade10Enabled(consensus, ptip)) {
         return true;
     }
-    const CBlockIndex *pbase = g_upgrade10_block_tracker.GetActivationBlock(ptip, consensus);
+    const CBlockIndex *pbase = chain[GetUpgrade10ActivationHeight(consensus)];
     assert(pbase != nullptr);
     LogPrintf("%s: Verifying %i block headers have correct ABLA state ...\n",
               __func__, ptip->nHeight - pbase->nHeight + 1);
@@ -5000,7 +5000,7 @@ void UnloadBlockIndex(const Config &config) {
     pindexBestForkTip = nullptr;
     pindexBestForkBase = nullptr;
     ResetASERTAnchorBlockCache();
-    g_upgrade10_block_tracker.ResetActivationBlockCache();
+    g_upgrade11_block_tracker.ResetActivationBlockCache();
     g_mempool.clear();
     mapBlocksUnlinked.clear();
     {
@@ -5855,7 +5855,7 @@ public:
     }
 } instance_of_cmaincleanup;
 
-ActivationBlockTracker g_upgrade10_block_tracker(&IsUpgrade10Enabled);
+ActivationBlockTracker g_upgrade11_block_tracker(&IsUpgrade11Enabled);
 
 const CBlockIndex *
 ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Consensus::Params &params)

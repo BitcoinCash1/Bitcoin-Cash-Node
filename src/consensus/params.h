@@ -51,8 +51,8 @@ struct Params {
     int upgrade8Height;
     /** Block height at which the May 15, 2023 rules became active (this is one less than the upgrade block itself) */
     int upgrade9Height;
-    /** Unix time used for MTP activation of 15 May 2024 12:00:00 UTC upgrade */
-    int64_t upgrade10ActivationTime;
+    /** Block height at which the May 15, 2024 rules became active (this is one less than the upgrade block itself) */
+    int upgrade10Height;
     /** Unix time used for tentative MTP activation of 15 May 2025 12:00:00 UTC upgrade */
     int64_t upgrade11ActivationTime;
 

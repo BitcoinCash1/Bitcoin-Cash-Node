@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2023 The Bitcoin Cash Node developers
+# Copyright (c) 2020-2024 The Bitcoin Cash Node developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test sigop and size limits for getblocktemplate."""
@@ -32,7 +32,7 @@ class GetBlockTemplateSigopsTest(BitcoinTestFramework):
         # This test is still valid, even after ABLA activates, since we want to check that
         # the getblocktemplate calls properly enforce & report the sigcheck limit, whatever
         # the max block size is set to.
-        self.start_node(node_id, new_extra_args + ['-upgrade10activationtime=2000000000'])
+        self.start_node(node_id, new_extra_args + ['-upgrade10activationheight=2147483647'])
         connect_nodes_bi(self.nodes[0], self.nodes[1])
         self.sync_all()
 
