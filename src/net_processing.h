@@ -9,6 +9,7 @@
 #include <consensus/params.h>
 #include <net.h>
 #include <sync.h>
+#include <txrequest.h>
 #include <validationinterface.h>
 
 #include <atomic>
@@ -53,6 +54,7 @@ private:
     CConnman *const connman;
     BanMan *const m_banman;
     std::shared_ptr<std::atomic_bool> deleted; ///< Used to suppress further scheduler tasks if this instance is gone.
+    TxRequestTracker m_txrequest GUARDED_BY(cs_main);
 
     bool SendRejectsAndCheckIfShouldDiscourage(CNode *pnode, bool enable_bip61)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
