@@ -6,30 +6,31 @@ Bitcoin Cash Node version 27.1.0 is now available from:
 
 ## Overview
 
-This is a minor release of Bitcoin Cash Node (BCHN) that implements
-
-TODO
+This release of Bitcoin Cash Node (BCHN) includes some bug fixes and important reliability enhancements.
 
 ## Usage recommendations
 
-TODO
+Users who are running v27.0.0 or earlier are encouraged to upgrade to v27.1.0 as it includes some bugfixes as well as
+updated checkpoints for the recently completed (15 May 2024) network upgrade. It also include some performance and
+reliability fixes related to transaction processing.
 
 ## Network changes
 
-TODO
+The internal transaction processing logic for both regular and orphan transactions has been reworked to be more
+performant and more reliable.
 
 ## Added functionality
 
-TODO
+None.
 
 ## Deprecated functionality
 
-TODO
+None.
 
 ## Modified functionality
 
 The command-line option -upgrade10activationtime has been renamed to -upgrade10activationheight and is now height-based,
-rather than MTP time-based.
+rather than MTP time-based. The next upgrade is still expected to be MTP time-based.
 
 ## Removed functionality
 
@@ -42,7 +43,7 @@ Cash or Bitcoin.com that continue to support BIP70 payment requests.
 
 ## New RPC methods
 
-TODO
+None.
 
 ## User interface changes
 
@@ -53,15 +54,15 @@ TODO
   until that point, they would be processed as often as any other node rather than
   being ignored for a cooling-off period as intended. To resolve this, we decided to
   simply remove this facility entirely, meaning that nodes will now never be ignored.
+- The `datadir=` conf file variable appearing both outside and inside a section header in
+  the conf file works as expected now, and no longer leads to unexpected `blocksdir=`
+  settings (!1816).
 
 ## Regressions
 
-(TODO) Bitcoin Cash Node 27.1.0 does not introduce any known regressions as compared
-to 27.0.0.
+Bitcoin Cash Node 27.1.0 does not introduce any known regressions as compared to 27.0.0.
 
 ## Limitations
-
-(TODO - update as needed)
 
 The following are limitations in this release of which users should be aware:
 
@@ -96,8 +97,6 @@ The following are limitations in this release of which users should be aware:
 
 
 ## Known Issues
-
-(TODO - update as needed)
 
 Some issues could not be closed in time for release, but we are tracking all
 of them on our GitLab repository.
@@ -186,95 +185,127 @@ of them on our GitLab repository.
 
 ---
 
-## Changes since Bitcoin Cash Node 26.1.0
+## Changes since Bitcoin Cash Node 27.0.0
 
 ### New documents
 
-TODO
+None
 
 ### Removed documents
 
-TODO
+None
 
 ### Notable commits grouped by functionality
 
 #### Security or consensus relevant fixes
 
-TODO
+- 2443f184a582b2bf726f4fdce131c4cbd4c08324 Add checkpoints for blocks after upgrade10 ABLA activation
+- 7f862714801cf2ae764e4bc0d74831c8f2ef8920 Switch ABLA (upgrade10) to use height-based activation, rather than MTP
+- 399f414b4be9539b5b41b4c82d02ba45ff5b3c42 qa: Update chainparams assumevalid and minimumchainwork for 27.1.0
+- 02c658c8e3d3d2ab3d7c7e2cdbc3137134d2def9 Update chainTxData for main, test3, test4, and chipnet
 
 #### Interfaces / RPC
 
-TODO
+None
 
 #### Features in internal development: support for UTXO commitments
 
-TODO
+None
 
 ### Data directory changes
 
-TODO
+- c64905bdd52c227f1901a3d183e20ee7ace6fbf6 Fix for wrong behavior for conf file datadir= inside vs outside a secton
 
 #### Performance optimizations
 
-TODO
+None
 
 #### GUI
 
-TODO
+None
 
 #### Code quality
 
-TODO
+- 4f4fa009aa944d156d81d43dc1e69649eb8d2153 Trivial: Fix compiler warning about unused variable in dsproof_tests.cpp
+- 706bc01a8a298dcf296a379b2b853d0090cdd8d5 Remove deprecated boost::basename method.
+- ef2dcc2176a12ddac4f54b73bd372a9748a2c88f Fix compatibility for Boost 1.85 and above
+- 368c9996c12b36fd700f1ce7c0933d0b020412ba trivial: Fix up the header util/heapoptional.h includes
+- 0f6a086ce91ff3aa7b2faaa748efa48a3e611d9a Fix spurious ABLA-related warning for pruned nodes
 
 #### Documentation updates
 
-TODO
+- 3c137713ddef3e2cced98866da97c28a0fde5e20 Update copyright year to 2024
+- 633908d627f65a4f997b17121efea17856295d44 clarify links and link contribution guide from docs
+- 6fbefbf3b6c1cb80653118f3b21f7da3d8c9d685 Include onlynet option in example bitcoin.conf
+- 9ffaa384771b1df2c9d88b3829db62957e2b3fba Bump version to 27.1.0 + update release-notes to use this version
 
 #### Build / general
 
-TODO
+None
 
 #### Build / Linux
 
-TODO
+None
 
 #### Build / Windows
 
-TODO
+None
 
 #### Build / MacOSX
 
-TODO
+None
 
 #### Tests / test framework
 
-TODO
+- dba4975cb98f9453cb5084f18e02fe316a0c355a Nit: Fix a missing `%s` in chip_testing_setup.cpp
+- 233c8cfa7e400b2aa8f4e9b572a8ef0816d617c5 Expected test failure messages regeneration
+- 2ff9aeaa7ac80c72580b3f6215b641351bfb6752 Expand signing serialization VMB tests
+
 
 #### Benchmarks
 
-TODO
+None
 
 #### Seeds / seeder software
 
-TODO
+- 93e08e6642dbd533cccaac03b79df183dfaba366 Fix seeder checkpoint check
+- 9cdabd25c642c79bb1857b6fe64696b846e873e4 Fixed a rare crash bug when process runs out of file descriptors
+- 7ddc65cc572b48be5c31041790190aa71e22bcd7 Fix socket leaks leading to process running out of file descriptors
+
 
 #### Maintainer tools
 
-TODO
+- 6b79e9fef20cb337c17f73bc786ffa7f17120163 linearize: Add the new testnets and rename diskmagic
 
 #### Infrastructure
 
-TODO
+None
 
 #### Cleanup
 
-TODO
+- 37ac1c6058c0aa639297e8166108d15ddc54429b Deleted comments related to segwit.
 
 #### Continuous Integration (GitLab CI)
 
-TODO
+- 610dfff8da4f2ca643bcd6c04c384b07b53254ca Import CI docker image file
+- b7b2e762105b70f7d739da730e70d4fc73378468 ci: Bump docker image buster -> bookworm
+
 
 #### Backports
 
-TODO
-
+- 975743a8f0912bb580d30989bbe65a7727da85d8 Add the the "util::Overloaded" helper for more idiomatic std::variant usage
+- 29e9616a1ff7f40dbdcb236d0cb09cfbeb02fdfd net processing: Only send a getheaders for one block in an INV
+- 2b563318ce6e9a681710c873d3ef54bfd5a5d9b2 Avoid the use of abs64 in timedata
+- e5c1897d2b4557aad6088ece40bc741dd55c1410 Simplify orphan processing in preparation for interruptibility
+- 1d91bcc2385272c1e14c16d2cc33e97ddf7a82d6 MOVEONLY: Move processing of orphan queue to ProcessOrphanTx
+- 218969139a6ab51bfcc2351003478becd09013bf Interrupt orphan processing after every transaction
+- 25fe0ea589fa0ee751f6bef89810bf6b42f2531e Removed BIP70 support
+- d5e0e02bf00bd4ac796be72d35ea19b72665d4fa Add txrequest module
+- dc9959798bba2a877874c9647ab635c0a7f7460f Add txrequest unit tests
+- a44ac5a96514bfb654a75bb4fb7854732d73feea Add txrequest fuzz tests
+- 5b85c5dcc395992c7c90250cb71ed957316d2389 Change transaction request logic to use txrequest
+- 7675a909b6eed0f49cb7ba460018d1b726e868a4 Expedite removal of tx requests that are no longer needed
+- d9e0b6f0efb50605c9666fd4d50bb531defe69a8 Delete limitedmap as it is unused now
+- d4075a4bffc1d7e4deea4ccca634a3e2b65b9d8c Report and verify expirations
+- 63069ce9d074461ee8aa97f6873be679b7265eba Add "overload' functional test + disable the penalty for PF_RELAY peers
+- d01f330e6c6046eba24008897655f9c713d4a5c9 p2p: declare Announcement::m_state as uint8_t, add getter/setter
