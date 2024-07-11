@@ -46,6 +46,7 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
@@ -839,9 +840,8 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats) {
 
 static void AddToCompactExtraTransactions(const CTransactionRef &tx)
     EXCLUSIVE_LOCKS_REQUIRED(internal::g_cs_orphans) {
-    size_t max_extra_txn = gArgs.GetArg("-blockreconstructionextratxn",
-                                        DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN);
-    if (max_extra_txn <= 0) {
+    const int64_t max_extra_txn = gArgs.GetArg("-blockreconstructionextratxn", DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN);
+    if (max_extra_txn <= 0 || uint64_t(max_extra_txn) > uint64_t(std::numeric_limits<size_t>::max())) {
         return;
     }
 
@@ -849,9 +849,8 @@ static void AddToCompactExtraTransactions(const CTransactionRef &tx)
         vExtraTxnForCompact.resize(max_extra_txn);
     }
 
-    vExtraTxnForCompact[vExtraTxnForCompactIt] =
-        std::make_pair(tx->GetHash(), tx);
-    vExtraTxnForCompactIt = (vExtraTxnForCompactIt + 1) % max_extra_txn;
+    vExtraTxnForCompact[vExtraTxnForCompactIt] = std::make_pair(tx->GetHash(), tx);
+    vExtraTxnForCompactIt = (vExtraTxnForCompactIt + 1) % vExtraTxnForCompact.size();
 }
 
 bool internal::AddOrphanTx(const CTransactionRef &tx, NodeId peer)
