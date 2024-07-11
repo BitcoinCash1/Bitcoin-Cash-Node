@@ -387,6 +387,7 @@ add_library(util
   util/saltedhashers.cpp
   util/strencodings.cpp
   util/string.cpp
+  util/syserror.cpp
   util/system.cpp
   util/threadnames.cpp
   util/time.cpp
