@@ -40,4 +40,10 @@ search_and_report_if_found "std::filesystem" \
    "Use of std::filesystem detected. This is a problem on OSX 10.14 (gitian build). Use boost::filesystem instead." \
    "*.cpp" "*.h"
 
+# strerror is not thread-safe. Disallow it in the codebase except for some exclusions (util/syserror.*, leveldb, etc).
+search_and_report_if_found "strerror" \
+                           "Use of strerror is not thread-safe. Use SysErrorString() from util/syserror.h instead." \
+                           "*.cpp" "*.h" \
+                           ":^test/lint/*" ":^src/zmq/zmqutil.cpp" ":^src/util/syserror.*" ":^src/wallet/db.cpp"
+
 exit "${EXIT_CODE}"
