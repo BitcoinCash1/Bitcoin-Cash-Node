@@ -58,6 +58,7 @@
 #include <util/asmap.h>
 #include <util/moneystr.h>
 #include <util/string.h>
+#include <util/syserror.h>
 #include <util/system.h>
 #include <util/threadnames.h>
 #include <validation.h>
@@ -130,7 +131,7 @@ static fs::path GetPidFile() {
     } else {
         return InitError(strprintf(_("Unable to create the PID file '%s': %s"),
                                    GetPidFile().string(),
-                                   std::strerror(errno)));
+                                   SysErrorString(errno)));
     }
 }
 

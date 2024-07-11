@@ -16,6 +16,7 @@
 #include <serialize.h>
 #include <util/strencodings.h>
 #include <util/string.h>
+#include <util/syserror.h>
 #include <util/time.h>
 
 #include <cstdarg>
@@ -1430,7 +1431,7 @@ void ScheduleBatchPriority() {
 #ifdef SCHED_BATCH
     const static sched_param param{};
     if (pthread_setschedparam(pthread_self(), SCHED_BATCH, &param) != 0) {
-        LogPrintf("Failed to pthread_setschedparam: %s\n", strerror(errno));
+        LogPrintf("Failed to pthread_setschedparam: %s\n", SysErrorString(errno));
     }
 #endif
 }

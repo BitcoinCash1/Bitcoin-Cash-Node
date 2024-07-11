@@ -21,6 +21,7 @@
 #include <rpc/server.h>
 #include <shutdown.h>
 #include <util/strencodings.h>
+#include <util/syserror.h>
 #include <util/system.h>
 #include <util/threadnames.h>
 #include <validationinterface.h>
@@ -183,8 +184,7 @@ static bool AppInit(int argc, char *argv[]) {
             // Daemonize
             if (daemon(1, 0)) {
                 // don't chdir (1), do close FDs (0)
-                fprintf(stderr, "Error: daemon() failed: %s\n",
-                        strerror(errno));
+                fprintf(stderr, "Error: daemon() failed: %s\n", SysErrorString(errno).c_str());
                 return false;
             }
 #if defined(MAC_OSX)
