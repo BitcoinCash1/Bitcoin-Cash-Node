@@ -6,6 +6,7 @@
 
 #include <tinyformat.h> // for strprintf()
 #include <util/defer.h> // for Defer
+#include <util/syserror.h>
 
 #include <algorithm>
 #include <array>
@@ -70,7 +71,7 @@ CheckAssertResult CheckAssert(std::function<void()> func, std::string_view expec
     });
     auto ChkRet = [](std::string_view call, int ret) {
         if (ret != 0) {
-            throw std::runtime_error(strprintf("Error from `%s`: %s", std::string{call}, std::strerror(errno)));
+            throw std::runtime_error(strprintf("Error from `%s`: %s", std::string{call}, SysErrorString(errno)));
         }
     };
     // create 2 pipes (to replace stdout and stderr)
@@ -197,7 +198,7 @@ CheckAssertResult CheckAssert(std::function<void()> func, std::string_view expec
 
         if (hadError != 0) {
             throw std::runtime_error(strprintf("Failed to read from pipe to subordinate process: %s",
-                                               std::strerror(hadError)));
+                                               SysErrorString(hadError)));
         }
 
         if (WIFEXITED(status) && WEXITSTATUS(status) == exit_status_cannot_dup2) {

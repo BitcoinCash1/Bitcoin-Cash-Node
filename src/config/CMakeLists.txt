@@ -183,6 +183,15 @@ check_cxx_source_compiles("
     }
 " HAVE_INT128)
 
+check_cxx_source_compiles("
+    #include <string.h>
+    int main() {
+      char buf[100];
+      char* p{strerror_r(0, buf, sizeof buf)};
+      (void)p;
+    }
+" STRERROR_R_CHAR_P)
+
 #__fdelt_chk's params and return type have changed from long unsigned int to
 # long int. See which one is present here.
 include(CheckPrototypeDefinition)

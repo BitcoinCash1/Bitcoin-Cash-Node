@@ -10,6 +10,7 @@
 #include <logging.h>
 #include <serialize.h>
 #include <streams.h>
+#include <util/syserror.h>
 
 #include <cmath>
 #include <cstdio>
@@ -744,13 +745,13 @@ std::vector<bool> CAddrMan::DecodeAsmap(fs::path path) {
     FILE *filestr = fsbridge::fopen(path, "rb");
     CAutoFile file(filestr, SER_DISK, CLIENT_VERSION);
     if (file.IsNull()) {
-        LogPrintf("Failed to open asmap file %s: %s\n", path, std::strerror(errno));
+        LogPrintf("Failed to open asmap file %s: %s\n", path, SysErrorString(errno));
         return bits;
     }
     std::fseek(filestr, 0, SEEK_END);
     const long length = std::ftell(filestr);
     if (length < 0L) {
-        LogPrintf("Cannot determine size of asmap file %s: %s\n", path, std::strerror(errno));
+        LogPrintf("Cannot determine size of asmap file %s: %s\n", path, SysErrorString(errno));
         return bits;
     }
     LogPrintf("Opened asmap file %s (%d bytes) from disk\n", path, length);
