@@ -42,7 +42,8 @@ private:
 std::string get_filesystem_error_message(const fs::filesystem_error &e);
 
 inline auto get_overwrite_if_exists_option() {
-#if BOOST_VERSION >= 108500
+    // see https://www.boost.org/users/history/version_1_74_0.html
+#if BOOST_VERSION >= 107400
     return fs::copy_options::overwrite_existing;
 #else
     return fs::copy_option::overwrite_if_exists;
@@ -50,7 +51,8 @@ inline auto get_overwrite_if_exists_option() {
 }
 
 inline int get_dir_iterator_level(const fs::recursive_directory_iterator &it) {
-#if BOOST_VERSION >= 108500
+    // see https://www.boost.org/users/history/version_1_72_0.html
+#if BOOST_VERSION >= 107200
     return it.depth();
 #else
     return it.level();
