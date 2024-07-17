@@ -385,8 +385,7 @@ bool StatCompare(const CAddrReport &a, const CAddrReport &b) noexcept {
 
 void SaveAllToDisk() {
     auto PrintCantOpenMsg = [](const char *fname) {
-        auto * const errstr = std::strerror(errno);
-        std::fprintf(stderr, "WARNING: Unable to open file '%s': %s\n", fname, errstr);
+        std::fprintf(stderr, "WARNING: Unable to open file '%s': %s\n", fname, SysErrorString(errno).c_str());
     };
     std::vector<CAddrReport> v = db.GetAll();
     std::sort(v.begin(), v.end(), StatCompare);

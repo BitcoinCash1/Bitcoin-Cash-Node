@@ -6,6 +6,7 @@
 #include <seeder/util.h>
 #include <sync.h>
 #include <tinyformat.h>
+#include <util/syserror.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -614,7 +615,7 @@ std::optional<std::string> DnsServer::run() {
     int senderSocket = -1;
     senderSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (senderSocket == -1) {
-        return strprintf("socket (1): %s", strerror(errno));
+        return strprintf("socket (1): %s", SysErrorString(errno));
     }
 
     int replySocket;
@@ -623,11 +624,11 @@ std::optional<std::string> DnsServer::run() {
         if (listenSocket == -1) {
             struct sockaddr_in6 si_me;
             if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-                return strprintf("socket (2): %s", strerror(errno));
+                return strprintf("socket (2): %s", SysErrorString(errno));
             }
             replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
             if (replySocket == -1) {
-                auto ret = strprintf("socket (3): %s", strerror(errno));
+                auto ret = strprintf("socket (3): %s", SysErrorString(errno));
                 closeSocket_nolock();
                 return ret;
             }
@@ -638,7 +639,7 @@ std::optional<std::string> DnsServer::run() {
             recvtimeout.tv_usec = (polltimeMsec % 1000) * 1000;
             // Use a receive timeout for listenSocket (so we can periodically check if shutdown is requested)
             if (0 != setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, &recvtimeout, sizeof recvtimeout)) {
-                auto ret = strprintf("setsockopt (SO_RCVTIMEO): %s", strerror(errno));
+                auto ret = strprintf("setsockopt (SO_RCVTIMEO): %s", SysErrorString(errno));
                 closeSocket_nolock();
                 return ret;
             }
@@ -647,7 +648,7 @@ std::optional<std::string> DnsServer::run() {
             si_me.sin6_port = htons(this->port);
             si_me.sin6_addr = in6addr_any;
             if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
-                auto ret = strprintf("bind: %s", strerror(errno));
+                auto ret = strprintf("bind: %s", SysErrorString(errno));
                 closeSocket_nolock();
                 return ret;
             }
