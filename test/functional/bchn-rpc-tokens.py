@@ -227,6 +227,14 @@ class CashTokenRPCTest(BitcoinTestFramework):
         assert_equal(self.nodes[1].sendrawtransaction(txhex), tx_send_token.hash)
         self.mine_to_non_wallet_addess(1)
 
+        # Check that getrawtransaction with verbosity=2 contains the expected tokenData in the "vin" key
+        result = self.nodes[0].getrawtransaction(tx_send_token.hash, 2)
+        assert_equal(result["hash"], tx_send_token.hash)
+        assert_equal(result["vin"][0]["tokenData"]["category"], tokenData.id_hex)
+        assert_equal(result["vin"][0]["tokenData"]["amount"], str(tokenData.amount))  # Impl. quirk: "amount" is str
+        assert_equal(result["vin"][0]["tokenData"]["nft"]["commitment"], tokenData.commitment.hex())
+        assert_equal(result["vin"][0]["tokenData"]["nft"]["capability"], "minting")
+
         # Ensure the token got there
         bal0_after_2 = self.nodes[0].getbalance()
         self.log.info(f"Balance on node 0 after receiving a token: {bal0_after_2}")

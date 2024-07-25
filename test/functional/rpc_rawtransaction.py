@@ -663,6 +663,7 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # 11.2 make new mempool transaction spending confirmed transaction
         inputs = [{'txid': lastSentTx["hash"], 'vout': 0}]
+        input_0 = lastSentTx["vout"][0]
         outputs = multidict([(self.nodes[0].getnewaddress(), 2.00), (self.nodes[0].getnewaddress(), 0.18)])
         rawtx = self.nodes[0].createrawtransaction(inputs, outputs)
         rawtx = self.nodes[0].signrawtransactionwithwallet(rawtx)
@@ -681,7 +682,13 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # -txindex enabled node
         result = self.nodes[1].getrawtransaction(lastSentTx["hash"], 2)
+        # Check verbosity=2 "value" on inputs
         assert_equal(result["vin"][0]["value"], Decimal('2.19'))
+        # Check verbosity=2 "scriptPubKey" on inputs
+        assert_equal(result["vin"][0]["scriptPubKey"]["address"], input_0["scriptPubKey"]["addresses"][0])
+        assert_equal(result["vin"][0]["scriptPubKey"]["asm"], input_0["scriptPubKey"]["asm"])
+        assert_equal(result["vin"][0]["scriptPubKey"]["hex"], input_0["scriptPubKey"]["hex"])
+        assert_equal(result["vin"][0]["scriptPubKey"]["type"], input_0["scriptPubKey"]["type"])
         assert_equal(result["vout"][0]["value"], Decimal('2.00'))
         assert_equal(result["vout"][1]["value"], Decimal('0.18'))
         assert_equal(result["fee"], Decimal('0.01'))
