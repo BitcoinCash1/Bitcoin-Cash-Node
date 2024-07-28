@@ -77,12 +77,13 @@ static UniValue::Object TxToJSON(const Config &config, const CTransaction &tx, c
 // - `tx` is not null and is *not* a coinbase txn
 // - `result` already has a key named `vin` with an array of objects of size tx->vin.size()
 // Postconditions:
-// - `result` will be populated with an additional `fee` key and each of the inputs in the `vin` array will also have an
-//   additional `value` key added.
+// - `result` will be populated with an additional `fee` key and each of the inputs in the `vin` array will also have
+//   2-3 additional keys added: `value`, `scriptPubKey` and, if applicable, `tokenData`.
 // May throw if it cannot satisfy the postconditions (e.g. cannot find prevouts)
-static void getrawtransaction_verbosity_2_helper(const CChainParams &params, const CTransactionRef &tx,
+static void getrawtransaction_verbosity_2_helper(const Config &config, const CTransactionRef &tx,
                                                  UniValue::Object &result, bool &f_txindex_ready,
                                                  const CBlockIndex *blockindex, const BlockHash &hash_block) {
+    const CChainParams &params = config.GetChainParams();
     Amount valueIn;
     UniValue::Array &resultVinArr = result.at("vin").get_array();
     bool usedUndo = false;
@@ -97,7 +98,13 @@ static void getrawtransaction_verbosity_2_helper(const CChainParams &params, con
         // Tally fee and update result json for this input
         valueIn += value;
         UniValue::Object &resultForThisInput = resultVinArr.at(vinIndex).get_obj();
+        const bool hasTokenData = prevTxOut.tokenDataPtr;
+        resultForThisInput.reserve(resultForThisInput.size() + 2u + unsigned(hasTokenData));
         resultForThisInput.emplace_back("value", ValueFromAmount(value));
+        resultForThisInput.emplace_back("scriptPubKey", ScriptToUniv(config, prevTxOut.scriptPubKey, /*include_address=*/true));
+        if (hasTokenData) {
+            resultForThisInput.emplace_back("tokenData", TokenDataToUniv(*prevTxOut.tokenDataPtr));
+        }
     };
 
     // If txindex is not available, use undo data (if available) to get the prevouts
@@ -251,6 +258,20 @@ static UniValue getrawtransaction(const Config &config,
             "       \"sequence\": n      (numeric) The script sequence number\n"
             "       \"value\" : x.xxx,   (numeric) The input value in " +
             CURRENCY_UNIT + " (available at verbosity level 2)\n"
+            "       \"scriptPubKey\" : {          (json object) The previous output's locking script (available at verbosity level 2)\n"
+            "         \"asm\" : \"str\",            (string) The asm\n"
+            "         \"hex\" : \"str\",            (string) The hex\n"
+            "         \"type\" : \"str\",           (string) The type (one of: nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)\n"
+            "         \"address\" : \"str\"         (string, optional) The Bitcoin Cash address (only if well-defined address exists)\n"
+            "       },\n"
+            "       \"tokenData\" : {             (json object, optional) CashToken data (verbosity level 2, only if the input contained a token)\n"
+            "         \"category\" : \"hex\",       (string) Token id\n"
+            "         \"amount\" : \"xxx\",         (string) Fungible amount (is a string to support >53-bit amounts)\n"
+            "         \"nft\" : {                 (json object, optional) NFT data (only if the token has an NFT)\n"
+            "           \"capability\" : \"xxx\",   (string) One of \"none\", \"mutable\", \"minting\"\n"
+            "           \"commitment\" : \"hex\"    (string) NFT commitment formatted as hexadecimal\n"
+            "         },\n"
+            "       }\n"
             "     }\n"
             "     ,...\n"
             "  ],\n"
@@ -383,7 +404,7 @@ static UniValue getrawtransaction(const Config &config,
 
     // Fill in fee info, and inputs' value info, for non-coinbase txn iff verbosity >= 2
     if (fGetPrevouts && !tx->IsCoinBase()) {
-        getrawtransaction_verbosity_2_helper(params, tx, result, f_txindex_ready, blockindex, hash_block);
+        getrawtransaction_verbosity_2_helper(config, tx, result, f_txindex_ready, blockindex, hash_block);
     }
 
     return result;
