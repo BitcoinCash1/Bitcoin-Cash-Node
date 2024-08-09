@@ -389,6 +389,7 @@ add_library(util
   util/string.cpp
   util/syserror.cpp
   util/system.cpp
+  util/thread.cpp
   util/threadnames.cpp
   util/time.cpp
 
