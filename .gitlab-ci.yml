@@ -23,7 +23,7 @@ code_quality:
     artifacts:
         paths: [gl-code-quality-report.json]
 
-image: bitcoincashnode/buildenv:debian-v3
+image: bitcoincashnode/buildenv:debian-v4
 
 stages:
     - static_checks

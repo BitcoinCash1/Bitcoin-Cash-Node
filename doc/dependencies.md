@@ -21,6 +21,7 @@ These dependencies are required:
 | jemalloc | [5.2.1](https://github.com/jemalloc/jemalloc/releases) |  |  |  |  |
 | libevent | [2.1.12-stable](https://github.com/libevent/libevent/releases) | 2.0.22 | No |  |  |  Networking       | OS independent asynchronous networking |
 | libjpeg |  |  |  |  | Yes |  |  |
+| libnatpmp | commit [07004b9...](https://github.com/miniupnp/libnatpmp/commit/07004b97cf691774efebe70404cf22201e4d330d) |  | No |  |  | NAT-PMP Support  | Firewall-jumping support |
 | libpng |  |  |  |  | Yes |  |  |
 | MiniUPnPc | [2.2.2](http://miniupnp.free.fr/files) | 1.6 | No |  |  | UPnP Support     | Firewall-jumping support |
 | Ninja |  | [1.5.1](https://github.com/ninja-build/ninja/releases) |  |  |  |  |  |

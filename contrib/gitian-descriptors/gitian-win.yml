@@ -146,7 +146,8 @@ script: |
     -DENABLE_CLANG_TIDY=OFF \
     -DENABLE_MAN=OFF \
     -DENABLE_QRCODE=OFF \
-    -DENABLE_UPNP=OFF
+    -DENABLE_UPNP=OFF \
+    -DENABLE_NATPMP=OFF
 
   ninja package_source
   SOURCEDIST=`echo bitcoin-cash-node-*.tar.gz`

@@ -5,11 +5,11 @@
 You will need the following dependencies:
 
 ```bash
-    pacman -S boost cmake git libevent ninja python miniupnpc zeromq help2man
+    pacman -S boost cmake git libevent ninja python miniupnpc libnatpmp zeromq help2man
 ```
 
-You can do without the `miniupnpc`, `zeromq`, and `help2man` packages, then you
-just need to respectively pass `-DENABLE_UPNP=OFF`, `-DBUILD_BITCOIN_ZMQ=OFF`,
+You can do without the `miniupnpc`, `libnatpmp`, `zeromq`, and `help2man` packages, then you
+just need to respectively pass `-DENABLE_UPNP=OFF`, `-DENABLE_NATPMP=OFF`, `-DBUILD_BITCOIN_ZMQ=OFF`,
 or `-DENABLE_MAN=OFF` on the `cmake` command line.
 
 If you want to build the GUI client `bitcoin-qt` Qt 5 is necessary.
