@@ -133,8 +133,10 @@ static bool NatpmpMapping(natpmp_t *natpmp, const struct in_addr &external_ipv4_
         } while (ret && g_mapport_interrupt.sleep_for(PORT_MAPPING_REANNOUNCE_PERIOD));
         g_mapport_interrupt.reset();
 
+        /* Note: https://www.rfc-editor.org/rfc/rfc6886#section-3.4 says *both* external port and lifetime need to be
+                 set to 0 to do an unmapping. */
         const int r_send = sendnewportmappingrequest(&natpmp, NATPMP_PROTOCOL_TCP, private_port,
-                                                     g_mapport_external_port, /* remove a port mapping */ 0);
+                                                     /* remove a port mapping */ 0, /* remove a port mapping */ 0);
         g_mapport_external_port = 0;
         if (r_send == 12 /* OK */) {
             LogPrintf("natpmp: Port mapping removed successfully.\n");
