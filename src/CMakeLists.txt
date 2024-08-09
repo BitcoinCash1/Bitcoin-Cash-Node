@@ -561,6 +561,7 @@ add_library(server
   interfaces/chain.cpp
   interfaces/handler.cpp
   interfaces/node.cpp
+  mapport.cpp
   merkleblock.cpp
   miner.cpp
   net.cpp
