@@ -10,6 +10,7 @@
 #include <univalue.h>
 
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -21,7 +22,7 @@ class CValidationState;
 /// For FEATURE tests, subclasses must reimplement "ActivateFeature()" (see libauth_tests.cpp for examples that use
 /// this setup)
 class LibauthTestingSetup : public TestChain100Setup {
-
+public:
     enum TxStandard { INVALID, NONSTANDARD, STANDARD };
 
     // A structure to hold all failure reason messages for all tests for all test packs
@@ -81,11 +82,15 @@ class LibauthTestingSetup : public TestChain100Setup {
             std::string libauthNonstandardReason; //! Libauth suggested failure reason when validated in nonstandard mode
             bool scriptOnly = false; //< If true, this test vector should not test against AcceptToMemoryPool() for the
                                      //< whole txn, but should just evaluate the script for input `inputNum`.
+            bool benchmark = false;  //< True if the test description contains the string "[benchmark]"
+            bool baselineBench = false; //< True if `benchmark==true` and the description contains "[baseline]"
             unsigned inputNum = 0;   //< The input number to test. Comes from the optional 7th column of the JSON array
                                      //< for this test, defaults to 0 if unspecified. Only used if scriptOnly == true.
         };
 
         std::vector<Test> vec;
+        std::vector<size_t> benchmarks; // indices into above vector; all `Test`s that are also `benchmark==true`
+        std::optional<size_t> baselineBench; // if set, index into the above vector for the first Test that is `baselineBench`
     };
 
     // Container for a group of test vectors. Corresponds to either an individual "CHIP" test pack or a regression or
@@ -93,6 +98,9 @@ class LibauthTestingSetup : public TestChain100Setup {
     struct TestPack {
         std::string name; //! Test pack name, same as the key in the `allTestPacks` map below
         std::vector<TestVector> testVectors;
+        std::vector<size_t> benchmarkVectors; // indices into the above `testVectors` for all vectors that also have benchmarks in them
+        // if set: the baseline benchmark; pair of: .first = index into testVectors, .second = index into testVector.vec.
+        std::optional<std::pair<size_t, size_t>> baselineBenchmark;
 
         enum Type {
             FEATURE, //! Feature-specific test pack. May toggle the "featureActive" bool to test pre and post activation
@@ -104,6 +112,7 @@ class LibauthTestingSetup : public TestChain100Setup {
         TestPack() = default;
     };
 
+private:
     static std::map<std::string, TestPack> allTestPacks;  //! key: testPack.name, value: testPack
 
     // A lookup table that can be used to find a single expected failure test message given information about the
@@ -117,7 +126,6 @@ class LibauthTestingSetup : public TestChain100Setup {
     static AllReasonsDict allLibauthReasons; // All error messages suggested by Libauth
     static AllReasonsDict bchnProducedReasons; // All error messages actually produced
 
-    static void LoadAllTestPacks();
     static void RunTestVector(const TestVector &test, const std::string &packName);
     static bool RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state);
 
@@ -132,8 +140,14 @@ public:
     LibauthTestingSetup();
     ~LibauthTestingSetup() override;
 
+    /// Explicitly load all test packs, optionally specifying the height for all coins internally.
+    static void LoadAllTestPacks(std::optional<unsigned> coinHeights = std::nullopt);
+
     /// Run all tests for the test pack named `name`.
     void RunTestPack(const std::string &name);
+
+    /// Returns the TestPack named `name`, or `nullptr` if no such TestPack exists
+    static const TestPack *GetTestPack(const std::string &name);
 
     /// Generate the reasons lookup table and compare it against the currently loaded table. Returns false and outputs
     /// the corrected version to a file if it differs, and includes a human-readable checklist file to help with manual

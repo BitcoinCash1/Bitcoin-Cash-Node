@@ -154,27 +154,7 @@ gen_asmap_headers(ASMAP_HEADERS
 )
 
 add_boost_unit_tests_to_suite(bitcoin test_bitcoin
-  check_assert.cpp
-  libauth_testing_setup.cpp
-  jsonutil.cpp
-  lib/transaction_utils.cpp
   main.cpp
-  scriptflags.cpp
-  sigutil.cpp
-  setup_common.cpp
-
-  ${ASMAP_HEADERS}
-
-  # Tests generated from JSON
-  ${JSON_HEADERS}
-  ${LIBAUTH_TESTS_AUTOGEN}
-  ${ABLA_HEADER}
-
-  # Wallet test fixture
-  ${BITCOIN_WALLET_TEST_FIXTURE}
-
-  # Properties based test fixture
-  ${BITCOIN_PROPERTY_BASED_TEST_FIXTURE}
 
   TESTS
     abla_basic_tests.cpp
@@ -299,6 +279,31 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     ${BITCOIN_PROPERTY_BASED_TESTS}
 )
 
+add_library(test_common OBJECT EXCLUDE_FROM_ALL
+    check_assert.cpp
+    jsonutil.cpp
+    lib/transaction_utils.cpp
+    libauth_testing_setup.cpp
+    scriptflags.cpp
+    setup_common.cpp
+    sigutil.cpp
+    util.cpp
+
+    ${ASMAP_HEADERS}
+
+    # Tests generated from JSON
+    ${JSON_HEADERS}
+    ${LIBAUTH_TESTS_AUTOGEN}
+    ${ABLA_HEADER}
+
+    # Wallet test fixture
+    ${BITCOIN_WALLET_TEST_FIXTURE}
+
+    # Properties based test fixture
+    ${BITCOIN_PROPERTY_BASED_TEST_FIXTURE}
+)
+target_link_libraries(test_common PUBLIC server Boost::unit_test_framework)
+
 if(ENABLE_PROPERTY_BASED_TESTS)
   target_link_libraries(test_bitcoin Rapidcheck::rapidcheck)
 endif()
@@ -331,7 +336,7 @@ endfunction()
 
 add_boost_test_runners_with_upgrade_activated(bitcoin test_bitcoin)
 
-target_link_libraries(test_bitcoin rpcclient server)
+target_link_libraries(test_bitcoin rpcclient server test_common)
 if(TARGET bitcoinconsensus-shared)
   target_link_libraries(test_bitcoin bitcoinconsensus-shared)
 else()

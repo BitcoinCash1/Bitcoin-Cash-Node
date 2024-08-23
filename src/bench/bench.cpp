@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,6 +17,7 @@
 #include <iostream>
 #include <numeric>
 #include <regex>
+#include <set>
 
 namespace benchmark {
 
@@ -26,31 +27,56 @@ void ConsolePrinter::header() {
 }
 
 void ConsolePrinter::result(const State &state, uint64_t num_evals) {
-    auto results = state.m_elapsed_results;
-    std::sort(results.begin(), results.end());
-
-    double total = state.m_num_iters *
-                   std::accumulate(results.begin(), results.end(), 0.0);
-
-    double min    = 0;
-    double max    = 0;
-    double median = 0;
-
-    if (!results.empty()) {
-        min = results.front();
-        max = results.back();
-
-        size_t mid = results.size() / 2;
-        median = results.size() % 2 ? results[mid] : (results[mid - 1] + results[mid]) / 2.0;
-    }
-
     std::cout << std::setprecision(6)
-              << state.m_name << ", " << num_evals << ", "
-              << state.m_num_iters << ", " << total << ", " << min << ", "
-              << max << ", " << median << std::endl;
+              << state.GetName() << ", " << num_evals << ", "
+              << state.GetNumIters() << ", " << state.GetTotal() << ", " << state.GetMin() << ", "
+              << state.GetMax() << ", " << state.GetMedian() << std::endl;
 }
 
-void ConsolePrinter::footer() {}
+void ConsolePrinter::footer() {
+    // Print any "extra data" tables that may have been pushed to us by the completion function.
+    // Currently this mechanism is used e.g. by the LibAuth benches (see: libauth_bench.cpp).
+    for (const auto & [name, dvec] : extraDataByCategory) {
+        std::cout << std::endl << "--- Supplemental data for benchmark category \"" << name << "\" ---" << std::endl;
+        using ExtraDataMap = std::map<std::string, std::string>;
+        std::vector<ExtraDataMap> rows;
+        // accumulate all column names & values for this category into `rows` so that the table we print is rectangular
+        std::set<std::string> allCols;
+        std::vector<std::string> allOrderedCols;
+        for (const auto &pairs : dvec) {
+            ExtraDataMap map;
+            for (const auto & [colName, val] : pairs) {
+                if (allCols.insert(colName).second) {
+                    allOrderedCols.push_back(colName);
+                }
+                map[colName] = val;
+            }
+            rows.push_back(std::move(map));
+        }
+        // print table header (column names)
+        std::cout << "# ";
+        size_t colNum = 0;
+        for (const auto &colName : allOrderedCols) {
+            if (colNum++) std::cout << ", ";
+            std::cout << colName;
+        }
+        std::cout << std::endl;
+        // print table rows, ordered by allOrderedCols
+        for (const auto &map : rows) {
+            colNum = 0;
+            for (const auto &colName : allOrderedCols) {
+                if (colNum++) std::cout << ", ";
+                if (auto it = map.find(colName); it != map.end()) {
+                    std::cout << it->second;
+                } else {
+                    std::cout << "-";
+                }
+            }
+            std::cout << std::endl;
+        }
+    }
+}
+
 PlotlyPrinter::PlotlyPrinter(const std::string &plotly_url,
                              int64_t width,
                              int64_t height)
@@ -66,11 +92,11 @@ void PlotlyPrinter::header() {
 
 void PlotlyPrinter::result(const State &state, uint64_t num_evals) {
     std::cout << "{ " << std::endl
-              << "  name: '" << state.m_name << "', " << std::endl
+              << "  name: '" << state.GetName() << "', " << std::endl
               << "  y: [";
 
     const char *prefix = "";
-    for (const auto &e : state.m_elapsed_results) {
+    for (const auto &e : state.GetResults()) {
         std::cout << prefix << std::setprecision(6) << e;
         prefix = ", ";
     }
@@ -94,9 +120,9 @@ BenchRunner::BenchmarkMap &BenchRunner::benchmarks() {
 
 BenchRunner::BenchRunner(const std::string &name,
                          BenchFunction func,
-                         uint64_t num_iters_for_one_second) {
-    benchmarks().insert(
-        std::make_pair(name, Bench{func, num_iters_for_one_second}));
+                         uint64_t num_iters_for_one_second,
+                         CompletionFunction completionFunc) {
+    benchmarks().try_emplace(name, Bench{func, num_iters_for_one_second, completionFunc});
 }
 
 void BenchRunner::RunAll(Printer &printer, uint64_t num_evals,
@@ -138,10 +164,31 @@ void BenchRunner::RunAll(Printer &printer, uint64_t num_evals,
 
             bench.func(state);
         }
+        state.CalcStats();
         printer.result(state, num_evals);
+        if (bench.completionFunc) {
+            bench.completionFunc(state, printer);
+        }
     }
 
     printer.footer();
+}
+
+void State::CalcStats() {
+    auto results = GetResults();
+    std::sort(results.begin(), results.end());
+
+    m_total = m_num_iters * std::accumulate(results.begin(), results.end(), 0.0);
+
+    m_min = m_max = m_median = 0.;
+
+    if (!results.empty()) {
+        m_min = results.front();
+        m_max = results.back();
+        const size_t mid = results.size() / 2;
+        m_median = results.size() % 2 ? results[mid] : (results[mid - 1] + results[mid]) / 2.0;
+    }
+    m_calced_stats = true;
 }
 
 void State::UpdateTimer(const time_point &current_time) {
