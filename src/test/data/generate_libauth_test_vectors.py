@@ -50,6 +50,13 @@ def main():
             pack_name = m[3]
             standardness = m[4].split("_")[0]
             reasons = m[4].endswith("_reasons")
+            scriptonly = m[4].endswith("_scriptonly")
+            if reasons:
+                map_key = "reasons"
+            elif scriptonly:
+                map_key = "scriptonly"
+            else:
+                map_key = "tests"
             test_name = standardness
             if not active:
                 test_name = "preactivation_" + test_name
@@ -68,12 +75,13 @@ def main():
             # Update or create the named test within pack_test, and set the "reasons" or "tests" content
             for pack_test in pack_tests:
                 if pack_test["name"] == test_name:
-                    pack_test["reasons" if reasons else "tests"] = json_cont
+                    pack_test[map_key] = json_cont
                     break
             else:
-                pack_tests.append({ "name": test_name,
-                                    "reasons": json_cont if reasons else [],
-                                    "tests": json_cont if not reasons else [] })
+                pack_tests.append({"name": test_name,
+                                   "reasons": json_cont if map_key == "reasons" else {},
+                                   "tests": json_cont if map_key == "tests" else [],
+                                   "scriptonly": json_cont if map_key == "scriptonly" else []})
 
     if encode:
         json_bytes = json.dumps(packs_vector).encode(encoding="utf8")

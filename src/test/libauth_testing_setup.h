@@ -13,6 +13,8 @@
 #include <set>
 #include <string>
 
+class CValidationState;
+
 /// Testing setup that:
 /// - loads all of the json data for all of the libauth tests into a static structure (lazy load, upon first use)
 /// - tracks if we overrode ::fRequireStandard, and resets it on test end
@@ -77,6 +79,10 @@ class LibauthTestingSetup : public TestChain100Setup {
             std::string nonstandardReason; //! Expected failure reason when validated in nonstandard mode
             std::string libauthStandardReason; //! Libauth suggested failure reason when validated in standard mode
             std::string libauthNonstandardReason; //! Libauth suggested failure reason when validated in nonstandard mode
+            bool scriptOnly = false; //< If true, this test vector should not test against AcceptToMemoryPool() for the
+                                     //< whole txn, but should just evaluate the script for input `inputNum`.
+            unsigned inputNum = 0;   //< The input number to test. Comes from the optional 7th column of the JSON array
+                                     //< for this test, defaults to 0 if unspecified. Only used if scriptOnly == true.
         };
 
         std::vector<Test> vec;
@@ -113,6 +119,7 @@ class LibauthTestingSetup : public TestChain100Setup {
 
     static void LoadAllTestPacks();
     static void RunTestVector(const TestVector &test, const std::string &packName);
+    static bool RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state);
 
     const bool saved_fRequireStandard;
 

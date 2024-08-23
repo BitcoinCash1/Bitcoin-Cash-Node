@@ -60,6 +60,10 @@ BOOST_FIXTURE_TEST_CASE(cashtokens, TokenTransactionTestingSetup) {
     RunTestPack("cashtokens");
 }
 
+BOOST_FIXTURE_TEST_CASE(regression_2023, LibauthTestingSetup) {
+    RunTestPack("2023");
+}
+
 // Precondition: This test *requires* that all Libauth test packs have previously completed as part of this
 // test_bitcoin run.
 BOOST_FIXTURE_TEST_CASE(test_lookup_table, TestingSetup) {
