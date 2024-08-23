@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <test/chip_testing_setup.h>
+#include <test/libauth_testing_setup.h>
 
 #include <config.h>
 #include <consensus/validation.h>
@@ -13,33 +13,35 @@
 #include <util/defer.h>
 #include <validation.h>
 
-#include <test/data/chip_test_vectors.json.h>
-#include <test/data/expected_test_fail_reasons.json.h>
+#include <test/data/libauth_test_vectors.json.h>
+#include <test/data/libauth_expected_test_fail_reasons.json.h>
 #include <test/jsonutil.h>
 
 #include <boost/test/unit_test.hpp>
 
+#include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <utility>
 
 /* static */
-std::map<std::string, std::vector<ChipTestingSetup::TestVector>> ChipTestingSetup::allChipsVectors = {};
-ChipTestingSetup::AllChipsReasonsDict ChipTestingSetup::allLibauthReasons = {};
-ChipTestingSetup::AllChipsReasonsDict ChipTestingSetup::bchnProducedReasons = {};
-UniValue::Object ChipTestingSetup::reasonsLookupTable = {};
+std::map<std::string, LibauthTestingSetup::TestPack> LibauthTestingSetup::allTestPacks;
+LibauthTestingSetup::AllReasonsDict LibauthTestingSetup::allLibauthReasons;
+LibauthTestingSetup::AllReasonsDict LibauthTestingSetup::bchnProducedReasons;
+UniValue::Object LibauthTestingSetup::reasonsLookupTable;
 
 /* static */
-void ChipTestingSetup::LoadChipsVectors() {
-    if (!allChipsVectors.empty()) return;
+void LibauthTestingSetup::LoadAllTestPacks() {
+    if (!allTestPacks.empty()) return;
 
-    static_assert(sizeof(json_tests::chip_test_vectors[0]) == 1 && sizeof(json_tests::expected_test_fail_reasons[0]) == 1,
+    static_assert(sizeof(json_tests::libauth_test_vectors[0]) == 1 && sizeof(json_tests::libauth_expected_test_fail_reasons[0]) == 1,
                   "Assumption is that the test vectors are byte blobs of json data");
 
-    const auto allChipsTests = read_json({ reinterpret_cast<const char *>(json_tests::chip_test_vectors),
-                                           std::size(json_tests::chip_test_vectors) });
-    const auto expectedReasons = read_json({ reinterpret_cast<const char *>(json_tests::expected_test_fail_reasons),
-                                         std::size(json_tests::expected_test_fail_reasons) });
+    const auto testPacksUV = read_json({ reinterpret_cast<const char *>(json_tests::libauth_test_vectors.data()),
+                                         json_tests::libauth_test_vectors.size() });
+    const auto expectedReasons = read_json({ reinterpret_cast<const char *>(json_tests::libauth_expected_test_fail_reasons),
+                                             std::size(json_tests::libauth_expected_test_fail_reasons) });
 
     // Load in the Libauth -> BCHN error message lookup table
     BOOST_CHECK( ! expectedReasons.empty());
@@ -49,22 +51,32 @@ void ChipTestingSetup::LoadChipsVectors() {
             reasonsLookupTable = outerWrap.get_obj();
         }
     }
-    // Load the CHIP test vectors, and Libauth suggested failure reasons
-    BOOST_CHECK( ! allChipsTests.empty());
+    // Load the test pack vectors, and Libauth suggested failure reasons
+    BOOST_CHECK( ! testPacksUV.empty());
     unsigned coinHeights = []{
         LOCK(cs_main);
         return ::ChainActive().Tip()->nHeight;
     }();
-    for (auto &chip : allChipsTests) {
-        BOOST_CHECK(chip.isObject());
-        if (chip.isObject()) {
-            auto &chipObj = chip.get_obj();
-            auto *nameVal = chipObj.locate("name");
+    for (auto &pack : testPacksUV) {
+        BOOST_CHECK(pack.isObject());
+        if (pack.isObject()) {
+            auto &packObj = pack.get_obj();
+            auto *nameVal = packObj.locate("name");
+            auto *typeVal = packObj.locate("type");
             BOOST_CHECK(nameVal != nullptr);
             if (nameVal) {
-                auto chipName = nameVal->get_str();
-                std::vector<TestVector> chipVec;
-                for (const auto &uv : chipObj.at("tests").get_array()) {
+                TestPack testPack;
+                const auto &packName = testPack.name = nameVal->get_str();
+                BOOST_REQUIRE(typeVal != nullptr);
+                if (const auto s = typeVal->get_str(); s == "feature") {
+                    testPack.type = TestPack::FEATURE;
+                } else if (s == "other") {
+                    testPack.type = TestPack::OTHER;
+                } else {
+                    BOOST_ERROR(strprintf("Unknown test pack type: %s", s));
+                }
+                std::vector<TestVector> &packVec = testPack.testVectors; // append to this member variable of testPack
+                for (const auto &uv : packObj.at("tests").get_array()) {
                     BOOST_CHECK(uv.isObject());
                     if (uv.isObject()) {
                         auto &uvObj = uv.get_obj();
@@ -73,9 +85,9 @@ void ChipTestingSetup::LoadChipsVectors() {
                         if (testNameVal) {
                             std::string testName = testNameVal->get_str();
                             std::string preactivePrefix = "preactivation_";
-                            bool chipActive = testName.rfind(preactivePrefix, 0) != 0;
-                            std::string standardnessStr = chipActive ? testName
-                                                                     : testName.substr(preactivePrefix.size());
+                            bool featureActive = testName.rfind(preactivePrefix, 0) != 0;
+                            std::string standardnessStr = featureActive ? testName
+                                                                        : testName.substr(preactivePrefix.size());
                             BOOST_CHECK(standardnessStr == "invalid" ||
                                         standardnessStr == "nonstandard" ||
                                         standardnessStr == "standard" );
@@ -85,7 +97,7 @@ void ChipTestingSetup::LoadChipsVectors() {
                             } else if (standardnessStr == "standard") {
                                 testStandardness = STANDARD;
                             }
-                            std::string descActiveString = chipActive ? "Post-Activation" : "Pre-Activation";
+                            std::string descActiveString = featureActive ? "Post-Activation" : "Pre-Activation";
                             std::string descStdString = "fail validation in both nonstandard and standard mode";
                             if (testStandardness == NONSTANDARD) {
                                 descStdString = "fail validation in standard mode but pass validation in nonstandard mode";
@@ -96,7 +108,7 @@ void ChipTestingSetup::LoadChipsVectors() {
                             TestVector testVec;
                             testVec.name = testName;
                             testVec.description = testDescription;
-                            testVec.chipActive = chipActive;
+                            testVec.featureActive = featureActive;
                             testVec.standardness = testStandardness;
 
                             const auto &libauthReasons = uvObj.at("reasons");
@@ -106,9 +118,9 @@ void ChipTestingSetup::LoadChipsVectors() {
                                         // Invalid tests should produce errors under both standard and nonstandard validation
                                         // Nonstandard tests should produce errors only under standard validation
                                         if (testStandardness == INVALID || testStandardness == NONSTANDARD) {
-                                            allLibauthReasons[chipName][chipActive][true][ident] = obj.get_str();
+                                            allLibauthReasons[packName][featureActive][true][ident] = obj.get_str();
                                             if (testStandardness == INVALID) {
-                                                allLibauthReasons[chipName][chipActive][false][ident] = obj.get_str();
+                                                allLibauthReasons[packName][featureActive][false][ident] = obj.get_str();
                                             }
                                         }
                                     }
@@ -157,35 +169,35 @@ void ChipTestingSetup::LoadChipsVectors() {
                                     testVec.vec.push_back(std::move(test));
                                 }
                             }
-                            chipVec.push_back(std::move(testVec));
+                            packVec.push_back(std::move(testVec));
                         }
                     }
                 }
                 // Assign Libauth's suggested failure reasons and BCHN expected failure reasons to each test
-                for (auto &tv : chipVec) {
+                for (auto &tv : packVec) {
                     for (auto &test : tv.vec) {
                         if (tv.standardness == INVALID || tv.standardness == NONSTANDARD) {
-                            test.libauthStandardReason = allLibauthReasons[chipName][tv.chipActive][true][test.ident];
-                            test.standardReason = LookupReason(test.libauthStandardReason, test.ident, chipName,
-                                                               tv.chipActive, true);
+                            test.libauthStandardReason = allLibauthReasons[packName][tv.featureActive][true][test.ident];
+                            test.standardReason = LookupReason(test.libauthStandardReason, test.ident, packName,
+                                                               tv.featureActive, true);
                             if (tv.standardness == INVALID) {
-                                test.libauthNonstandardReason = allLibauthReasons[chipName][tv.chipActive][false][test.ident];
+                                test.libauthNonstandardReason = allLibauthReasons[packName][tv.featureActive][false][test.ident];
                                 test.nonstandardReason = LookupReason(test.libauthNonstandardReason, test.ident,
-                                                                      chipName, tv.chipActive, false);
+                                                                      packName, tv.featureActive, false);
                             }
                         }
                     }
                 }
-                allChipsVectors[chipName] = std::move(chipVec);
+                allTestPacks[testPack.name] = std::move(testPack);
             }
         }
     }
-    BOOST_CHECK( ! allChipsVectors.empty());
+    BOOST_CHECK( ! allTestPacks.empty());
 }
 
 /* static */
-void ChipTestingSetup::RunTestVector(const TestVector &test, const std::string &chipName) {
-    std::string activeStr = test.chipActive ? "postactivation" : "preactivation";
+void LibauthTestingSetup::RunTestVector(const TestVector &test, const std::string &packName) {
+    std::string activeStr = test.featureActive ? "postactivation" : "preactivation";
     const bool expectStd = test.standardness == STANDARD;
     const bool expectNonStd = test.standardness == STANDARD || test.standardness == NONSTANDARD;
     BOOST_TEST_MESSAGE(strprintf("Running test vectors \"%s\", description: \"%s\" ...", test.name, test.description));
@@ -268,40 +280,44 @@ void ChipTestingSetup::RunTestVector(const TestVector &test, const std::string &
             }
         }
         if (!ok1) {
-            bchnProducedReasons[chipName][test.chipActive][true][tv.ident] = standardReason;
+            bchnProducedReasons[packName][test.featureActive][true][tv.ident] = standardReason;
         }
         if (!ok2) {
-            bchnProducedReasons[chipName][test.chipActive][false][tv.ident] = nonstandardReason;
+            bchnProducedReasons[packName][test.featureActive][false][tv.ident] = nonstandardReason;
         }
     }
 }
 
-ChipTestingSetup::ChipTestingSetup()
+LibauthTestingSetup::LibauthTestingSetup()
     : saved_fRequireStandard{::fRequireStandard}
 {}
 
-ChipTestingSetup::~ChipTestingSetup() {
+LibauthTestingSetup::~LibauthTestingSetup() {
     // restore original fRequireStandard flag since the testing setup definitely touched this flag
     ::fRequireStandard = saved_fRequireStandard;
 }
 
-void ChipTestingSetup::RunTestsForChip(const std::string &chipName) {
-    LoadChipsVectors();
-    const auto it = allChipsVectors.find(chipName);
-    if (it != allChipsVectors.end()) {
-        BOOST_TEST_MESSAGE(strprintf("----- Running '%s' CHIP tests -----", chipName));
-        for (const TestVector &testVector : it->second) {
-            ActivateChip(testVector.chipActive);
-            RunTestVector(testVector, chipName);
+void LibauthTestingSetup::RunTestPack(const std::string &packName) {
+    LoadAllTestPacks();
+    const auto it = std::as_const(allTestPacks).find(packName);
+    if (it != allTestPacks.cend()) {
+        const TestPack &pack = it->second;
+        BOOST_CHECK_EQUAL(packName, pack.name); // paranoia, should always match
+        BOOST_TEST_MESSAGE(strprintf("----- Running '%s' tests -----", packName));
+        for (const TestVector &testVector : pack.testVectors) {
+            if (pack.type == TestPack::FEATURE) {
+                ActivateFeature(testVector.featureActive);
+            }
+            RunTestVector(testVector, packName);
         }
     } else {
-        // fail if test vectors for `chipName` are not found
-        BOOST_CHECK_MESSAGE(false, strprintf("No tests found for '%s' CHIP!", chipName));
+        // fail if test vectors for `packName` are not found
+        BOOST_CHECK_MESSAGE(false, strprintf("No tests found for '%s'!", packName));
     }
 }
 
 /* static */
-bool ChipTestingSetup::ProcessReasonsLookupTable() {
+bool LibauthTestingSetup::ProcessReasonsLookupTable() {
     // Gather all the reasons/errors information
     ReasonsMapTree reasonsTree{};
     // Optimize the structure to minimize the number of rules/overrides
@@ -313,7 +329,8 @@ bool ChipTestingSetup::ProcessReasonsLookupTable() {
         fs::path filePath{path};
         FILE *file = fsbridge::fopen(filePath, "w");
         if (file) {
-            fwrite(str.data(), 1, str.size(), file);
+            std::fwrite(str.data(), 1, str.size(), file);
+            std::fclose(file);
         } else {
             BOOST_WARN_MESSAGE(false, "Can't open output file: " + path);
         }
@@ -323,12 +340,12 @@ bool ChipTestingSetup::ProcessReasonsLookupTable() {
     bool tablesMatch = lookupTable == reasonsLookupTable;
     if (!tablesMatch) {
         // The `[]` wrapper is needed since `json_read` expects an array at the top level
-        std::string path{"./expected_test_fail_reasons.json"};
+        std::string path{"./libauth_expected_test_fail_reasons.json"};
         std::string jsonOut = "[" + UniValue::stringify(lookupTable, 2) + "]\n";
         BOOST_WARN_MESSAGE(false, "Saving Libauth -> BCHN error message lookup table to: " + path);
         stringToFile(jsonOut, path);
         // Also output a human-readable checklist
-        path = "./expected_reasons_checklist.csv";
+        path = "./libauth_expected_reasons_checklist.csv";
         std::string csvOut = reasonsTree.GetReasonsLookupChecklist(lookupTable);
         BOOST_WARN_MESSAGE(false, "Saving Libauth -> BCHN error message lookup table checklist to: " + path);
         stringToFile(csvOut, path);
@@ -338,47 +355,47 @@ bool ChipTestingSetup::ProcessReasonsLookupTable() {
 
 
 /* static */
-std::string ChipTestingSetup::LookupReason(const std::string &libauthReason, const std::string &ident,
-                                           const std::string &chipName, const bool chipActive,
-                                           const bool standardValidation, const UniValue::Object &table) {
+std::string LibauthTestingSetup::LookupReason(const std::string &libauthReason, const std::string &ident,
+                                              const std::string &packName, const bool featureActive,
+                                              const bool standardValidation, const UniValue::Object &table) {
     // Return matches in order most specific to least specific:
     // - First use any specific test overrides if found.
     // - Next consult specific-situation libauth to bchn error message rules, that is, rules that should be
-    //   applied for this CHIP, CHIP activation, and validation standardness.
+    //   applied for this test pack, feature activation, and validation standardness.
     // - Finally try progressively less specific rules, ultimately using the most general context-free rules.
-    std::string activeStr = chipActive ? "postactivation" : "preactivation";
+    std::string activeStr = featureActive ? "postactivation" : "preactivation";
     std::string standardStr = standardValidation ? "standard" : "nonstandard";
-    const UniValue &chipEntry = table["chips"][chipName];
-    for (const UniValue *reason : { chipEntry[activeStr][standardStr]["overrides"].locate(ident),
-                                    chipEntry[activeStr][standardStr]["mappings"].locate(libauthReason),
-                                    chipEntry[activeStr]["mappings"].locate(libauthReason),
-                                    chipEntry["mappings"].locate(libauthReason),
+    const UniValue &packEntry = table["testpacks"][packName];
+    for (const UniValue *reason : { packEntry[activeStr][standardStr]["overrides"].locate(ident),
+                                    packEntry[activeStr][standardStr]["mappings"].locate(libauthReason),
+                                    packEntry[activeStr]["mappings"].locate(libauthReason),
+                                    packEntry["mappings"].locate(libauthReason),
                                     table["mappings"].locate(libauthReason) }) {
         if (reason) {
             return reason->getValStr();
         }
     }
-    BOOST_ERROR(strprintf("No rule or override found for test \"%s\" with Libauth suggeted reason \"%s\"",
-                          ident, libauthReason));
+    BOOST_ERROR(strprintf("No rule or override found for test \"%s\" with Libauth suggeted reason \"%s\" for test pack \"%s\"",
+                          ident, libauthReason, packName));
     return "";
 }
 
-ChipTestingSetup::ReasonsMapTree::ReasonsMapTree() {
-    for (const auto & [chipName, chipVec] : bchnProducedReasons) {
-        for (const auto & [active, chipTests] : chipVec) {
-            for (const auto & [standard, testVec] : chipTests) {
+LibauthTestingSetup::ReasonsMapTree::ReasonsMapTree() {
+    for (const auto & [packName, m1] : bchnProducedReasons) {
+        for (const auto & [active, m2] : m1) {
+            for (const auto & [standard, testVec] : m2) {
                 for (const auto & [ident, bchnReason] : testVec) {
                     // If there is a Libauth suggested reason for this test, assign a mapping
                     try {
                         const std::string &libauthReason =
-                                allLibauthReasons.at(chipName).at(active).at(standard).at(ident);
-                        entries[chipName].entries[active].entries[standard]
+                                allLibauthReasons.at(packName).at(active).at(standard).at(ident);
+                        entries[packName].entries[active].entries[standard]
                                 .mappings[libauthReason][bchnReason].insert(ident);
                     } catch (const std::out_of_range &e) {
                         std::string desc = std::string(active ? "post" : "pre") + "activation-"
                                            + (standard ? "" : "non") + "standard";
-                        BOOST_ERROR(strprintf("Missing Libauth suggested failure reason for %s test \"%s\"",
-                                              desc, ident));
+                        BOOST_ERROR(strprintf("Missing Libauth suggested failure reason for %s test \"%s\" for test pack \"%s\"",
+                                              desc, ident, packName));
                     }
                 }
             }
@@ -386,7 +403,7 @@ ChipTestingSetup::ReasonsMapTree::ReasonsMapTree() {
     }
 }
 
-void ChipTestingSetup::ReasonsMapTree::Prune() {
+void LibauthTestingSetup::ReasonsMapTree::Prune() {
     // Moves the most common conflicting rules to become overrides
     auto setCommonOverrides = [](Mappings &mappings_, Overrides &overrides) {
         for (auto & [libauthReason, bchnReasons] : mappings_) {
@@ -503,8 +520,8 @@ void ChipTestingSetup::ReasonsMapTree::Prune() {
     // Deduplicate rules between CHIP branches if there is more than one CHIP
     if (entries.size() > 1) {
         std::vector<ReasonsMapLeaf*> treeLeaves{};
-        for (auto & [chipName, chipEntries] : entries) {
-            for (auto & [chipActive, activationEntries] : chipEntries.entries) {
+        for (auto & [packName, packEntries] : entries) {
+            for (auto & [featureActive, activationEntries] : packEntries.entries) {
                 for (auto & [_, standardnessEntries] : activationEntries.entries) {
                     treeLeaves.push_back(&standardnessEntries);
                 }
@@ -513,19 +530,19 @@ void ChipTestingSetup::ReasonsMapTree::Prune() {
         promoteDuplicateRules(mappings, treeLeaves);
     }
     // Deduplicate rules between activation branches
-    for (auto & [chipName, chipEntries] : entries) {
+    for (auto & [packName, packEntries] : entries) {
         std::vector<ReasonsMapLeaf*> treeLeaves{};
-        for (auto & [chipActive, activationEntries] : chipEntries.entries) {
+        for (auto & [featureActive, activationEntries] : packEntries.entries) {
             std::vector<Mappings*> thisBranchDescendants{};
             for (auto & [_, standardnessEntries] : activationEntries.entries) {
                 treeLeaves.push_back(&standardnessEntries);
             }
         }
-        promoteDuplicateRules(chipEntries.mappings, treeLeaves);
+        promoteDuplicateRules(packEntries.mappings, treeLeaves);
     }
     // Deduplicate rules between standardness branches
-    for (auto & [chipName, chipEntries] : entries) {
-        for (auto & [chipActive, activationEntries] : chipEntries.entries) {
+    for (auto & [packName, packEntries] : entries) {
+        for (auto & [featureActive, activationEntries] : packEntries.entries) {
             std::vector<ReasonsMapLeaf*> treeLeaves{};
             for (auto & [_, standardnessEntries] : activationEntries.entries) {
                 treeLeaves.push_back(&standardnessEntries);
@@ -535,8 +552,8 @@ void ChipTestingSetup::ReasonsMapTree::Prune() {
     }
     // At each leaf node, for each libauthReason, move every mapping that is not the most common mapping to
     // become an override instead of a general rule
-    for (auto & [chipName, chipEntries] : entries) {
-        for (auto & [chipActive, activeEntries] : chipEntries.entries) {
+    for (auto & [packName, packEntries] : entries) {
+        for (auto & [featurective, activeEntries] : packEntries.entries) {
             for (auto & [standard, standardnessEntries] : activeEntries.entries) {
                 setCommonOverrides(standardnessEntries.mappings, standardnessEntries.overrides);
             }
@@ -544,13 +561,13 @@ void ChipTestingSetup::ReasonsMapTree::Prune() {
     }
 }
 
-UniValue::Object ChipTestingSetup::ReasonsMapTree::GetLookupTable() const {
+UniValue::Object LibauthTestingSetup::ReasonsMapTree::GetLookupTable() const {
     auto getMappingsJson = [](const Mappings &mappings_) -> UniValue::Object {
         UniValue::Object json;
         for (const auto & [libauthReason, bchnReasons] : mappings_) {
             if (bchnReasons.size()) {
                 // Ignore idents when outputting to JSON
-                json.emplace_back(libauthReason, UniValue(bchnReasons.begin()->first));
+                json.emplace_back(libauthReason, bchnReasons.begin()->first);
             }
         }
         return json;
@@ -565,60 +582,59 @@ UniValue::Object ChipTestingSetup::ReasonsMapTree::GetLookupTable() const {
     };
 
     UniValue::Object table;
+    table.reserve(2);
     table.emplace_back("mappings", getMappingsJson(mappings));
-    UniValue::Object chips;
-    for (const auto & [chipName, chipEntries] : entries) {
-        UniValue::Object chipObj;
-        UniValue::Object chipMappings = getMappingsJson(chipEntries.mappings);
-        chipObj.emplace_back("mappings", chipMappings);
-        for (const auto & [chipActive, activationEntries] : chipEntries.entries) {
-            std::string activationStr = chipActive ? "postactivation" : "preactivation";
+    UniValue::Object testPacks;
+    testPacks.reserve(entries.size());
+    for (const auto & [packName, packEntries] : entries) {
+        UniValue::Object packObj;
+        packObj.reserve(1 + packEntries.entries.size());
+        packObj.emplace_back("mappings", getMappingsJson(packEntries.mappings));
+        for (const auto & [featureActive, activationEntries] : packEntries.entries) {
+            std::string activationStr = featureActive ? "postactivation" : "preactivation";
             UniValue::Object activationObj;
-            UniValue::Object activationMappings = getMappingsJson(activationEntries.mappings);
-            activationObj.emplace_back("mappings", activationMappings);
+            activationObj.reserve(2);
+            activationObj.emplace_back("mappings", getMappingsJson(activationEntries.mappings));
             for (const auto & [standard, standardnessEntries] : activationEntries.entries) {
                 std::string standardStr = standard ? "standard" : "nonstandard";
                 UniValue::Object standardObj;
-                UniValue::Object standardMappings = getMappingsJson(standardnessEntries.mappings);
-                UniValue::Object standardOverrides = getOverridesJson(standardnessEntries.overrides);
-                standardObj.emplace_back("mappings", standardMappings);
-                standardObj.emplace_back("overrides", standardOverrides);
-                activationObj.emplace_back(standardStr, standardObj);
+                standardObj.emplace_back("mappings", getMappingsJson(standardnessEntries.mappings));
+                standardObj.emplace_back("overrides", getOverridesJson(standardnessEntries.overrides));
+                activationObj.emplace_back(standardStr, std::move(standardObj));
             }
-            chipObj.emplace_back(activationStr, activationObj);
+            packObj.emplace_back(activationStr, std::move(activationObj));
         }
-        chips.emplace_back(chipName, chipObj);
+        testPacks.emplace_back(packName, std::move(packObj));
     }
-    table.emplace_back("chips", chips);
+    table.emplace_back("testpacks", std::move(testPacks));
     return table;
 }
 
-std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const UniValue::Object& newLookup) const {
+std::string LibauthTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const UniValue::Object& newLookup) const {
     // [ident, description]
     using TestsDetails = std::set<std::pair<std::string, std::string>>;
     // libauthReason: {bchnReason: [ident, description]}
     using DetailedOverrides = std::map<std::string, std::map<std::string, TestsDetails>>;
-    // chipName: { chipActive: { standard: { libauthReason: {bchnReason: [ident, description]}}}}
+    // packName: { featureActive: { standard: { libauthReason: {bchnReason: [ident, description]}}}}
     using AllDetailedOverrides = std::map<std::string, std::map<std::string, std::map<std::string, DetailedOverrides>>>;
 
     // Get the description and suggested failure reason for a given test
-    const auto getTestDetails = [](const std::string &ident, const std::string &chipName, const bool &chipActive,
-                                   const bool &standardValidation) {
+    const auto getTestDetails = [](const std::string &ident, const std::string &packName, const bool featureActive,
+                                   const bool standardValidation) {
         std::pair<std::string, std::string> out{};
-        for (const auto & [chipName_, chipVec] : allChipsVectors) {
-            if (chipName == chipName_) {
-                for (const TestVector &testVector : chipVec) {
-                    if (testVector.chipActive == chipActive) {
-                        for (const auto &test : testVector.vec) {
-                            if (test.ident == ident) {
-                                out.first = test.description;
-                                if (standardValidation)  {
-                                    out.second = test.libauthStandardReason;
-                                } else {
-                                    out.second = test.libauthNonstandardReason;
-                                }
-                                break;
+        if (auto it = std::as_const(allTestPacks).find(packName); it != allTestPacks.cend()) {
+            const auto &testPack = it->second;
+            for (const TestVector &testVector : testPack.testVectors) {
+                if (testVector.featureActive == featureActive) {
+                    for (const auto &test : testVector.vec) {
+                        if (test.ident == ident) {
+                            out.first = test.description;
+                            if (standardValidation)  {
+                                out.second = test.libauthStandardReason;
+                            } else {
+                                out.second = test.libauthNonstandardReason;
                             }
+                            break;
                         }
                     }
                 }
@@ -630,15 +646,15 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
     // Gather extra information about all overrides so they can be inserted immediately after the rules
     // that they override
     AllDetailedOverrides allOverrides{};
-    for (const auto & [chipName, chipEntries] : entries) {
-        for (const auto & [chipActive, activationEntries] : chipEntries.entries) {
-            std::string activationStr = chipActive ? "postactivation" : "preactivation";
+    for (const auto & [packName, packEntries] : entries) {
+        for (const auto & [featureActive, activationEntries] : packEntries.entries) {
+            std::string activationStr = featureActive ? "postactivation" : "preactivation";
             for (const auto & [standard, standardnessEntries] : activationEntries.entries) {
                 std::string standardStr = standard ? "standard" : "nonstandard";
                 for (const auto & [ident, bchnReason] : standardnessEntries.overrides) {
-                    const auto [description, suggestedReason] = getTestDetails(ident, chipName, chipActive, standard);
-                    allOverrides[chipName][activationStr][standardStr][suggestedReason][bchnReason]
-                            .insert({ident, description});
+                    const auto [description, suggestedReason] = getTestDetails(ident, packName, featureActive, standard);
+                    allOverrides[packName][activationStr][standardStr][suggestedReason][bchnReason]
+                            .emplace(ident, description);
                 }
             }
         }
@@ -646,21 +662,21 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
 
     // Returns whether or not the specified lookup would have produced a different result using the originally
     // loaded in reasons lookup table
-    auto ruleChanged = [&](const std::string &chipName, const std::string &chipActive, const std::string &standard,
-            const std::string &libauthReason, const std::string &ident) -> bool {
-        // If the rule to check applies to a specific CHIP, CHIP activation state and validation standard, then we
-        // need only check that the same expected bchnReason is produced by the same lookup.  However if there are
+    auto ruleChanged = [&](const std::string &packName, const std::string &featureActive, const std::string &standard,
+                           const std::string &libauthReason, const std::string &ident) -> bool {
+        // If the rule to check applies to a specific TestPack, feature activation state and validation standard, then
+        // we need only check that the same expected bchnReason is produced by the same lookup.  However if there are
         // placeholders, such as "--both--" for the activation state, then we need to confirm that the original
         // lookup would have produce the same expected result for each state
-        for (const auto & [chipName_, _] : reasonsLookupTable["chips"].get_obj()) {
-            if (chipName == "--all--" || chipName_ == chipName) {
-                for (bool chipActive_ : {true, false}) {
-                    if (chipActive == "--both--" || chipActive_ == (chipActive == "postactivation")) {
-                        for (bool standard_ : {true, false}) {
+        for (const auto & [packName_, _] : reasonsLookupTable["testpacks"].get_obj()) {
+            if (packName == "--all--" || packName_ == packName) {
+                for (const bool featureActive_ : {true, false}) {
+                    if (featureActive == "--both--" || featureActive_ == (featureActive == "postactivation")) {
+                        for (const bool standard_ : {true, false}) {
                             if (standard == "--both--" || standard_ == (standard == "standard")) {
-                                std::string origReason = LookupReason(libauthReason, ident, chipName, chipActive_,
+                                std::string origReason = LookupReason(libauthReason, ident, packName, featureActive_,
                                                                       standard_);
-                                std::string newReason = LookupReason(libauthReason, ident, chipName, chipActive_,
+                                std::string newReason = LookupReason(libauthReason, ident, packName, featureActive_,
                                                                      standard_, newLookup);
                                 if (newReason != origReason) {
                                     return true;
@@ -678,13 +694,12 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
 
     // Construct one line of content for the spreadsheet
     auto getEntry = [&](const bool &override, const std::string &bchnReason,
-            const std::string &chipName, const std::string &chipActive, const std::string &standard,
-            const std::string &suggestedReason, const TestsDetails &tests)
-            -> std::string {
+                        const std::string &packName, const std::string &featureActive, const std::string &standard,
+                        const std::string &suggestedReason, const TestsDetails &tests) -> std::string {
         std::ostringstream ss{};
         std::string newRule = "";
         for (const auto & [ident, _] : tests) {
-            if (ruleChanged(chipName, chipActive, standard, suggestedReason, ident)) {
+            if (ruleChanged(packName, featureActive, standard, suggestedReason, ident)) {
                 newRule = "NEW";
                 ++numToCheck;
                 break;
@@ -692,7 +707,7 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
         }
         std::string ruleOrOverride = override ? "override" : "rule";
         ss << "\"" << newRule << "\",\"" << ruleOrOverride << "\",\"" << tests.size() << "\",\"" << bchnReason;
-        ss << "\",\"" << suggestedReason << "\",\"" << chipName << "\",\"" << chipActive << "\",\"" << standard << "\"";
+        ss << "\",\"" << suggestedReason << "\",\"" << packName << "\",\"" << featureActive << "\",\"" << standard << "\"";
         for (const auto & [ident, description] : tests) {
             ss << ",\"" << ident << "\",\"" << description << "\"";
             ++numTests;
@@ -702,23 +717,24 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
     };
 
     // Construct all the lines of content for the specified mapping rules and the overrides that apply to them
-    auto getEntriesForRules = [&](const Mappings &mappings_, const std::string &chipName="--all--",
-            const std::string &chipActive="--both--", const std::string &standard="--both--") -> std::string {
+    auto getEntriesForRules = [&](const Mappings &mappings_, const std::string &packName = "--all--",
+                                  const std::string &featureActive = "--both--",
+                                  const std::string &standard = "--both--") -> std::string {
         std::ostringstream ss{};
         for (const auto & [libauthReason, bchnReasons] : mappings_) {
             for (const auto & [bchnReason, idents] : bchnReasons) {
                 TestsDetails tests{};
                 for (const auto &ident : idents) {
-                    const auto [description, _] = getTestDetails(ident, chipName, chipActive == "postactivation",
+                    const auto [description, _] = getTestDetails(ident, packName, featureActive == "postactivation",
                                                                  standard == "standard");
-                    tests.insert({ident, description});
+                    tests.emplace(ident, description);
                 }
-                ss << getEntry(false, bchnReason, chipName, chipActive, standard, libauthReason, tests);
+                ss << getEntry(false, bchnReason, packName, featureActive, standard, libauthReason, tests);
             }
-            DetailedOverrides &detailedOverrides = allOverrides[chipName][chipActive][standard];
+            DetailedOverrides &detailedOverrides = allOverrides[packName][featureActive][standard];
             if (detailedOverrides.count(libauthReason)) {
                 for (const auto & [bchnReason, tests] : detailedOverrides[libauthReason]) {
-                    ss << getEntry(true, bchnReason, chipName, chipActive, standard, libauthReason, tests);
+                    ss << getEntry(true, bchnReason, packName, featureActive, standard, libauthReason, tests);
                 }
             }
         }
@@ -728,18 +744,18 @@ std::string ChipTestingSetup::ReasonsMapTree::GetReasonsLookupChecklist(const Un
     // Construct the contents of the checklist spreadsheet
     std::ostringstream ss{};
     ss << "\"New?\",\"Type\",\"Uses\",\"BCHN error message\",";
-    ss << "\"Libauth suggested reason\",\"CHIP name\",\"CHIP activation\",";
+    ss << "\"Libauth suggested reason\",\"TestPack name\",\"Feature activation\",";
     ss << "\"Validation standard\",\"Test ID\",\"Test description (columns repeat when multiple tests fit a rule)\"";
     ss << std::endl;
     ss << getEntriesForRules(mappings);
-    for (const auto & [chipName, chipEntries] : entries) {
-        ss << getEntriesForRules(chipEntries.mappings, chipName);
-        for (const auto & [chipActive, activationEntries] : chipEntries.entries) {
-            std::string activationStr = chipActive ? "postactivation" : "preactivation";
-            ss << getEntriesForRules(activationEntries.mappings, chipName, activationStr);
+    for (const auto & [packName, packEntries] : entries) {
+        ss << getEntriesForRules(packEntries.mappings, packName);
+        for (const auto & [featureActive, activationEntries] : packEntries.entries) {
+            std::string activationStr = featureActive ? "postactivation" : "preactivation";
+            ss << getEntriesForRules(activationEntries.mappings, packName, activationStr);
             for (const auto & [standard, standardnessEntries] : activationEntries.entries) {
                 std::string standardStr = standard ? "standard" : "nonstandard";
-                ss << getEntriesForRules(standardnessEntries.mappings, chipName, activationStr, standardStr);
+                ss << getEntriesForRules(standardnessEntries.mappings, packName, activationStr, standardStr);
             }
         }
     }
