@@ -6,6 +6,7 @@
 #include <list>
 #include <locale>
 #include <stdexcept>
+#include <tuple>
 
 namespace {
 // trigger: use ctype<char>::widen to trigger ctype<char>::_M_widen_init().
@@ -49,7 +50,8 @@ bool sanity_test_list(unsigned int size) {
 bool sanity_test_range_fmt() {
     std::string test;
     try {
-        test.at(1);
+        /* sometimes .at() is [[nodiscard]] */
+        std::ignore = test.at(1);
     } catch (const std::out_of_range &) {
         return true;
     } catch (...) {
