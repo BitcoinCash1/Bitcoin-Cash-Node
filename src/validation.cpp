@@ -1298,8 +1298,7 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
 }
 
 /** Restore the UTXO in a Coin at a given COutPoint. */
-DisconnectResult UndoCoinSpend(const Coin &undo, CCoinsViewCache &view,
-                               const COutPoint &out) {
+DisconnectResult UndoCoinSpend(Coin &&undo, CCoinsViewCache &view, const COutPoint &out) {
     bool fClean = true;
 
     if (view.HaveCoin(out)) {
@@ -1321,8 +1320,7 @@ DisconnectResult UndoCoinSpend(const Coin &undo, CCoinsViewCache &view,
         // This is somewhat ugly, but hopefully utility is limited. This is only
         // useful when working from legacy on disck data. In any case, putting
         // the correct information in there doesn't hurt.
-        const_cast<Coin &>(undo) = Coin(undo.GetTxOut(), alternate.GetHeight(),
-                                        alternate.IsCoinBase());
+        undo = Coin(undo.GetTxOut(), alternate.GetHeight(), alternate.IsCoinBase());
     }
 
     // The potential_overwrite parameter to AddCoin is only allowed to be false
@@ -1347,11 +1345,10 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock &block,
         return DISCONNECT_FAILED;
     }
 
-    return ApplyBlockUndo(blockUndo, block, pindex, view);
+    return ApplyBlockUndo(std::move(blockUndo), block, pindex, view);
 }
 
-DisconnectResult ApplyBlockUndo(const CBlockUndo &blockUndo,
-                                const CBlock &block, const CBlockIndex *pindex,
+DisconnectResult ApplyBlockUndo(CBlockUndo &&blockUndo, const CBlock &block, const CBlockIndex *pindex,
                                 CCoinsViewCache &view) {
     bool fClean = true;
 
@@ -1363,7 +1360,7 @@ DisconnectResult ApplyBlockUndo(const CBlockUndo &blockUndo,
     // First, restore inputs.
     for (size_t i = 1; i < block.vtx.size(); i++) {
         const CTransaction &tx = *(block.vtx[i]);
-        const CTxUndo &txundo = blockUndo.vtxundo[i - 1];
+        CTxUndo &txundo = blockUndo.vtxundo[i - 1];
         if (txundo.vprevout.size() != tx.vin.size()) {
             error("DisconnectBlock(): transaction and undo data inconsistent");
             return DISCONNECT_FAILED;
@@ -1371,13 +1368,13 @@ DisconnectResult ApplyBlockUndo(const CBlockUndo &blockUndo,
 
         for (size_t j = 0; j < tx.vin.size(); j++) {
             const COutPoint &out = tx.vin[j].prevout;
-            const Coin &undo = txundo.vprevout[j];
-            DisconnectResult res = UndoCoinSpend(undo, view, out);
+            DisconnectResult res = UndoCoinSpend(std::move(txundo.vprevout[j]), view, out);
             if (res == DISCONNECT_FAILED) {
                 return DISCONNECT_FAILED;
             }
             fClean = fClean && res != DISCONNECT_UNCLEAN;
         }
+        // At this point, all of txundo.vprevout should have been moved out.
     }
 
     // Second, revert created outputs.
