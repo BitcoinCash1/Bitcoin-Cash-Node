@@ -1489,14 +1489,21 @@ static void ProcessGetBlockData(const Config &config, CNode *pfrom,
                 return *pblock;
             };
             if (inv.type == MSG_FILTERED_BLOCK) {
-                ensure_pblock();  // read into pblock now with pfrom->cs_filter not held
                 bool sendMerkleBlock = false;
                 CMerkleBlock merkleBlock;
                 {
-                    LOCK(pfrom->cs_filter);
+                    WAIT_LOCK(pfrom->cs_filter, lock);
                     if (pfrom->pfilter) {
-                        sendMerkleBlock = true;
-                        merkleBlock = CMerkleBlock(*pblock, *pfrom->pfilter);
+                        if (!pblock) {
+                            // read into pblock now with pfrom->cs_filter not held
+                            REVERSE_LOCK(lock);
+                            ensure_pblock();
+                        }
+                        // relocked; check again (in case in future code another thread clears pfilter)
+                        if (pfrom->pfilter) {
+                            sendMerkleBlock = true;
+                            merkleBlock = CMerkleBlock(*pblock, *pfrom->pfilter);
+                        }
                     }
                 }
                 if (sendMerkleBlock) {
