@@ -34,7 +34,7 @@ class GBTCheckValidityAndIgnoreCacheTest(BitcoinTestFramework):
         """ The inverse of assert_debug_log: fail if any of the excluded_msgs are encountered in the log. """
         node_num = self.nodes.index(node)
         try:
-            with node.assert_debug_log(excluded_msgs, timeout):
+            with node.assert_debug_log(excluded_msgs, timeout=timeout):
                 yield
         except AssertionError as e:
             if 'Expected messages "{}" does not partially match log:'.format(str(excluded_msgs)) in str(e):
