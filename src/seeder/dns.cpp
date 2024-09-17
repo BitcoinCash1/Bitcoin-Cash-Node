@@ -1,8 +1,12 @@
-// Copyright (c) 2017-2021 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <seeder/dns.h>
+#include <seeder/util.h>
+#include <sync.h>
+#include <tinyformat.h>
+#include <util/syserror.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -11,7 +15,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cctype>
 #include <cstdbool>
 #include <cstdio>
 #include <cstdlib>
@@ -362,8 +365,7 @@ error:
     return error;
 }
 
-static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
-                         uint8_t *outbuf) {
+ssize_t DnsServer::handle(const uint8_t *inbuf, size_t insize, uint8_t *outbuf) {
     DNSResponseCode responseCode = DNSResponseCode::OK;
     if (insize < 12) {
         // DNS header
@@ -432,10 +434,10 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
             goto error;
         }
 
-        int namel = std::strlen(name), hostl = std::strlen(opt->host);
-        if (strcasecmp(name, opt->host) &&
+        int namel = std::strlen(name), hostl = std::strlen(this->host);
+        if (strcasecmp(name, this->host) &&
             (namel < hostl + 2 || name[namel - hostl - 1] != '.' ||
-             strcasecmp(name + namel - hostl, opt->host))) {
+             strcasecmp(name + namel - hostl, this->host))) {
             responseCode = DNSResponseCode::REFUSED;
             goto error;
         }
@@ -475,12 +477,12 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
               (cls == CLASS_IN || cls == QCLASS_ANY))) {
             // authority section will be necessary, either NS or SOA
             uint8_t *newpos = outpos;
-            write_record_ns(&newpos, outend, "", offset, CLASS_IN, 0, opt->ns);
+            write_record_ns(&newpos, outend, "", offset, CLASS_IN, 0, this->ns);
             max_auth_size = newpos - outpos;
 
             newpos = outpos;
-            write_record_soa(&newpos, outend, "", offset, CLASS_IN, opt->nsttl,
-                             opt->ns, opt->mbox, std::time(nullptr), 604800, 86400,
+            write_record_soa(&newpos, outend, "", offset, CLASS_IN, this->nsttl,
+                             this->ns, this->mbox, std::time(nullptr), 604800, 86400,
                              2592000, 604800);
             if (max_auth_size < newpos - outpos) {
                 max_auth_size = newpos - outpos;
@@ -495,7 +497,7 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         if ((typ == TYPE_NS || typ == QTYPE_ANY) &&
             (cls == CLASS_IN || cls == QCLASS_ANY)) {
             int ret2 = write_record_ns(&outpos, outend - max_auth_size, "",
-                                       offset, CLASS_IN, opt->nsttl, opt->ns);
+                                       offset, CLASS_IN, this->nsttl, this->ns);
             //    std::fprintf(stdout, "wrote NS record: %i\n", ret2);
             if (!ret2) {
                 outbuf[7]++;
@@ -505,10 +507,10 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
 
         // SOA records
         if ((typ == TYPE_SOA || typ == QTYPE_ANY) &&
-            (cls == CLASS_IN || cls == QCLASS_ANY) && opt->mbox) {
+            (cls == CLASS_IN || cls == QCLASS_ANY) && this->mbox) {
             int ret2 =
                 write_record_soa(&outpos, outend - max_auth_size, "", offset,
-                                 CLASS_IN, opt->nsttl, opt->ns, opt->mbox,
+                                 CLASS_IN, this->nsttl, this->ns, this->mbox,
                                  std::time(nullptr), 604800, 86400, 2592000, 604800);
             //    std::fprintf(stdout, "wrote SOA record: %i\n", ret2);
             if (!ret2) {
@@ -520,20 +522,18 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         if ((typ == TYPE_A || typ == TYPE_AAAA || typ == QTYPE_ANY) &&
             (cls == CLASS_IN || cls == QCLASS_ANY)) {
             AddrGeneric addr[32];
-            int naddr = opt->cb((void *)opt, name, addr, 32,
-                                typ == TYPE_A || typ == QTYPE_ANY,
-                                typ == TYPE_AAAA || typ == QTYPE_ANY);
+            int naddr = GetIPList(name, addr, 32, typ == TYPE_A || typ == QTYPE_ANY, typ == TYPE_AAAA || typ == QTYPE_ANY);
             int n = 0;
             while (n < naddr) {
                 int mustbreak = 1;
                 if (addr[n].v == 4) {
                     mustbreak = write_record_a(&outpos, outend - max_auth_size,
                                                "", offset, CLASS_IN,
-                                               opt->datattl, &addr[n]);
+                                               this->datattl, &addr[n]);
                 } else if (addr[n].v == 6) {
                     mustbreak = write_record_aaaa(
                         &outpos, outend - max_auth_size, "", offset, CLASS_IN,
-                        opt->datattl, &addr[n]);
+                        this->datattl, &addr[n]);
                 }
 
                 //      std::fprintf(stdout, "wrote A record: %i\n", mustbreak);
@@ -549,7 +549,7 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
         // Authority section
         if (!have_ns && outbuf[7]) {
             int ret2 = write_record_ns(&outpos, outend, "", offset, CLASS_IN,
-                                       opt->nsttl, opt->ns);
+                                       this->nsttl, this->ns);
             //    std::fprintf(stdout, "wrote NS record: %i\n", ret2);
             if (!ret2) {
                 outbuf[9]++;
@@ -560,8 +560,8 @@ static ssize_t dnshandle(dns_opt_t *opt, const uint8_t *inbuf, size_t insize,
             // horizontal referral loop, as the NS response indicates where the
             // resolver should try next.
             int ret2 = write_record_soa(
-                &outpos, outend, "", offset, CLASS_IN, opt->nsttl, opt->ns,
-                opt->mbox, std::time(nullptr), 604800, 86400, 2592000, 604800);
+                &outpos, outend, "", offset, CLASS_IN, this->nsttl, this->ns,
+                this->mbox, std::time(nullptr), 604800, 86400, 2592000, 604800);
             //    std::fprintf(stdout, "wrote SOA record: %i\n", ret2);
             if (!ret2) {
                 outbuf[9]++;
@@ -589,37 +589,69 @@ error:
     return 12;
 }
 
-static int listenSocket = -1;
+static SharedMutex listenSocketMut;
+static int listenSocket GUARDED_BY(listenSocketMut) = -1;
+static constexpr int polltimeMsec = 500;
 
-int dnsserver(dns_opt_t *opt) {
+static void closeSocket_nolock() EXCLUSIVE_LOCKS_REQUIRED(listenSocketMut) {
+    if (listenSocket > -1) {
+        close(listenSocket);
+    }
+    listenSocket = -1;
+}
+
+DnsServer::DnsServer(int port_, const char *host_, const char *ns_, const char *mbox_, int datattl_, int nsttl_)
+    : port(port_), datattl(datattl_), nsttl(nsttl_), host(host_), ns(ns_), mbox(mbox_) {}
+
+DnsServer::~DnsServer() {}
+
+void DnsServer::Shutdown() {
+    LOCK(listenSocketMut);
+    closeSocket_nolock();
+}
+
+std::optional<std::string> DnsServer::run() {
     struct sockaddr_in6 si_other;
     int senderSocket = -1;
     senderSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (senderSocket == -1) {
-        return -3;
+        return strprintf("socket (1): %s", SysErrorString(errno));
     }
 
     int replySocket;
-    if (listenSocket == -1) {
-        struct sockaddr_in6 si_me;
-        if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-            return -1;
-        }
-        replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-        if (replySocket == -1) {
-            close(listenSocket);
-            return -1;
-        }
-        int sockopt = 1;
-        setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt,
-                   sizeof sockopt);
-        std::memset((char *)&si_me, 0, sizeof(si_me));
-        si_me.sin6_family = AF_INET6;
-        si_me.sin6_port = htons(opt->port);
-        si_me.sin6_addr = in6addr_any;
-        if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) ==
-            -1) {
-            return -2;
+    {
+        LOCK(listenSocketMut);
+        if (listenSocket == -1) {
+            struct sockaddr_in6 si_me;
+            if ((listenSocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+                return strprintf("socket (2): %s", SysErrorString(errno));
+            }
+            replySocket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+            if (replySocket == -1) {
+                auto ret = strprintf("socket (3): %s", SysErrorString(errno));
+                closeSocket_nolock();
+                return ret;
+            }
+            const int sockopt = 1;
+            setsockopt(listenSocket, IPPROTO_IPV6, DSTADDR_SOCKOPT, &sockopt, sizeof sockopt);
+            struct timeval recvtimeout;
+            recvtimeout.tv_sec = polltimeMsec / 1000;
+            recvtimeout.tv_usec = (polltimeMsec % 1000) * 1000;
+            // Use a receive timeout for listenSocket (so we can periodically check if shutdown is requested)
+            if (0 != setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, &recvtimeout, sizeof recvtimeout)) {
+                auto ret = strprintf("setsockopt (SO_RCVTIMEO): %s", SysErrorString(errno));
+                closeSocket_nolock();
+                return ret;
+            }
+            std::memset((char *)&si_me, 0, sizeof(si_me));
+            si_me.sin6_family = AF_INET6;
+            si_me.sin6_port = htons(this->port);
+            si_me.sin6_addr = in6addr_any;
+            if (bind(listenSocket, (struct sockaddr *)&si_me, sizeof(si_me)) == -1) {
+                auto ret = strprintf("bind: %s", SysErrorString(errno));
+                closeSocket_nolock();
+                return ret;
+            }
         }
     }
 
@@ -633,7 +665,7 @@ int dnsserver(dns_opt_t *opt) {
     };
 
     union control_data cmsg;
-    msghdr msg;
+    msghdr msg = {};
     msg.msg_name = &si_other;
     msg.msg_namelen = sizeof(si_other);
     msg.msg_iov = iov;
@@ -641,24 +673,32 @@ int dnsserver(dns_opt_t *opt) {
     msg.msg_control = &cmsg;
     msg.msg_controllen = sizeof(cmsg);
 
-    for (; 1; ++(opt->nRequests)) {
+    while (!seeder::ShutdownRequested()) {
+        LOCK_SHARED(listenSocketMut);
+        if (listenSocket < 0) {
+            break;
+        }
         ssize_t insize = recvmsg(listenSocket, &msg, 0);
-        //    uint8_t *addr = (uint8_t*)&si_other.sin_addr.s_addr;
-        //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i
-        //                 bytes\n", (unsigned long long)(opt->nRequests), addr[0], addr[1],
-        //                 addr[2], addr[3], ntohs(si_other.sin_port), (int)insize);
+        if (insize < 0 && errno == EWOULDBLOCK) {
+            // socket polled, no data available, keep polling until app shutdown
+            continue;
+        }
+        ++this->nRequests;
+        //    uint8_t *addr = (uint8_t*)&si_other.sin6_addr.s6_addr;
+        //    std::fprintf(stdout, "DNS: Request %llu from %i.%i.%i.%i:%i of %i bytes\n",
+        //                 (unsigned long long)(this->nRequests), addr[0], addr[1], addr[2], addr[3],
+        //                 ntohs(si_other.sin6_port), (int)insize);
         if (insize <= 0) {
             continue;
         }
 
-        ssize_t ret = dnshandle(opt, inbuf, insize, outbuf);
+        ssize_t ret = handle(inbuf, insize, outbuf);
         if (ret <= 0) {
             continue;
         }
 
         bool handled = false;
-        for (struct cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr;
-             hdr = CMSG_NXTHDR(&msg, hdr)) {
+        for (struct cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr && !seeder::ShutdownRequested(); hdr = CMSG_NXTHDR(&msg, hdr)) {
             if (hdr->cmsg_level == IPPROTO_IP &&
                 hdr->cmsg_type == DSTADDR_SOCKOPT) {
                 msg.msg_iov[0].iov_base = outbuf;
@@ -669,10 +709,9 @@ int dnsserver(dns_opt_t *opt) {
                 handled = true;
             }
         }
-        if (!handled) {
-            sendto(listenSocket, outbuf, ret, 0, (struct sockaddr *)&si_other,
-                   sizeof(si_other));
+        if (!handled && !seeder::ShutdownRequested()) {
+            sendto(listenSocket, outbuf, ret, 0, (struct sockaddr *)&si_other, sizeof(si_other));
         }
     }
-    return 0;
+    return std::nullopt;
 }

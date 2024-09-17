@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -324,6 +324,48 @@ CSeederNode::~CSeederNode() {
     CloseSocket(sock);
 }
 
+/// Polls the socket at 2 Hz for data, keeping sure to check the ShutdownRequested() flag as it loops.
+/// @return true if data is available, or false otherwise on timeout, or if ShutdownRequested().
+static bool waitSocket(const int sock, const int timeout_secs) {
+    constexpr int poll_hz = 2;
+    constexpr int tick_msec = 1000 / poll_hz;
+    int timeout_ticks = timeout_secs * poll_hz;
+    while (!seeder::ShutdownRequested() && timeout_ticks > 0) {
+        const auto [pollret, pollfunc] = [&]() -> std::pair<int, const char *> {
+#ifdef USE_POLL
+            /* Linux */
+            struct pollfd pfd = {};
+            pfd.fd = sock;
+            pfd.events = POLLIN | POLLERR;
+            return {::poll(&pfd, 1, tick_msec), "poll"};
+#else
+            /* OSX, BSD, Win32 */
+            fd_set fdsetRecv;
+            fd_set fdsetError;
+            FD_ZERO(&fdsetRecv);
+            FD_ZERO(&fdsetError);
+            FD_SET(sock, &fdsetRecv);
+            FD_SET(sock, &fdsetError);
+            struct timeval wa;
+            wa.tv_sec = 0;
+            wa.tv_usec = tick_msec * 1000;
+            return {::select(sock + 1, &fdsetRecv, nullptr, &fdsetError, &wa), "select"};
+#endif
+        }();
+        if (pollret == 1) {
+            // data is available
+            return true;
+        } else if (pollret < 0) {
+            // low-level error, print to console and return
+            perror(pollfunc);
+            return false;
+        }
+        // otherwise, keep polling until timeout_secs expires
+        --timeout_ticks;
+    }
+    return false; // timeout or shutdown requested
+}
+
 bool CSeederNode::Run() {
     // FIXME: This logic is duplicated with CConnman::ConnectNode for no
     // good reason.
@@ -365,36 +407,12 @@ bool CSeederNode::Run() {
     int64_t now;
     auto Predicate = [&now, this] {
         now = std::time(nullptr);
-        return ban == 0 && (doneAfter == 0 || doneAfter > now) && sock != INVALID_SOCKET;
+        return !seeder::ShutdownRequested() && ban == 0 && (doneAfter == 0 || doneAfter > now) && sock != INVALID_SOCKET;
     };
     while (Predicate()) {
         char pchBuf[0x10000];
-#ifdef USE_POLL
-        /* Linux */
-        struct pollfd pfd = {};
-        pfd.fd = sock;
-        pfd.events = POLLIN | POLLERR;
-        const int pollTimeoutMsec = 1000 * (doneAfter ? static_cast<int>(doneAfter - now) : GetTimeout());
-        const int ret = ::poll(&pfd, 1, pollTimeoutMsec);
-#else
-        /* OSX, BSD, Win32 */
-        fd_set fdsetRecv;
-        fd_set fdsetError;
-        FD_ZERO(&fdsetRecv);
-        FD_ZERO(&fdsetError);
-        FD_SET(sock, &fdsetRecv);
-        FD_SET(sock, &fdsetError);
-        struct timeval wa;
-        if (doneAfter) {
-            wa.tv_sec = static_cast<int>(doneAfter - now);
-            wa.tv_usec = 0;
-        } else {
-            wa.tv_sec = GetTimeout();
-            wa.tv_usec = 0;
-        }
-        const int ret = ::select(sock + 1, &fdsetRecv, nullptr, &fdsetError, &wa);
-#endif
-        if (ret != 1) {
+        const bool waitRes = waitSocket(sock, (doneAfter ? static_cast<int>(doneAfter - now) : GetTimeout()));
+        if (!waitRes) {
             if (!doneAfter) {
                 res = false;
             }
