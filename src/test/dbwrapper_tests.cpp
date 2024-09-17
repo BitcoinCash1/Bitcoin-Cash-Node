@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(dbwrapper_iterator_snapshot) {
     auto GetAll = [](CDBIterator *it) {
         std::vector<std::pair<char, uint256>> found;
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            char k;
+            char k{};
             uint256 v;
             it->GetKey(k);
             it->GetValue(v);
