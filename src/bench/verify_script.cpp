@@ -58,9 +58,8 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
     CCoinsView coinsDummy;
     CCoinsViewCache coinsCache(&coinsDummy);
     {
-        CDataStream stream(coinsdata, SER_NETWORK, PROTOCOL_VERSION);
         std::map<COutPoint, Coin> coins;
-        stream >> coins;
+        VectorReader(SER_NETWORK, PROTOCOL_VERSION, coinsdata, 0) >> coins;
         for (const auto & [outpt, coin] : coins) {
             coinsCache.AddCoin(outpt, coin, false);
         }
@@ -68,10 +67,7 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
 
     const CBlock block = [&] {
         CBlock tmpblock;
-        CDataStream stream(blockdata, SER_NETWORK, PROTOCOL_VERSION);
-        char a = '\0';
-        stream.write(&a, 1); // Prevent compaction
-        stream >> tmpblock;
+        VectorReader(SER_NETWORK, PROTOCOL_VERSION, blockdata, 0) >> tmpblock;
         return tmpblock;
     }();
 
