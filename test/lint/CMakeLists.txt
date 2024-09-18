@@ -36,6 +36,7 @@ TESTS
 	lint-include-cheader.py
 	lint-cpp-void-parameters.py
 	lint-source-filename.py
+	lint-locale-dependencies.py
 )
 
 add_dependencies(check-lint-lint-unicode unicode_src_linter)
