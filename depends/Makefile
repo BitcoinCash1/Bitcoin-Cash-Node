@@ -234,10 +234,6 @@ download: download-osx download-linux download-win
 
 build-linux64: download-linux
 	@$(MAKE) -s HOST=x86_64-linux-gnu install
-build-linux32: download-linux
-	@$(MAKE) -s HOST=i686-pc-linux-gnu install
-build-linux-arm: download-linux
-	@$(MAKE) -s HOST=arm-linux-gnueabihf install
 build-linux-aarch64: download-linux
 	@$(MAKE) -s HOST=aarch64-linux-gnu install
 build-osx: download-osx
@@ -245,7 +241,7 @@ build-osx: download-osx
 build-win64: download-win
 	@$(MAKE) -s HOST=x86_64-w64-mingw32 install
 
-build-all: build-linux64 build-linux32 build-linux-arm build-linux-aarch64 build-osx build-win64
+build-all: build-linux64 build-linux-aarch64 build-osx build-win64
 
 $(foreach package,$(all_packages),$(eval $(call ext_add_stages,$(package))))
 

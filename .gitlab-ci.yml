@@ -172,17 +172,6 @@ static-run-linters:
             - depends/built
             - depends/x86_64-w64-mingw32
 
-.cache-arm:
-    extends: .build_common
-    cache:
-        <<: *global_cache_settings
-        key: arm_cache
-        paths:
-            - ccache/
-            - depends/sources
-            - depends/built
-            - depends/arm-linux-gnueabihf
-
 .cache-aarch64:
     extends: .build_common
     cache:
@@ -638,35 +627,6 @@ build-win-64:
         - ninja
     dependencies:
         - build-win-64-depends
-
-## ARM build
-
-build-arm-depends:
-    stage: build_depends
-    extends: .cache-arm
-    needs: []
-    script:
-        - (cd depends; make build-linux-arm
-            HOST=aarch64-linux-gnu NO_QT=1 JOBS=`nproc`)
-    artifacts:
-        paths:
-            - depends/arm-linux-gnueabihf
-
-build-arm:
-    stage: build
-    extends: .cache-arm
-    needs: ["build-arm-depends"]
-    script:
-        - cd build
-        - cmake -GNinja .. -DENABLE_MAN=OFF
-                           -DBUILD_BITCOIN_QT=OFF
-                           -DBUILD_BITCOIN_SEEDER=OFF
-                           -DENABLE_GLIBC_BACK_COMPAT=ON
-                           -DENABLE_STATIC_LIBSTDCXX=ON
-                           -DCMAKE_TOOLCHAIN_FILE=../cmake/platforms/LinuxARM.cmake
-        - ninja
-    dependencies:
-        - build-arm-depends
 
 ## AArch64 build
 
