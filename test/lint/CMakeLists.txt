@@ -33,6 +33,7 @@ TESTS
 	lint-includes.sh
 	lint-include-guards.sh
 	lint-unicode.sh
+	lint-include-cheader.py
 )
 
 add_dependencies(check-lint-lint-unicode unicode_src_linter)
