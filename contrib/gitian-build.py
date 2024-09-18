@@ -4,6 +4,7 @@ import argparse
 import inspect
 import multiprocessing
 import os
+import shutil
 import subprocess
 import sys
 
@@ -43,12 +44,17 @@ def setup():
         else:
             sys.exit("macOS support only works in --docker mode")
 
-    if not os.path.isdir('gitian-builder'):
-        subprocess.check_call(
-            ['git', 'clone', 'https://github.com/devrandom/gitian-builder.git'])
     if not os.path.isdir('bitcoin-cash-node'):
         subprocess.check_call(
             ['git', 'clone', 'https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git'])
+    if not os.path.isdir('gitian-builder'):
+        # Ensure gitian-builder directory is copied to top-level
+        if os.path.exists("gitian-builder"):
+            os.remove("gitian-builder")
+        src = os.path.join("bitcoin-cash-node", "contrib", "gitian-builder")
+        dst = "gitian-builder"
+        print("Copying {} -> {} ...".format(src, dst))
+        shutil.copytree(src, dst)
     os.chdir('gitian-builder')
     make_image_prog = ['bin/make-base-vm',
                        '--distro', 'debian', '--suite', 'buster', '--arch', 'amd64']

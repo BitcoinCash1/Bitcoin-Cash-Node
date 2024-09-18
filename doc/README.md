@@ -68,3 +68,11 @@ Drag `bitcoin-cash-node` to your applications folder, and then run `bitcoin-cash
 ## Help
 
 - Ask for help on the [Bitcoin Cash Node Subreddit](https://www.reddit.com/r/bchnode/), [Bitcoin Cash Node Slack](https://join.slack.com/t/bitcoincashnode/shared_invite/zt-egg3c36d-2cglIrKcbnGpIQFaKFzCWA) or [Bitcoin Cash Node Telegram](https://t.me/bitcoincashnode).
+
+## License
+
+Distribution is done under the [MIT software license](/COPYING). This product includes software developed by the
+OpenSSL Project for use in the [OpenSSL Toolkit](https://www.openssl.org/), cryptographic software written by Eric Young
+([eay@cryptsoft.com](mailto:eay@cryptsoft.com)), and UPnP software written by Thomas Bernard. The `gitian-builder`
+software developed by the Gitian Developers and distributed as part of the project is
+[licenced](../contrib/gitian-builder/LICENSE) under the [GNU General Public License version 3](../contrib/gitian-builder/COPYING).

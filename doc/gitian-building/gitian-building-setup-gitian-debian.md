@@ -72,11 +72,11 @@ cd ..
 
 **Note**: When sudo asks for a password, enter the password for the user `gitianuser` not for `root`.
 
-Clone the git repositories for Bitcoin Cash Node and Gitian.
+Clone the git repositories for Bitcoin Cash Node and copy `gitian-builder` up to the top level.
 
 ```bash
-git clone https://github.com/devrandom/gitian-builder.git
 git clone https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git
+cp -fpra bitcoin-cash-node/contrib/gitian-builder .
 ```
 
 ## Setting up the Gitian image

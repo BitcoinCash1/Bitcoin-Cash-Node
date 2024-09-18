@@ -9,7 +9,7 @@ export LC_ALL=C
 EXIT_CODE=0
 OLDIFS=$IFS
 IFS=$'\n'
-filelist=($(git ls-files "*py" | grep -Fv "lint-python-format.py"))
+filelist=($(git ls-files "*py" -- ":^contrib/gitian-builder/" | grep -Fv "lint-python-format.py"))
 IFS=$OLDIFS
 for f in "${filelist[@]}"; do
     if ! test/lint/lint-python-format.py "${f}"; then

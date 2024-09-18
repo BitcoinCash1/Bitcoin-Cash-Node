@@ -12,7 +12,7 @@
 export LC_ALL=C
 
 EXIT_CODE=0
-mapfile -d '' file_list < <(git ls-files -z -- '*.sh' '*.sh.in' ':!:src/secp256k1' ':!:src/univalue')
+mapfile -d '' file_list < <(git ls-files -z -- '*.sh' '*.sh.in' ':!:src/secp256k1' ':!:src/univalue' ':!:contrib/gitian-builder')
 for SHELL_SCRIPT in "${file_list[@]}"; do
     if grep -q "# This script is intentionally locale dependent by not setting \"export LC_ALL=C\"" "${SHELL_SCRIPT}"; then
         continue
