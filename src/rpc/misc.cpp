@@ -278,15 +278,14 @@ static UniValue signmessagewithprivkey(const Config &config,
 static UniValue setmocktime(const Config &config,
                             const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() != 1) {
-        throw std::runtime_error(
-            RPCHelpMan{"setmocktime",
-                "\nSet the local time to given timestamp (-regtest only)\n",
-                {
-                    {"timestamp", RPCArg::Type::NUM, /* opt */ false, /* default_val */ "", "Unix seconds-since-epoch timestamp\n"
-            "   Pass 0 to go back to using the system time."},
-                }}
-                .ToString()
-        );
+        throw std::runtime_error(RPCHelpMan{
+            "setmocktime",
+            "\nSet the local time to given timestamp (-regtest only)\n",
+            {
+                {"timestamp", RPCArg::Type::NUM, /* opt */ false, /* default_val */ "",
+                 "Unix seconds-since-epoch timestamp\n"
+                 "Pass 0 to go back to using the system time."},
+            }}.ToString());
     }
 
     if (!config.GetChainParams().MineBlocksOnDemand()) {
@@ -302,10 +301,9 @@ static UniValue setmocktime(const Config &config,
     LOCK(cs_main);
 
     RPCTypeCheck(request.params, {UniValue::VNUM});
-    int64_t mockTime = request.params[0].get_int64();
+    const int64_t mockTime{request.params[0].get_int64()};
     if (mockTime < 0) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER,
-                           "Timestamp must be 0 or greater");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Mocktime can not be negative: %s.", mockTime));
     }
     SetMockTime(mockTime);
 

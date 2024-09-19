@@ -22,7 +22,7 @@ void UninterruptibleSleep(const std::chrono::microseconds &n) {
     std::this_thread::sleep_for(n);
 }
 
-//! For unit testing
+//! For testing
 static std::atomic<int64_t> nMockTime(0);
 
 int64_t GetTime() {
