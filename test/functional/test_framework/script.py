@@ -28,14 +28,14 @@ from .ripemd160 import ripemd160
 MAX_SCRIPT_ELEMENT_SIZE = 520
 MAX_SCRIPT_SIZE = 10000
 
-OPCODE_NAMES = {}  # type: Dict[CScriptOp, str]
+OPCODE_NAMES: Dict['CScriptOp', str] = {}
 
 
 def hash160(s):
     return ripemd160(sha256(s))
 
 
-_opcode_instances = []  # type: List[CScriptOp]
+_opcode_instances: List['CScriptOp'] = []
 
 
 class CScriptOp(int):
