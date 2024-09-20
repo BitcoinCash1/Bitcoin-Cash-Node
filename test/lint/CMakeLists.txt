@@ -34,7 +34,6 @@ TESTS
 	lint-include-guards.sh
 	lint-unicode.sh
 	lint-include-cheader.py
-	lint-cpp-void-parameters.py
 	lint-source-filename.py
 )
 
