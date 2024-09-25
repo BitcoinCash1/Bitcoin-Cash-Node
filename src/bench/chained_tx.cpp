@@ -163,9 +163,8 @@ static void benchReorg(const Config& config,
                        size_t chainSizePerBlock,
                        bool includeMempoolTxRemoval)
 {
-    auto utxos = createUTXOs(config, reorgDepth);
     std::vector<std::vector<CTransactionRef>> chains;
-    for (const auto &utxo : utxos) {
+    for (auto &utxo : createUTXOs(config, reorgDepth)) {
         chains.emplace_back(oneInOneOutChain(config, std::move(utxo), chainSizePerBlock));
     }
 
