@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Bitcoin developers
+# Copyright (c) 2017-2024 The Bitcoin developers
 
 cmake_minimum_required(VERSION 3.13)
 project(univalue)
@@ -23,7 +23,7 @@ target_include_directories(univalue
 		lib
 )
 
-if(UNIVALUE_BUILD_TESTS)
+if(UNIVALUE_BUILD_TESTS AND ENABLE_TEST)
 	include(TestSuite)
 	create_test_suite(univalue)
 
@@ -43,7 +43,7 @@ if(UNIVALUE_BUILD_TESTS)
 	add_executable(json_test EXCLUDE_FROM_ALL test/test_json.cpp)
 	target_link_libraries(json_test univalue)
 	add_dependencies(check-univalue json_test)
-endif(UNIVALUE_BUILD_TESTS)
+endif(UNIVALUE_BUILD_TESTS AND ENABLE_TEST)
 
 # Generate lib/univalue_escapes.h
 include(NativeExecutable)

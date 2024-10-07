@@ -571,4 +571,6 @@ add_custom_target(translate
 )
 
 # Test tests
-add_subdirectory(test)
+if(ENABLE_TEST)
+    add_subdirectory(test)
+endif()
