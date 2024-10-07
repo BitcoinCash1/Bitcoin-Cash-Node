@@ -116,7 +116,9 @@ if(ENABLE_COVERAGE)
 endif()
 
 add_subdirectory(src)
-add_subdirectory(test)
+if(ENABLE_TEST)
+    add_subdirectory(test)
+endif()
 
 add_subdirectory(contrib)
 add_subdirectory(doc)

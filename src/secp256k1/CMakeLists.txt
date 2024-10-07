@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Bitcoin developers
+# Copyright (c) 2017-2024 The Bitcoin developers
 
 cmake_minimum_required(VERSION 3.13)
 project(secp256k1 LANGUAGES C VERSION 0.1.0)
@@ -340,7 +340,7 @@ if(SECP256K1_ENABLE_JNI)
 endif()
 
 # Tests
-if(SECP256K1_BUILD_TEST)
+if(SECP256K1_BUILD_TEST AND ENABLE_TEST)
 	include(TestSuite)
 	create_test_suite(secp256k1)
 
@@ -387,7 +387,7 @@ if(SECP256K1_BUILD_TEST)
 		add_dependencies(check-secp256k1-java secp256k1-jni-test-jar)
 		add_dependencies(check-secp256k1 check-secp256k1-java)
 	endif()
-endif(SECP256K1_BUILD_TEST)
+endif(SECP256K1_BUILD_TEST AND ENABLE_TEST)
 
 # Benchmarks
 add_secp256k1_bench(verify src/bench_verify.c)

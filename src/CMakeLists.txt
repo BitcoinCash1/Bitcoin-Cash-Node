@@ -32,6 +32,7 @@ option(ENABLE_WERROR "Promote some compiler warnings to errors" OFF)
 option(ENABLE_CLANG_TIDY "Enable clang-tidy checks for Bitcoin Cash Node" OFF)
 option(ENABLE_PROFILING "Select the profiling tool to use" OFF)
 option(USE_JEMALLOC_EXPERIMENTAL "Use jemalloc as an allocation library (experimental)" OFF)
+option(ENABLE_TEST "Enable tests and benchmarks" ON)
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   set(DEFAULT_ENABLE_DBUS_NOTIFICATIONS ON)
@@ -649,11 +650,11 @@ if(ENABLE_NATPMP)
     endif()
 endif()
 
-# Test suite.
-add_subdirectory(test)
-
-# Benchmark suite.
-add_subdirectory(bench)
+# Tests and benchmarks
+if(ENABLE_TEST)
+    add_subdirectory(test)
+    add_subdirectory(bench)
+endif()
 
 include(BinaryTest)
 

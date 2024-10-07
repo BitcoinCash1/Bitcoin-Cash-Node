@@ -17,4 +17,6 @@ add_to_security_check(bitcoin-seeder)
 include(InstallationHelper)
 install_target(bitcoin-seeder)
 
-add_subdirectory(test)
+if(ENABLE_TEST)
+    add_subdirectory(test)
+endif()
