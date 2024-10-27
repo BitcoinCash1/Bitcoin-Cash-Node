@@ -37,7 +37,10 @@ class WalletStandardnessTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2
-        self.extra_args = [['-acceptnonstdtxn=0'], ['-acceptnonstdtxn=1']]
+        # We must ensure upgrade11 is not activated because it affects standardness and error messaging and this test
+        # has not been yet updated to test pre and post upgrade11.
+        no_upgrade11 = "-upgrade11activationtime=9999999999"
+        self.extra_args = [[no_upgrade11, '-acceptnonstdtxn=0'], [no_upgrade11, '-acceptnonstdtxn=1']]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
