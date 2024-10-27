@@ -4997,7 +4997,7 @@ void UnloadBlockIndex(const Config &config) {
     pindexBestForkTip = nullptr;
     pindexBestForkBase = nullptr;
     ResetASERTAnchorBlockCache();
-    g_upgrade11_block_tracker.ResetActivationBlockCache();
+    g_upgrade12_block_tracker.ResetActivationBlockCache();
     g_mempool.clear();
     mapBlocksUnlinked.clear();
     {
@@ -5852,7 +5852,7 @@ public:
     }
 } instance_of_cmaincleanup;
 
-ActivationBlockTracker g_upgrade11_block_tracker(&IsUpgrade11Enabled);
+ActivationBlockTracker g_upgrade12_block_tracker(&IsUpgrade12Enabled);
 
 const CBlockIndex *
 ActivationBlockTracker::GetActivationBlock(const CBlockIndex *pindex, const Consensus::Params &params)
