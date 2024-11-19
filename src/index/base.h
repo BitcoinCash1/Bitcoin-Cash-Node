@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 The Bitcoin Core developers
-// Copyright (c) 2019-2021 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +13,14 @@
 #include <validationinterface.h>
 
 class CBlockIndex;
+
+/** Result type returned by BaseIndex::GetSummary() */
+struct IndexSummary {
+    std::string name;
+    bool synced{false};
+    int best_block_height{0};
+    uint256 best_block_hash;
+};
 
 /**
  * Base class for indices of blockchain data. This implements
@@ -108,4 +116,7 @@ public:
 
     /// Stops the instance from staying in sync with blockchain updates.
     void Stop();
+
+    /// Get a summary of the index and its state.
+    IndexSummary GetSummary() const;
 };

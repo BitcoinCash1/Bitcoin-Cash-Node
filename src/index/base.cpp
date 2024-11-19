@@ -299,3 +299,18 @@ void BaseIndex::Stop() {
         m_thread_sync.join();
     }
 }
+
+IndexSummary BaseIndex::GetSummary() const {
+    IndexSummary summary{};
+    summary.name = GetName();
+    summary.synced = m_synced.load();
+    const CBlockIndex *pindex = m_best_block_index.load();
+    if (!pindex) {
+        WITH_LOCK(cs_main, pindex = ::ChainActive().Genesis()); // grab genesis (height 0) as default
+    }
+    if (pindex) { // this should always be non-nullptr normally, but guard against it being nullptr for safety.
+        summary.best_block_height = pindex->nHeight;
+        summary.best_block_hash = pindex->GetBlockHash();
+    }
+    return summary;
+}
