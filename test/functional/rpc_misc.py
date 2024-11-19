@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2019 The Bitcoin Core developers
+# Copyright (c) 2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test RPC misc output."""
@@ -11,6 +12,7 @@ from test_framework.util import (
     assert_equal,
     assert_greater_than,
     assert_greater_than_or_equal,
+    wait_until,
 )
 
 from test_framework.authproxy import JSONRPCException
@@ -55,6 +57,25 @@ class RpcMiscTest(BitcoinTestFramework):
         assert_equal(node.logging()['qt'], False)
         node.logging(include=['qt'])
         assert_equal(node.logging()['qt'], True)
+
+        self.log.info("test getindexinfo")
+        # Without any indices running the RPC returns an empty object
+        assert_equal(node.getindexinfo(), {})
+
+        # Restart the node with indices and wait for them to sync
+        self.restart_node(0, ["-txindex"])
+        wait_until(lambda: all(i["synced"] for i in node.getindexinfo().values()))
+
+        # Returns a list of all running indices by default
+        assert_equal(node.getindexinfo(),
+                     {"txindex": {"synced": True, "best_block_height": 200}})
+
+        # Specifying an index by name returns only the status of that index
+        assert_equal(node.getindexinfo("txindex"),
+                     {"txindex": {"synced": True, "best_block_height": 200}})
+
+        # Specifying an unknown index name returns an empty result
+        assert_equal(node.getindexinfo("foo"), {})
 
 
 if __name__ == '__main__':
