@@ -1,5 +1,5 @@
 // Copyright (c) 2017 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -604,7 +604,7 @@ BOOST_AUTO_TEST_CASE(script_standard_IsMine) {
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
         // Keystore has redeemScript but no key
-        BOOST_CHECK(keystore.AddCScript(redeemScript, false /*=p2sh_20*/));
+        BOOST_CHECK(keystore.AddCScript(redeemScript, false /*=p2sh_20*/, false /* legacy vm limits */));
         result = IsMine(keystore, scriptPubKey);
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
@@ -631,7 +631,7 @@ BOOST_AUTO_TEST_CASE(script_standard_IsMine) {
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
         // Keystore has redeemScript but no key
-        BOOST_CHECK(keystore.AddCScript(redeemScript, true /*=p2sh_32*/));
+        BOOST_CHECK(keystore.AddCScript(redeemScript, true /*=p2sh_32*/, false /* legacy vm limits */));
         result = IsMine(keystore, scriptPubKey);
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
@@ -655,9 +655,9 @@ BOOST_AUTO_TEST_CASE(script_standard_IsMine) {
             CScript redeemscript = GetScriptForDestination(ScriptID(redeemscript_inner, is_p2sh_32));
             scriptPubKey = GetScriptForDestination(ScriptID(redeemscript, is_p2sh_32));
 
-            BOOST_CHECK(keystore.AddCScript(redeemscript, is_p2sh_32));
-            BOOST_CHECK(keystore.AddCScript(redeemscript_inner, is_p2sh_32));
-            BOOST_CHECK(keystore.AddCScript(scriptPubKey, is_p2sh_32));
+            BOOST_CHECK(keystore.AddCScript(redeemscript, is_p2sh_32, false /* legacy vm limits */));
+            BOOST_CHECK(keystore.AddCScript(redeemscript_inner, is_p2sh_32, false /* legacy vm limits */));
+            BOOST_CHECK(keystore.AddCScript(scriptPubKey, is_p2sh_32, false /* legacy vm limits */));
             BOOST_CHECK(keystore.AddKey(keys[0]));
             result = IsMine(keystore, scriptPubKey);
             BOOST_CHECK_EQUAL(result, ISMINE_NO);
@@ -688,7 +688,7 @@ BOOST_AUTO_TEST_CASE(script_standard_IsMine) {
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
         // Keystore has 2/2 keys and the script
-        BOOST_CHECK(keystore.AddCScript(scriptPubKey, false /*=p2sh_20*/));
+        BOOST_CHECK(keystore.AddCScript(scriptPubKey, false /*=p2sh_20*/, false /* legacy vm limits */));
 
         result = IsMine(keystore, scriptPubKey);
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
@@ -709,7 +709,7 @@ BOOST_AUTO_TEST_CASE(script_standard_IsMine) {
             BOOST_CHECK_EQUAL(result, ISMINE_NO);
 
             // Keystore has redeemScript
-            BOOST_CHECK(keystore.AddCScript(redeemScript, is_p2sh_32));
+            BOOST_CHECK(keystore.AddCScript(redeemScript, is_p2sh_32, false /* legacy vm limits */));
             result = IsMine(keystore, scriptPubKey);
             BOOST_CHECK_EQUAL(result, ISMINE_SPENDABLE);
         }

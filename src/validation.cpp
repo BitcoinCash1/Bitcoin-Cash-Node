@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2021 The Bitcoin Core developers
-// Copyright (c) 2017-2023 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -562,7 +562,8 @@ AcceptToMemoryPoolWorker(const Config &config, CTxMemPool &pool,
                         if (!viewMemPool.GetCoin(txin.prevout, coin))
                             throw std::runtime_error(strprintf("Could not find coin: %s", txin.prevout.ToString()));
 
-                        const auto proof = DoubleSpendProof::create(*itConflicting->second, tx, txin.prevout, &coin.GetTxOut());
+                        const auto proof = DoubleSpendProof::create(scriptVerifyFlags,
+                                                                    *itConflicting->second, tx, txin.prevout, &coin.GetTxOut());
 
                         if (proof.validate(pool, entryIt->GetSharedTx()) != DoubleSpendProof::Valid)
                             throw std::runtime_error("Proof is not valid (doublespend tx may be bad)");
@@ -1166,9 +1167,9 @@ bool CScriptCheck::operator()() {
         return false;
     }
     if ((pTxLimitSigChecks &&
-         !pTxLimitSigChecks->consume_and_check(metrics.nSigChecks)) ||
+         !pTxLimitSigChecks->consume_and_check(metrics.GetSigChecks())) ||
         (pBlockLimitSigChecks &&
-         !pBlockLimitSigChecks->consume_and_check(metrics.nSigChecks))) {
+         !pBlockLimitSigChecks->consume_and_check(metrics.GetSigChecks()))) {
         // we can't assign a meaningful script error (since the script
         // succeeded), but remove the ScriptError::OK which could be
         // misinterpreted.
@@ -1283,7 +1284,7 @@ bool CheckInputs(const CTransaction &tx, CValidationState &state,
                           ScriptErrorString(scriptError)));
         }
 
-        nSigChecksTotal += check.GetScriptExecutionMetrics().nSigChecks;
+        nSigChecksTotal += check.GetScriptExecutionMetrics().GetSigChecks();
     }
 
     nSigChecksOut = nSigChecksTotal;
@@ -1494,13 +1495,22 @@ static uint32_t GetNextBlockScriptFlags(const Consensus::Params &params, const C
         flags |= SCRIPT_ENABLE_P2SH_32;
     }
 
+    if (IsUpgrade11Enabled(params, pindex)) {
+        flags |= SCRIPT_ENABLE_MAY2025;
+    }
+
     return flags;
 }
 
 uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex, uint32_t *nextBlockFlags) {
     const uint32_t flags = GetNextBlockScriptFlags(params, pindex);
     if (nextBlockFlags) *nextBlockFlags = flags;
-    return flags | STANDARD_SCRIPT_VERIFY_FLAGS;
+    uint32_t extraFlags = 0;
+    if ((flags & SCRIPT_ENABLE_MAY2025) && fRequireStandard) {
+        // If we have May 2025 vm limits, enable the vm limits "standard" flag (stricter limits), if fRequireStandard
+        extraFlags |= SCRIPT_VM_LIMITS_STANDARD;
+    }
+    return flags | STANDARD_SCRIPT_VERIFY_FLAGS | extraFlags;
 }
 
 /// Maintain invariants, update ABLA state (if possible).

@@ -73,7 +73,7 @@ static void DoubleSpendProofCreate(benchmark::State &state) {
     const CTransaction ctx1{tx1}, ctx2{tx2};
 
     BENCHMARK_LOOP {
-        auto proof = DoubleSpendProof::create(ctx1, ctx2, dupe, &*commonTxOut);
+        auto proof = DoubleSpendProof::create(0, ctx1, ctx2, dupe, &*commonTxOut);
         assert(!proof.isEmpty());
     }
 }

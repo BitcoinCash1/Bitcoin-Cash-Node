@@ -135,7 +135,8 @@ void RunBench(State &state, const Test &test, const TxStandard txStd, const bool
         // Set up the signature checkers ahead of time to save cycles during the actual benchmarks
         struct FakeSignaureChecker final : ContextOptSignatureChecker {
             bool VerifySignature(const std::vector<uint8_t> &, const CPubKey &, const uint256 &) const override { return true; }
-            bool CheckSig(const std::vector<uint8_t> &, const std::vector<uint8_t> &, const CScript &, uint32_t) const override { return true; }
+            bool CheckSig(const std::vector<uint8_t> &, const std::vector<uint8_t> &, const CScript &,
+                          uint32_t, size_t *) const override { return true; }
             bool CheckLockTime(const CScriptNum &) const override { return true; }
             bool CheckSequence(const CScriptNum &) const override { return true; }
             using ContextOptSignatureChecker::ContextOptSignatureChecker;

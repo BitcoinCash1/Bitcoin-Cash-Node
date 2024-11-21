@@ -1,6 +1,6 @@
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
 // Copyright (C) 2020 Calin Culianu <calin.culianu@gmail.com>
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -102,7 +102,7 @@ std::vector<uint8_t> DoubleSpendProof::getP2PKHSignature(const CTransaction &tx,
 }
 
 // static
-DoubleSpendProof DoubleSpendProof::create(const CTransaction &tx1, const CTransaction &tx2,
+DoubleSpendProof DoubleSpendProof::create(const uint32_t scriptFlags, const CTransaction &tx1, const CTransaction &tx2,
                                           const COutPoint &prevout, const CTxOut *txOut)
 {
     DoubleSpendProof answer;
@@ -171,7 +171,7 @@ DoubleSpendProof DoubleSpendProof::create(const CTransaction &tx1, const CTransa
 
     // Finally, ensure that we can eat our own dog food -- this should always succeed,
     // it is a programming error if it does not.
-    answer.checkSanityOrThrow();
+    answer.checkSanityOrThrow(scriptFlags);
 
     return answer;
 }

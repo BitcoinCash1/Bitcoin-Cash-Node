@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -580,13 +580,14 @@ bool GetScriptOp(CScriptBase::const_iterator &pc,
     return true;
 }
 
-bool CScript::HasValidOps() const {
+bool CScript::HasValidOps(uint32_t scriptFlags) const {
+    const size_t maxElemSize = scriptFlags & SCRIPT_ENABLE_MAY2025 ? may2025::MAX_SCRIPT_ELEMENT_SIZE
+                                                                   : MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
     CScript::const_iterator it = begin();
     while (it < end()) {
         opcodetype opcode;
         std::vector<uint8_t> item;
-        if (!GetOp(it, opcode, item) || opcode > MAX_OPCODE ||
-            item.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+        if (!GetOp(it, opcode, item) || opcode > MAX_OPCODE || item.size() > maxElemSize) {
             return false;
         }
     }

@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1210,7 +1210,8 @@ static UniValue addmultisigaddress(const Config &config,
     // Construct using pay-to-script-hash:
     CScript inner = CreateMultisigRedeemscript(required, pubkeys);
     CTxDestination dest =
-        AddAndGetDestinationForScript(*pwallet, inner, output_type, false /* no p2sh32 */);
+        AddAndGetDestinationForScript(*pwallet, inner, output_type, false /* no p2sh32 */,
+                                      false /* no generous vm limits for wallet */);
     pwallet->SetAddressBook(dest, label, "send");
 
     UniValue::Object result;

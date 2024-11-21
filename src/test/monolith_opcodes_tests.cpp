@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022 The Bitcoin developers
+// Copyright (c) 2018-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -172,11 +172,11 @@ BOOST_AUTO_TEST_CASE(bitwise_opcodes_test) {
     RunTestForAllBitwiseOpcodes({}, {}, {}, {}, {});
 
     // Run all variations of zeros and ones.
-    valtype allzeros(MAX_SCRIPT_ELEMENT_SIZE, 0);
-    valtype allones(MAX_SCRIPT_ELEMENT_SIZE, 0xff);
+    valtype allzeros(MAX_SCRIPT_ELEMENT_SIZE_LEGACY, 0);
+    valtype allones(MAX_SCRIPT_ELEMENT_SIZE_LEGACY, 0xff);
 
-    BOOST_CHECK_EQUAL(allzeros.size(), MAX_SCRIPT_ELEMENT_SIZE);
-    BOOST_CHECK_EQUAL(allones.size(), MAX_SCRIPT_ELEMENT_SIZE);
+    BOOST_CHECK_EQUAL(allzeros.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
+    BOOST_CHECK_EQUAL(allones.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
 
     TestBitwiseOpcodes(allzeros, allzeros, allzeros, allzeros);
     TestBitwiseOpcodes(allzeros, allones, allzeros, allones);
@@ -274,8 +274,8 @@ BOOST_AUTO_TEST_CASE(bitwise_opcodes_test) {
         0xc9, 0x4d, 0xb9, 0x07, 0x71, 0x6d, 0xd1, 0x96, 0xc3, 0x88, 0xb6, 0xe6,
         0x0e, 0x8a, 0x8a, 0xd7};
 
-    BOOST_CHECK_EQUAL(a.size(), MAX_SCRIPT_ELEMENT_SIZE);
-    BOOST_CHECK_EQUAL(b.size(), MAX_SCRIPT_ELEMENT_SIZE);
+    BOOST_CHECK_EQUAL(a.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
+    BOOST_CHECK_EQUAL(b.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
 
     valtype aandb{
         0x10, 0x0e, 0x18, 0x01, 0x83, 0x00, 0x1a, 0x00, 0x41, 0x8c, 0x00, 0x00,
@@ -476,9 +476,9 @@ BOOST_AUTO_TEST_CASE(string_opcodes_test) {
         0xbe, 0x6b, 0xb1, 0x4c, 0x46, 0x2a, 0x86, 0xd9, 0x2d, 0x20, 0x29, 0xb4,
         0x44, 0x15, 0xb2, 0x7e};
 
-    BOOST_CHECK_EQUAL(n.size(), MAX_SCRIPT_ELEMENT_SIZE);
+    BOOST_CHECK_EQUAL(n.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
 
-    for (size_t i = 0; i <= MAX_SCRIPT_ELEMENT_SIZE; i++) {
+    for (size_t i = 0; i <= MAX_SCRIPT_ELEMENT_SIZE_LEGACY; i++) {
         valtype a(n.begin(), n.begin() + i);
         valtype b(n.begin() + i, n.end());
 
@@ -528,14 +528,14 @@ static void CheckTypeConversionOp(const valtype &bin, const valtype &num) {
     // Grow and shrink back down using NUM2BIN.
     CheckTestResultForAllFlags({bin},
                                CScript()
-                                   << ScriptInt::fromIntUnchecked(MAX_SCRIPT_ELEMENT_SIZE)
+                                   << ScriptInt::fromIntUnchecked(MAX_SCRIPT_ELEMENT_SIZE_LEGACY)
                                    << OP_NUM2BIN
                                    << ScriptInt::fromIntUnchecked(bin.size())
                                    << OP_NUM2BIN,
                                {rebuilt_bin});
     CheckTestResultForAllFlags({num},
                                CScript()
-                                   << ScriptInt::fromIntUnchecked(MAX_SCRIPT_ELEMENT_SIZE)
+                                   << ScriptInt::fromIntUnchecked(MAX_SCRIPT_ELEMENT_SIZE_LEGACY)
                                    << OP_NUM2BIN
                                    << ScriptInt::fromIntUnchecked(bin.size())
                                    << OP_NUM2BIN,
@@ -558,7 +558,7 @@ BOOST_AUTO_TEST_CASE(type_conversion_test) {
     CheckTypeConversionOp(empty, empty);
 
     valtype paddedzero, paddednegzero;
-    for (size_t i = 0; i < MAX_SCRIPT_ELEMENT_SIZE; i++) {
+    for (size_t i = 0; i < MAX_SCRIPT_ELEMENT_SIZE_LEGACY; i++) {
         CheckTypeConversionOp(paddedzero, empty);
         paddedzero.push_back(0x00);
 
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(type_conversion_test) {
     // Merge leading byte when sign bit isn't used.
     std::vector<uint8_t> k{0x7f}, negk{0xff};
     std::vector<uint8_t> kpadded = k, negkpadded = negk;
-    for (size_t i = 0; i < MAX_SCRIPT_ELEMENT_SIZE; i++) {
+    for (size_t i = 0; i < MAX_SCRIPT_ELEMENT_SIZE_LEGACY; i++) {
         CheckTypeConversionOp(kpadded, k);
         kpadded.push_back(0x00);
 
@@ -602,8 +602,8 @@ BOOST_AUTO_TEST_CASE(type_conversion_test) {
     CheckBin2NumError({{0x00, 0x00, 0x00, 0x80, 0x80}}, ScriptError::INVALID_NUMBER_RANGE);
 
     // NUM2BIN must not generate oversized push.
-    valtype largezero(MAX_SCRIPT_ELEMENT_SIZE, 0);
-    BOOST_CHECK_EQUAL(largezero.size(), MAX_SCRIPT_ELEMENT_SIZE);
+    valtype largezero(MAX_SCRIPT_ELEMENT_SIZE_LEGACY, 0);
+    BOOST_CHECK_EQUAL(largezero.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
     CheckTypeConversionOp(largezero, {});
 
     CheckNum2BinError({{}, {0x09, 0x02}}, ScriptError::PUSH_SIZE);

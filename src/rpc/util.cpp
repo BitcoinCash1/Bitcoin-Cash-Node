@@ -1,5 +1,5 @@
 // Copyright (c) 2017 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -82,11 +82,13 @@ CScript CreateMultisigRedeemscript(const int required,
 
     CScript result = GetScriptForMultisig(required, pubkeys);
 
-    if (result.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+    // Note: We use the legacy limit of 520 bytes for the redeemScript here, since that should be enough for all
+    // consensus-valid multisig scripts.
+    if (result.size() > MAX_SCRIPT_ELEMENT_SIZE_LEGACY) {
         throw JSONRPCError(
             RPC_INVALID_PARAMETER,
             (strprintf("redeemScript exceeds size limit: %d > %d",
-                       result.size(), MAX_SCRIPT_ELEMENT_SIZE)));
+                       result.size(), MAX_SCRIPT_ELEMENT_SIZE_LEGACY)));
     }
 
     return result;

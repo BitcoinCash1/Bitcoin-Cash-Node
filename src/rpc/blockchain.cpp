@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2023 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -2827,7 +2827,7 @@ static UniValue fillmempool(const Config &config, const JSONRPCRequest &request)
         UTXOList ret;
         assert(fanoutSize > 0);
         CMutableTransaction tx;
-        const CScript script_sig = CScript() << std::vector<uint8_t>(GetRandInt(MAX_SCRIPT_ELEMENT_SIZE)) // pad txn
+        const CScript script_sig = CScript() << std::vector<uint8_t>(GetRandInt(MAX_SCRIPT_ELEMENT_SIZE_LEGACY)) // pad txn
                                              << std::vector<uint8_t>(redeem_script.begin(), redeem_script.end());
         tx.vin.emplace_back(txoIn.first, script_sig);
         const auto &amt_in = txoIn.second;

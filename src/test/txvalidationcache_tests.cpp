@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -59,7 +59,7 @@ BOOST_FIXTURE_TEST_CASE(tx_mempool_block_doublespend, TestChain100Setup) {
         // Sign:
         std::vector<uint8_t> vchSig;
         uint256 hash = SignatureHash(scriptPubKey, ScriptExecutionContext{0, m_coinbase_txns[0]->vout[0], spends[i]},
-                                     SigHashType().withFork(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                     SigHashType().withFork(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         spends[i].vin[0].scriptSig << vchSig;
@@ -193,8 +193,8 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
 
     CBasicKeyStore keystore;
     BOOST_CHECK(keystore.AddKey(coinbaseKey));
-    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, false /*=p2sh20*/));
-    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, true /*=p2sh32*/));
+    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, false /*=p2sh20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore.AddCScript(p2pk_scriptPubKey, true /*=p2sh32*/, false /* legacy vm limits */));
 
     CMutableTransaction funding_tx;
     // Needed when spending the output of this transaction
@@ -214,7 +214,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         std::vector<uint8_t> fundingVchSig;
         const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx};
         uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(),
-                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx.vin[0].scriptSig << fundingVchSig;
@@ -354,7 +354,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         std::vector<uint8_t> vchSig;
         const ScriptExecutionContext limited_context{0, spend_tx.vout[1], invalid_with_cltv_tx};
         uint256 hash = SignatureHash(spend_tx.vout[1].scriptPubKey, limited_context, SigHashType().withFork(),
-                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         invalid_with_cltv_tx.vin[0].scriptSig = CScript() << vchSig << ScriptInt::fromIntUnchecked(101);
@@ -392,7 +392,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         std::vector<uint8_t> vchSig;
         const ScriptExecutionContext limited_context{0, spend_tx.vout[2], invalid_with_csv_tx};
         uint256 hash = SignatureHash(spend_tx.vout[2].scriptPubKey, limited_context, SigHashType().withFork(),
-                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                     nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(hash, vchSig));
         vchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         invalid_with_csv_tx.vin[0].scriptSig = CScript() << vchSig << ScriptInt::fromIntUnchecked(101);
@@ -579,7 +579,7 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         BOOST_CHECK(scriptchecks[0]());
         BOOST_CHECK_EQUAL(scriptchecks[0].GetScriptError(), ScriptError::OK);
         BOOST_CHECK_EQUAL(
-            scriptchecks[0].GetScriptExecutionMetrics().nSigChecks, 1);
+            scriptchecks[0].GetScriptExecutionMetrics().GetSigChecks(), 1);
         // The second check does fail
         BOOST_CHECK(!scriptchecks[1]());
         BOOST_CHECK_EQUAL(scriptchecks[1].GetScriptError(),

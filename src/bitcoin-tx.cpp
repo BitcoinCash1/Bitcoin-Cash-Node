@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2019 The Bitcoin Core developers
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -33,6 +33,9 @@
 static bool fCreateBlank;
 static std::map<std::string, UniValue> registers;
 static const int CONTINUE_EXECUTION = -1;
+static constexpr bool fChipVmLimitsEnabled = STANDARD_SCRIPT_VERIFY_FLAGS & SCRIPT_ENABLE_MAY2025;
+static constexpr auto MaxScriptElementSize = fChipVmLimitsEnabled ? may2025::MAX_SCRIPT_ELEMENT_SIZE
+                                                                  : MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
 
 const std::function<std::string(const char *)> G_TRANSLATION_FUN = nullptr;
 
@@ -416,10 +419,10 @@ static void MutateTxAddOutMultiSig(CMutableTransaction &tx,
     CScript scriptPubKey = GetScriptForMultisig(required, pubkeys);
 
     if (bScriptHash) {
-        if (scriptPubKey.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+        if (scriptPubKey.size() > MaxScriptElementSize) {
             throw std::runtime_error(
                 strprintf("redeemScript exceeds size limit: %d > %d",
-                          scriptPubKey.size(), MAX_SCRIPT_ELEMENT_SIZE));
+                          scriptPubKey.size(), MaxScriptElementSize));
         }
         // Get the ID for the script, and then construct a P2SH destination for
         // it.
@@ -489,10 +492,10 @@ static void MutateTxAddOutScript(CMutableTransaction &tx, const std::string &str
     }
 
     if (bScriptHash) {
-        if (scriptPubKey.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+        if (scriptPubKey.size() > MaxScriptElementSize) {
             throw std::runtime_error(
                 strprintf("redeemScript exceeds size limit: %d > %d",
-                          scriptPubKey.size(), MAX_SCRIPT_ELEMENT_SIZE));
+                          scriptPubKey.size(), MaxScriptElementSize));
         }
         scriptPubKey = GetScriptForDestination(ScriptID(scriptPubKey, false /* no p2sh_32 */));
     }
@@ -680,7 +683,7 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
             if (auto redeemScriptUV = prevOut.locate("redeemScript")) {
                 std::vector<uint8_t> rsData(ParseHexUV(*redeemScriptUV, "redeemScript"));
                 CScript redeemScript(rsData.begin(), rsData.end());
-                tempKeystore.AddCScript(redeemScript, is_p2sh32);
+                tempKeystore.AddCScript(redeemScript, is_p2sh32, fChipVmLimitsEnabled);
             }
         }
     }

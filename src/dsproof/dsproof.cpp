@@ -1,6 +1,6 @@
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
 // Copyright (C) 2020 Calin Culianu <calin.culianu@gmail.com>
-// Copyright (c) 2021 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,7 +25,7 @@ void DoubleSpendProof::setHash()
     m_hash = SerializeHash(*this);
 }
 
-void DoubleSpendProof::checkSanityOrThrow() const
+void DoubleSpendProof::checkSanityOrThrow(uint32_t scriptFlags) const
 {
     if (isEmpty())
         throw std::runtime_error("DSProof is empty");
@@ -35,8 +35,8 @@ void DoubleSpendProof::checkSanityOrThrow() const
         // Message must contain exactly 1 pushData
         if (pushData->size() != 1)
             throw std::runtime_error("DSProof must contain exactly 1 pushData");
-        // Script data must be within size limits (520 bytes)
-        if (!pushData->empty() && pushData->front().size() > MaxPushDataSize)
+        // Script data must be within size limits (520 bytes or 10,000 bytes depending on scriptFlags)
+        if (!pushData->empty() && pushData->front().size() > DetermineMaxPushDataSize(scriptFlags))
             throw std::runtime_error("DSProof script size limit exceeded");
     }
     if (m_spender1 == m_spender2)

@@ -1,5 +1,5 @@
 // Copyright (c) 2017 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(psbt_updater_test) {
                  "dae4dba2fbfef536d752ae"),
         SER_NETWORK, PROTOCOL_VERSION);
     s_rs1 >> rs1;
-    m_wallet.AddCScript(rs1, false /*=p2sh_20*/); // no p2sh_32 in wallet
+    m_wallet.AddCScript(rs1, false /*=p2sh_20*/, false); // no p2sh_32 in wallet, use legacy vm limits in wallet
 
     CScript rs2;
     CDataStream s_rs2(
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(psbt_updater_test) {
                  "6151926860221f0e7352ae"),
         SER_NETWORK, PROTOCOL_VERSION);
     s_rs2 >> rs2;
-    m_wallet.AddCScript(rs2, false /*=p2sh_20*/); // no p2sh_32 in wallet
+    m_wallet.AddCScript(rs2, false /*=p2sh_20*/, false); // no p2sh_32 in wallet, use legacy vm limits in wallet
 
     // Add hd seed
     // Mainnet and uncompressed form of

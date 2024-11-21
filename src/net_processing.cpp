@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -3744,7 +3744,9 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
         // script data object, and thus, the maximum size any matched object can
         // have) in a filteradd message.
         bool bad = false;
-        if (vData.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+        // NOTE: We use MAX_SCRIPT_ELEMENT_SIZE_LEGACY here even if the more geneous VM limits are enabled because of
+        // the current p2p protocol spec. Add a FILTERADD2 message to support larger scripts, if the need arises.
+        if (vData.size() > MAX_SCRIPT_ELEMENT_SIZE_LEGACY) {
             bad = true;
         } else {
             LOCK(pfrom->cs_filter);

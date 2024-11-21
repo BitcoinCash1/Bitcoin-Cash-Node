@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2023 The Bitcoin developers
+// Copyright (c) 2022-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -417,7 +417,7 @@ BOOST_AUTO_TEST_CASE(txout_compressor_edge_case) {
     BOOST_TEST_MESSAGE("Check that 520 sized token commitment + 100000 byte spk is ok");
     token::WrappedScriptPubKey wspk;
     auto vec = ParseHex("ef1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d70fd0802"
-                        + std::string(MAX_SCRIPT_ELEMENT_SIZE * 2, 'c') + "fc"
+                        + std::string(MAX_SCRIPT_ELEMENT_SIZE_LEGACY * 2, 'c') + "fc"
                         + std::string(MAX_SCRIPT_SIZE * 2, 'd'));
     wspk.assign(vec.begin(), vec.end());
     BOOST_CHECK_GT(vec.size(), MAX_SCRIPT_SIZE);
@@ -426,7 +426,7 @@ BOOST_AUTO_TEST_CASE(txout_compressor_edge_case) {
     token::UnwrapScriptPubKey(wspk, pdata, spk, INIT_PROTO_VERSION, true);
     BOOST_CHECK(bool(pdata));
     BOOST_CHECK_EQUAL(spk.size(), MAX_SCRIPT_SIZE);
-    BOOST_CHECK_EQUAL(HexStr(pdata->GetCommitment()), std::string(MAX_SCRIPT_ELEMENT_SIZE * 2, 'c'));
+    BOOST_CHECK_EQUAL(HexStr(pdata->GetCommitment()), std::string(MAX_SCRIPT_ELEMENT_SIZE_LEGACY * 2, 'c'));
     BOOST_CHECK_EQUAL(HexStr(pdata->GetId()), "1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d");
     BOOST_CHECK_EQUAL(int(pdata->GetCapability()), int(token::Capability::None));
     BOOST_CHECK(pdata->HasAmount() && pdata->GetAmount().getint64() == 252LL);
@@ -855,7 +855,7 @@ BOOST_AUTO_TEST_CASE(check_consensus_misc_activation) {
     };
     const CTransaction outOfConsensusCommitmentTokenDataTx = MakeOversizedCommitmentTx(
                                                                  token::MAX_CONSENSUS_COMMITMENT_LENGTH + 1);
-    const CTransaction outOfConsensusCommitmentTokenDataTx2 = MakeOversizedCommitmentTx(MAX_SCRIPT_ELEMENT_SIZE * 2);
+    const CTransaction outOfConsensusCommitmentTokenDataTx2 = MakeOversizedCommitmentTx(MAX_SCRIPT_ELEMENT_SIZE_LEGACY * 2);
     const CTransaction badTokenOutputDataTx = [&coins]{
         CMutableTransaction tx;
         const auto randhash = InsecureRand256();
@@ -1384,7 +1384,8 @@ static CMutableTransaction CreateAndSignTx(const CKey senderKey, const CTransact
     // Sign the transaction
     CBasicKeyStore keystore;
     keystore.AddKey(senderKey);
-    keystore.AddCScript(GetScriptForRawPubKey(senderKey.GetPubKey()), false /* not p2sh_32 */); // support p2sh wrapping p2pk for this key
+    // support p2sh wrapping p2pk for this key
+    keystore.AddCScript(GetScriptForRawPubKey(senderKey.GetPubKey()), false /* not p2sh_32 */, false /* legacy vm limits */);
     BOOST_CHECK(SignSignature(keystore, *inputTx, tx, 0, SigHashType().withFork(),
                               scriptFlags,
                               ScriptExecutionContext{0u, inputCoin, tx}));
@@ -1658,18 +1659,18 @@ BOOST_FIXTURE_TEST_CASE(sighash_utxos_test, TestChain100Setup) {
             BOOST_REQUIRE_THROW(SignatureHash(p2pk_scriptPubKey, limited_context, sigHashType, nullptr, signingFlags),
                                 SignatureHashMissingUtxoDataError);
             // But a full context does work.
-            sigHash = SignatureHash(p2pk_scriptPubKey, real_contexts[inp], sigHashType, nullptr, signingFlags);
+            sigHash = SignatureHash(p2pk_scriptPubKey, real_contexts[inp], sigHashType, nullptr, signingFlags).signatureHash;
 
             // Also get a sighash without the flag to test that it is indeed different
             sigHashNoUtxos = SignatureHash(p2pk_scriptPubKey, real_contexts[inp], sigHashType.withUtxos(false), nullptr,
-                                           signingFlags);
+                                           signingFlags).signatureHash;
             BOOST_CHECK(sigHashNoUtxos != sigHash);
 
             // Get a sighash but with SCRIPT_ENABLE_TOKENS disabled while the sighash type is still set to .withUtxos().
             // This "works" but yields a different, nonsensical signature hash not equivalent to the valid one.
             // (This codepath cannot happen in normal signing code, but is worth testing here)
             sigHashNoUtxos2 = SignatureHash(p2pk_scriptPubKey, real_contexts[inp], sigHashType, nullptr,
-                                           signingFlags & ~SCRIPT_ENABLE_TOKENS);
+                                           signingFlags & ~SCRIPT_ENABLE_TOKENS).signatureHash;
             BOOST_CHECK(sigHashNoUtxos2 != sigHash);
             BOOST_CHECK(sigHashNoUtxos2 != sigHashNoUtxos);
 

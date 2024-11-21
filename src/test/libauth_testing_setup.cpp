@@ -253,8 +253,10 @@ bool LibauthTestingSetup::RunScriptOnlyTest(const TestVector::Test &tv, bool sta
     if (!ret) {
         state.Invalid(false, REJECT_INVALID, ScriptErrorString(serror));
     }
-    BOOST_TEST_MESSAGE(strprintf("\"%s\" *scriptonly* eval input number: %i, nSigChecks: %i, result: %i, error: \"%s\"",
-                                 tv.ident, tv.inputNum, metrics.nSigChecks, ret, state.GetRejectReason()));
+    BOOST_TEST_MESSAGE(strprintf("\"%s\" *scriptonly* eval input number: %i, nSigChecks: %i, opCost: %i, hashIters: %i,"
+                                 " result: %i, error: \"%s\"",
+                                 tv.ident, tv.inputNum, metrics.GetSigChecks(), metrics.GetCompositeOpCost(flags),
+                                 metrics.GetHashDigestIterations(), ret, state.GetRejectReason()));
     return ret;
 }
 

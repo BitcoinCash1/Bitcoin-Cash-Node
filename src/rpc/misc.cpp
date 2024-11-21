@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -150,7 +150,8 @@ static UniValue createmultisig(const Config &config,
     const CScript inner = CreateMultisigRedeemscript(required, pubkeys);
     CBasicKeyStore keystore;
     const CTxDestination dest =
-        AddAndGetDestinationForScript(keystore, inner, output_type, false /* no p2sh32 */);
+        AddAndGetDestinationForScript(keystore, inner, output_type, false /* no p2sh32 */,
+                                      false /* use legacy vm limits for multisig */);
 
     UniValue::Object result;
     result.reserve(2);

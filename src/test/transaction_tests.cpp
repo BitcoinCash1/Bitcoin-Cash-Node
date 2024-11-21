@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2023 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -556,12 +556,12 @@ BOOST_AUTO_TEST_CASE(test_witness) {
     oneandthree.push_back(pubkey1);
     oneandthree.push_back(pubkey3);
     scriptMulti = GetScriptForMultisig(2, oneandthree);
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey1, false /*=p2sh_20*/));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey2, false /*=p2sh_20*/));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey1L, false /*=p2sh_20*/));
-    BOOST_CHECK(keystore.AddCScript(scriptPubkey2L, false /*=p2sh_20*/));
-    BOOST_CHECK(keystore.AddCScript(scriptMulti, false /*=p2sh_20*/));
-    BOOST_CHECK(keystore2.AddCScript(scriptMulti, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey1, false /*=p2sh_20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey2, false /*=p2sh_20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey1L, false /*=p2sh_20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore.AddCScript(scriptPubkey2L, false /*=p2sh_20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore.AddCScript(scriptMulti, false /*=p2sh_20*/, false /* legacy vm limits */));
+    BOOST_CHECK(keystore2.AddCScript(scriptMulti, false /*=p2sh_20*/, false /* legacy vm limits */));
     BOOST_CHECK(keystore2.AddKeyPubKey(key3, pubkey3));
 
     CTransactionRef output1, output2;
@@ -978,7 +978,7 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         std::vector<uint8_t> fundingVchSig;
         const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx_1};
         uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(),
-                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                               nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_1.vin[0].scriptSig << fundingVchSig;
@@ -1004,7 +1004,7 @@ BOOST_FIXTURE_TEST_CASE(checktxinput_test, TestChain100Setup) {
         std::vector<uint8_t> fundingVchSig;
         const ScriptExecutionContext limited_context{0, m_coinbase_txns[0]->vout[0], funding_tx_2};
         uint256 fundingSigHash = SignatureHash(p2pk_scriptPubKey, limited_context, SigHashType().withFork(), nullptr,
-                                               STANDARD_SCRIPT_VERIFY_FLAGS);
+                                               STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
         BOOST_CHECK(coinbaseKey.SignECDSA(fundingSigHash, fundingVchSig));
         fundingVchSig.push_back(uint8_t(SIGHASH_ALL | SIGHASH_FORKID));
         funding_tx_2.vin[0].scriptSig << fundingVchSig;

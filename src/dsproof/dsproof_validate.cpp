@@ -2,7 +2,7 @@
 // Copyright (C) 2020 Calin Culianu <calin.culianu@gmail.com>
 // Copyright (C) 2021 Fernando Pelliccioni <fpelliccioni@gmail.com>
 // Copyright (C) 2022 The Bitcoin developers
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +30,8 @@ public:
     }
 
     bool CheckSig(const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey, const CScript &scriptCode,
-                  uint32_t flags) const override {
+                  uint32_t flags, size_t *pbytesHashed) const override {
+        if (pbytesHashed) *pbytesHashed = 0;
         CPubKey pubkey(vchPubKey);
         if (!pubkey.IsValid())
             return false;
@@ -58,6 +59,7 @@ public:
         ss << m_txout.nValue << m_spender.outSequence << m_spender.hashOutputs;
         ss << m_spender.lockTime << (int32_t) m_spender.pushData.front().back();
         const uint256 sighash = ss.GetHash();
+        if (pbytesHashed) *pbytesHashed = ss.GetNumBytesWritten();
 
         if (vchSig.size() == 64)
             return pubkey.VerifySchnorr(sighash, vchSig);
@@ -82,9 +84,11 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
     AssertLockHeld(cs_main);
     AssertLockHeld(mempool.cs);
 
+    const uint32_t scriptFlags = GetMemPoolScriptFlags(::Params().GetConsensus(), ::ChainActive().Tip());
+
     try {
         // This ensures not empty and that all pushData vectors have exactly 1 item, among other things.
-        checkSanityOrThrow();
+        checkSanityOrThrow(scriptFlags);
     } catch (const std::runtime_error &e) {
         LogPrint(BCLog::DSPROOF, "DoubleSpendProof::%s: %s\n", __func__, e.what());
         return Invalid;
@@ -158,8 +162,6 @@ auto DoubleSpendProof::validate(const CTxMemPool &mempool, CTransactionRef spend
     DSPSignatureChecker checker1(this, m_spender1, txOut);
     ScriptError error;
     ScriptExecutionMetrics metrics; // dummy
-
-    const uint32_t scriptFlags = GetMemPoolScriptFlags(::Params().GetConsensus(), ::ChainActive().Tip());
 
     if ( ! VerifyScript(inScript, prevOutScript, scriptFlags, checker1, metrics, &error)) {
         LogPrint(BCLog::DSPROOF, "DoubleSpendProof failed validating first tx due to %s\n", ScriptErrorString(error));

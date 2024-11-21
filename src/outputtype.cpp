@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -49,9 +49,9 @@ std::vector<CTxDestination> GetAllDestinationsForKey(const CPubKey &key) {
 
 CTxDestination AddAndGetDestinationForScript(CKeyStore &keystore,
                                              const CScript &script,
-                                             OutputType type, bool is_p2sh32) {
+                                             OutputType type, bool is_p2sh32, bool chipVmLimitsEnabled) {
     // Add script to keystore
-    keystore.AddCScript(script, is_p2sh32);
+    keystore.AddCScript(script, is_p2sh32, chipVmLimitsEnabled);
     // Note that scripts over 520 bytes are not yet supported.
     switch (type) {
         case OutputType::LEGACY:

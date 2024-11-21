@@ -410,13 +410,13 @@ void CWallet::UpdateTimeFirstKey(int64_t nCreateTime) {
     }
 }
 
-bool CWallet::AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32) {
+bool CWallet::AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32, bool chipVmLimitsEnabled) {
     if (is_p2sh_32) {
         // Warn of internal invalid usage
         WalletLogPrintf("WARNING: p2sh_32 is not currently supported in wallet in %s\n", __func__);
         return false;
     }
-    if (!CCryptoKeyStore::AddCScript(redeemScript, is_p2sh_32)) {
+    if (!CCryptoKeyStore::AddCScript(redeemScript, is_p2sh_32, chipVmLimitsEnabled)) {
         return false;
     }
     if (batch.WriteCScript(Hash160(redeemScript), redeemScript)) {
@@ -426,29 +426,29 @@ bool CWallet::AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScrip
     return false;
 }
 
-bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32) {
+bool CWallet::AddCScript(const CScript &redeemScript, bool is_p2sh_32, bool chipVmLimitsEnabled) {
     WalletBatch batch(*database);
-    return AddCScriptWithBatch(batch, redeemScript, is_p2sh_32);
+    return AddCScriptWithBatch(batch, redeemScript, is_p2sh_32, chipVmLimitsEnabled);
 }
 
-bool CWallet::LoadCScript(const CScript &redeemScript) {
+bool CWallet::LoadCScript(const CScript &redeemScript, bool chipVmLimitsEnabled) {
     /**
      * A sanity check was added in pull #3843 to avoid adding redeemScripts that
      * never can be redeemed. However, old wallets may still contain these. Do
      * not add them to the wallet and warn.
      */
-    if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
+    if (const auto maxSz = chipVmLimitsEnabled ? may2025::MAX_SCRIPT_ELEMENT_SIZE : MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
+        redeemScript.size() > maxSz) {
         std::string strAddr =
             EncodeDestination(ScriptID(redeemScript, false /* no p2sh_32 in wallet */), GetConfig());
         WalletLogPrintf("%s: Warning: This wallet contains a redeemScript "
                         "of size %i which exceeds maximum size %i thus can "
                         "never be redeemed. Do not use address %s.\n",
-                        __func__, redeemScript.size(), MAX_SCRIPT_ELEMENT_SIZE,
-                        strAddr);
+                        __func__, redeemScript.size(), maxSz, strAddr);
         return true;
     }
 
-    return CCryptoKeyStore::AddCScript(redeemScript, false /* no p2sh_32 in wallet */);
+    return CCryptoKeyStore::AddCScript(redeemScript, false /* no p2sh_32 in wallet */, chipVmLimitsEnabled);
 }
 
 bool CWallet::AddWatchOnly(const CScript &dest) {

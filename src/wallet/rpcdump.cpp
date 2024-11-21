@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -257,7 +257,8 @@ static void ImportScript(CWallet *const pwallet, const CScript &script,
 
     if (isRedeemScript) {
         const ScriptID id(script, false /* no p2sh_32 in wallet */);
-        if (!pwallet->HaveCScript(id) && !pwallet->AddCScript(script, false /* no p2sh_32 in wallet */)) {
+        if (!pwallet->HaveCScript(id) && !pwallet->AddCScript(script, false /* no p2sh_32 in wallet */,
+                                                              false /* legacy vm limits in wallet */)) {
             throw JSONRPCError(RPC_WALLET_ERROR,
                                "Error adding p2sh redeemScript to wallet");
         }
@@ -763,7 +764,8 @@ UniValue importwallet(const Config &config, const JSONRPCRequest &request) {
                     HexStr(script));
                 continue;
             }
-            if (!pwallet->AddCScriptWithBatch(batch, script, false /* no p2sh_32 in wallet */)) {
+            if (!pwallet->AddCScriptWithBatch(batch, script, false /* no p2sh_32 in wallet */,
+                                              false /* legacy vm limits in wallet */)) {
                 pwallet->WalletLogPrintf("Error importing script %s\n",
                                          HexStr(script));
                 fGood = false;
@@ -1116,7 +1118,8 @@ static UniValue ProcessImport(CWallet *const pwallet, const UniValue &data,
 
             const ScriptID redeem_id(redeemScript, false /* no p2sh_32 in wallet */);
             if (!pwallet->HaveCScript(redeem_id) &&
-                !pwallet->AddCScript(redeemScript, false /* no p2sh_32 in wallet */)) {
+                !pwallet->AddCScript(redeemScript, false /* no p2sh_32 in wallet */,
+                                     false /* legacy vm limits in wallet */)) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    "Error adding p2sh redeemScript to wallet");
             }
