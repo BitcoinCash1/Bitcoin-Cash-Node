@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -387,7 +387,7 @@ static bool ReadKeyValue(CWallet *pwallet, CDataStream &ssKey,
             ssKey >> hash;
             CScript script;
             ssValue >> script;
-            if (!pwallet->LoadCScript(script)) {
+            if (!pwallet->LoadCScript(script, /* chipVmLimitsEnabled = */ false)) { // NB: wallet doesn't currently support >520 B scripts
                 strErr = "Error reading wallet database: LoadCScript failed";
                 return false;
             }

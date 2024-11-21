@@ -1,5 +1,5 @@
 // Copyright (c) 2012-2016 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -52,6 +52,7 @@ static bool Verify(const CScript &scriptSig, const CScript &scriptPubKey,
 BOOST_FIXTURE_TEST_SUITE(script_p2sh_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(sign) {
+    const bool targetedVmLimitsEnabled = false; /* Use legacy VM limits for this test. */
     // This tests both regular p2sh (hash160) and p2sh_32 (hash256).
     for (const bool is_p2sh_32 : {false, true}) {
         const uint32_t flags = is_p2sh_32 ? STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32
@@ -80,7 +81,7 @@ BOOST_AUTO_TEST_CASE(sign) {
         standardScripts[3] = GetScriptForDestination(key[2].GetPubKey().GetID());
         CScript evalScripts[4];
         for (int i = 0; i < 4; i++) {
-            BOOST_CHECK(keystore.AddCScript(standardScripts[i], is_p2sh_32));
+            BOOST_CHECK(keystore.AddCScript(standardScripts[i], is_p2sh_32, targetedVmLimitsEnabled));
             evalScripts[i] = GetScriptForDestination(ScriptID(standardScripts[i], is_p2sh_32));
         }
 
@@ -172,6 +173,7 @@ BOOST_AUTO_TEST_CASE(norecurse) {
 }
 
 BOOST_AUTO_TEST_CASE(set) {
+    const bool targetedVmLimitsEnabled = false; /* Use legacy VM limits for this test. */
     // This tests p2sh_20 and p2sh_32 as well.
     for (const bool is_p2sh_32 : {false, true}) {
         const uint32_t flags = is_p2sh_32 ? STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32
@@ -200,7 +202,7 @@ BOOST_AUTO_TEST_CASE(set) {
         CScript outer[4];
         for (int i = 0; i < 4; i++) {
             outer[i] = GetScriptForDestination(ScriptID(inner[i], is_p2sh_32));
-            BOOST_CHECK(keystore.AddCScript(inner[i], is_p2sh_32));
+            BOOST_CHECK(keystore.AddCScript(inner[i], is_p2sh_32, targetedVmLimitsEnabled));
         }
 
         // Funding transaction:
@@ -467,6 +469,7 @@ BOOST_AUTO_TEST_CASE(switchover) {
 }
 
 BOOST_AUTO_TEST_CASE(AreInputsStandard) {
+    const bool targetedVmLimitsEnabled = false; /* Use legacy VM limits for this test. */
     // This tests p2sh_20 and p2sh_32 as well.
     for (const bool is_p2sh_32 : {false, true}) {
         const uint32_t flags = is_p2sh_32 ? STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32
@@ -491,7 +494,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard) {
 
         // First three are standard:
         CScript pay1 = GetScriptForDestination(key[0].GetPubKey().GetID());
-        BOOST_CHECK(keystore.AddCScript(pay1, is_p2sh_32));
+        BOOST_CHECK(keystore.AddCScript(pay1, is_p2sh_32, targetedVmLimitsEnabled));
         CScript pay1of3 = GetScriptForMultisig(1, keys);
 
         // P2SH (OP_CHECKSIG)
@@ -515,7 +518,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard) {
                   << ToByteVector(key[4].GetPubKey())
                   << ToByteVector(key[5].GetPubKey());
         oneAndTwo << OP_3 << OP_CHECKMULTISIG;
-        BOOST_CHECK(keystore.AddCScript(oneAndTwo, is_p2sh_32));
+        BOOST_CHECK(keystore.AddCScript(oneAndTwo, is_p2sh_32, targetedVmLimitsEnabled));
         txFrom.vout[3].scriptPubKey = GetScriptForDestination(ScriptID(oneAndTwo, is_p2sh_32));
         txFrom.vout[3].nValue = 4000 * SATOSHI;
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -147,11 +147,11 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
 
         uint256 shref = SignatureHashOld(scriptCode, CTransaction(txTo), nIn, nHashType);
         const ScriptExecutionContext limitedContext{unsigned(nIn), CTxOut{Amount::zero(), scriptCode}, txTo};
-        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0);
+        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0).signatureHash;
         BOOST_CHECK(shold == shref);
 
         // Check the impact of the fork flag.
-        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
+        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID).signatureHash;
         if (sigHashType.hasFork()) {
             BOOST_CHECK(nHashType & SIGHASH_FORKID);
             BOOST_CHECK(shreg != shref);
@@ -232,10 +232,10 @@ BOOST_AUTO_TEST_CASE(sighash_from_data) {
         }
 
         const ScriptExecutionContext limitedContext{unsigned(nIn), CTxOut{Amount::zero(), scriptCode}, *tx};
-        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
+        uint256 shreg = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, SCRIPT_ENABLE_SIGHASH_FORKID).signatureHash;
         BOOST_CHECK_MESSAGE(shreg.GetHex() == sigHashRegHex, strTest);
 
-        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0);
+        uint256 shold = SignatureHash(scriptCode, limitedContext, sigHashType, nullptr, 0).signatureHash;
         BOOST_CHECK_MESSAGE(shold.GetHex() == sigHashOldHex, strTest);
     }
 }

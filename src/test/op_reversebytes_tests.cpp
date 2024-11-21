@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(op_reversebytes_random_and_palindrome) {
     }
 
     // Test every possible stack item size.
-    for (uint32_t datasize = 0; datasize < MAX_SCRIPT_ELEMENT_SIZE;
+    for (uint32_t datasize = 0; datasize < MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
          ++datasize) {
         // Generate random data.
         valtype random_data;

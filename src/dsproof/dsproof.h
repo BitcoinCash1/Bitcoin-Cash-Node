@@ -1,6 +1,6 @@
 // Copyright (C) 2019-2020 Tom Zander <tomz@freedommail.ch>
 // Copyright (C) 2020-2021 Calin Culianu <calin.culianu@gmail.com>
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #pragma once
@@ -10,6 +10,7 @@
 #include <primitives/transaction.h>
 #include <primitives/txid.h>
 #include <script/script.h>
+#include <script/script_flags.h>
 #include <serialize.h>
 #include <sync.h> // for thread safety macros
 
@@ -19,7 +20,10 @@ class DoubleSpendProof
 {
 public:
     //! Limit for the size of a `pushData` vector below
-    static constexpr size_t MaxPushDataSize = MAX_SCRIPT_ELEMENT_SIZE;
+    static constexpr size_t DetermineMaxPushDataSize(uint32_t scriptFlags) {
+        return (scriptFlags & SCRIPT_ENABLE_MAY2025) ? may2025::MAX_SCRIPT_ELEMENT_SIZE
+                                                     : MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
+    }
 
     //! Creates an empty DoubleSpendProof
     DoubleSpendProof() = default;
@@ -38,7 +42,7 @@ public:
     //!     std::runtime_error if creation failed
     //!     std::invalid_argument if tx1.GetHash() == tx2.GetHash()
     //! (implemented in dsproof_create.cpp)
-    static DoubleSpendProof create(const CTransaction &tx1, const CTransaction &tx2,
+    static DoubleSpendProof create(uint32_t scriptFlags, const CTransaction &tx1, const CTransaction &tx2,
                                    const COutPoint &prevout, const CTxOut *txOut = nullptr);
 
     bool isEmpty() const;
@@ -162,7 +166,7 @@ private:
     /// - does not have exactly 1 pushData per spender vector
     /// - any pushData size >520 bytes
     /// Called from: `create()` and `validate()` (`validate()` won't throw but will return Invalid)
-    void checkSanityOrThrow() const;
+    void checkSanityOrThrow(uint32_t scriptFlags) const;
 
     //! Used by IsEnabled() and SetEnabled() static methods; default is: enabled (true)
     static bool s_enabled;

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,7 @@
 #include <crypto/common.h>
 #include <prevector.h>
 #include <script/script_error.h>
+#include <script/vm_limits.h> // for constants MAX_SCRIPT_SIZE, MAX_STACK_SIZE, etc
 #include <serialize.h>
 
 #include <cassert>
@@ -20,25 +21,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-// Maximum number of bytes pushable to the stack
-static constexpr unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520;
-
-// Maximum number of non-push operations per script
-static const int MAX_OPS_PER_SCRIPT = 201;
-
-// Maximum number of public keys per multisig
-static const int MAX_PUBKEYS_PER_MULTISIG = 20;
-
-// Maximum script length in bytes
-static const int MAX_SCRIPT_SIZE = 10000;
-
-// Maximum number of values on script interpreter stack
-static const int MAX_STACK_SIZE = 1000;
-
-// Threshold for nLockTime: below this value it is interpreted as block number,
-// otherwise as UNIX timestamp. Thresold is Tue Nov 5 00:53:20 1985 UTC
-static const uint32_t LOCKTIME_THRESHOLD = 500'000'000u;
 
 template <typename T> std::vector<uint8_t> ToByteVector(const T &in) {
     return std::vector<uint8_t>(in.begin(), in.end());
@@ -800,7 +782,7 @@ public:
     bool IsPushOnly() const;
 
     /** Check if the script contains valid OP_CODES */
-    bool HasValidOps() const;
+    bool HasValidOps(uint32_t scriptFlags) const;
 
     /**
      * Returns whether the script is guaranteed to fail at execution, regardless

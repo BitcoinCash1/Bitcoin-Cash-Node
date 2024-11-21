@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -83,7 +83,7 @@ std::vector<DoubleSpendProof> makeDupeProofs(unsigned num, uint64_t fuzz = 0) {
         mut.vout[0].nValue -= (i+1) * SATOSHI;
         CTransaction tx2(mut);
         BOOST_CHECK(tx1.GetHash() != tx2.GetHash());
-        ret.push_back( DoubleSpendProof::create(tx1, tx2, tx1.vin.at(0).prevout) );
+        ret.push_back( DoubleSpendProof::create(/* scriptFlags = */ 0, tx1, tx2, tx1.vin.at(0).prevout) );
         auto &proof = ret.back();
         BOOST_CHECK(!proof.isEmpty());
     }
@@ -388,7 +388,7 @@ BOOST_FIXTURE_TEST_CASE(dsproof_doublespend_mempool, EnsureClearedMempoolTestCha
             BOOST_CHECK(!state.IsValid());
             BOOST_CHECK_EQUAL(state.GetRejectReason(), "txn-mempool-conflict");
             BOOST_CHECK(state.HasDspId());
-            auto dsproof = DoubleSpendProof::create(CTransaction{spend2}, CTransaction{spend1},
+            auto dsproof = DoubleSpendProof::create(/* scriptFlags = */ 0, CTransaction{spend2}, CTransaction{spend1},
                                                     spend1.vin[0].prevout, &cbTxRef->vout[0]);
             BOOST_CHECK(!dsproof.isEmpty());
             auto val = dsproof.validate(g_mempool, {});

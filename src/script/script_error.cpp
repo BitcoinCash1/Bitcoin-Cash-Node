@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -118,6 +118,14 @@ const char *ScriptErrorString(const ScriptError serror) {
             return "The specified transaction input index is out of range";
         case ScriptError::INVALID_TX_OUTPUT_INDEX:
             return "The specified transaction output index is out of range";
+
+        // Targeted VM Limits Chip
+        case ScriptError::OP_COST:
+            return "VM cost limit exceeded";
+        case ScriptError::TOO_MANY_HASH_ITERS:
+            return "Hash iteration limit exceeded";
+        case ScriptError::CONDITIONAL_STACK_DEPTH:
+            return "Conditional depth limit exceeded";
 
         case ScriptError::UNKNOWN:
         case ScriptError::ERROR_COUNT:

@@ -1,5 +1,5 @@
 // Copyright (c) 2016-2018 The Bitcoin Core developers
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -97,7 +97,8 @@ static void VerifyBlockScripts(bool reallyCheckSigs,
 
     struct FakeSignaureChecker final : ContextOptSignatureChecker {
         bool VerifySignature(const std::vector<uint8_t> &, const CPubKey &, const uint256 &) const override { return true; }
-        bool CheckSig(const std::vector<uint8_t> &, const std::vector<uint8_t> &, const CScript &, uint32_t) const override { return true; }
+        bool CheckSig(const std::vector<uint8_t> &, const std::vector<uint8_t> &, const CScript &, uint32_t,
+                      size_t *) const override { return true; }
         bool CheckLockTime(const CScriptNum &) const override { return true; }
         bool CheckSequence(const CScriptNum &) const override { return true; }
         using ContextOptSignatureChecker::ContextOptSignatureChecker;

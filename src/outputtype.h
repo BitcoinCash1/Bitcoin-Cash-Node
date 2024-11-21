@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -44,4 +44,4 @@ std::vector<CTxDestination> GetAllDestinationsForKey(const CPubKey &key);
  */
 CTxDestination AddAndGetDestinationForScript(CKeyStore &keystore,
                                              const CScript &script, OutputType,
-                                             bool is_p2sh32);
+                                             bool is_p2sh32, bool chipVmLimitsEnabled);

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,7 +27,7 @@ bool TransactionSignatureCreator::CreateSig(const SigningProvider &provider, std
         return false;
     }
 
-    const uint256 hash = SignatureHash(scriptCode, context, sigHashType, nullptr, scriptFlags);
+    const auto & [hash, bytesHashed] = SignatureHash(scriptCode, context, sigHashType, nullptr, scriptFlags);
     if (!key.SignECDSA(hash, vchSig)) {
         return false;
     }
@@ -212,15 +212,15 @@ public:
         : sigdata(sigdata_), checker(checker_) {}
     bool CheckSig(const std::vector<uint8_t> &scriptSig,
                   const std::vector<uint8_t> &vchPubKey,
-                  const CScript &scriptCode, uint32_t flags) const override;
+                  const CScript &scriptCode, uint32_t flags, size_t *pBytesHashed) const override;
     const ScriptExecutionContext *GetContext() const override { return checker.GetContext(); }
 };
 
 bool SignatureExtractorChecker::CheckSig(const std::vector<uint8_t> &scriptSig,
                                          const std::vector<uint8_t> &vchPubKey,
                                          const CScript &scriptCode,
-                                         uint32_t flags) const {
-    if (checker.CheckSig(scriptSig, vchPubKey, scriptCode, flags)) {
+                                         uint32_t flags, size_t *pBytesHashed) const {
+    if (checker.CheckSig(scriptSig, vchPubKey, scriptCode, flags, pBytesHashed)) {
         CPubKey pubkey(vchPubKey);
         sigdata.signatures.emplace(std::piecewise_construct,
                                    std::forward_as_tuple(pubkey.GetID()),
@@ -293,7 +293,7 @@ SignatureData DataFromTransaction(const ScriptExecutionContext &context, const u
                 // We either have a signature for this pubkey, or we have found
                 // a signature and it is valid
                 if (data.signatures.count(CPubKey(pubkey).GetID()) ||
-                    extractor_checker.CheckSig(sig, pubkey, next_script, scriptFlags)) {
+                    extractor_checker.CheckSig(sig, pubkey, next_script, scriptFlags, nullptr)) {
                     last_success_key = i + 1;
                     break;
                 }
@@ -365,7 +365,8 @@ public:
     DummySignatureChecker() {}
     bool CheckSig(const std::vector<uint8_t> &scriptSig,
                   const std::vector<uint8_t> &vchPubKey,
-                  const CScript &scriptCode, uint32_t scriptFlags) const override {
+                  const CScript &scriptCode, uint32_t scriptFlags, size_t *pBytesHashed) const override {
+        if (pBytesHashed) *pBytesHashed = 0;
         return true;
     }
 };

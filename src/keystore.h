@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +30,7 @@ public:
 
     //! Support for BIP 0013 : see
     //! https://github.com/bitcoin/bips/blob/master/bip-0013.mediawiki
-    virtual bool AddCScript(const CScript &redeemScript, bool is_p2sh32) = 0;
+    virtual bool AddCScript(const CScript &redeemScript, bool is_p2sh32, bool chipVmLimitsEnabled) = 0;
     virtual std::set<ScriptID> GetCScripts() const = 0;
 
     //! Support for Watch-only addresses
@@ -65,7 +65,7 @@ public:
     bool HaveKey(const CKeyID &address) const override;
     std::set<CKeyID> GetKeys() const override;
     bool GetKey(const CKeyID &address, CKey &keyOut) const override;
-    bool AddCScript(const CScript &redeemScript, bool is_p2sh32) override;
+    bool AddCScript(const CScript &redeemScript, bool is_p2sh32, bool chipVmLimitsEnabled) override;
     bool HaveCScript(const ScriptID &hash) const override;
     std::set<ScriptID> GetCScripts() const override;
     bool GetCScript(const ScriptID &hash, CScript &redeemScriptOut) const override;

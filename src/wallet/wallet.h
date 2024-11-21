@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (c) 2018-2023 The Bitcoin developers
-// Copyright (c) 2023 The Bitcoin Cash Node developers
+// Copyright (c) 2024 The Bitcoin Cash Node developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1013,9 +1013,9 @@ public:
     //! LoadWallet)
     bool LoadCryptedKey(const CPubKey &vchPubKey,
                         const std::vector<uint8_t> &vchCryptedSecret);
-    bool AddCScript(const CScript &redeemScript, bool is_p2sh_32) override;
-    bool AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32);
-    bool LoadCScript(const CScript &redeemScript);
+    bool AddCScript(const CScript &redeemScript, bool is_p2sh_32, bool chipVmLimitsEnabled) override;
+    bool AddCScriptWithBatch(WalletBatch &batch, const CScript &redeemScript, bool is_p2sh_32, bool chipVmLimitsEnabled);
+    bool LoadCScript(const CScript &redeemScript, bool chipVmLimitsEnabled);
 
     //! Adds a destination data tuple to the store, and saves it to disk
     bool AddDestData(const CTxDestination &dest, const std::string &key,

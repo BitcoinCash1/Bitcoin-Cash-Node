@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2023 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -447,22 +447,22 @@ protected:
     std::atomic<int64_t> remaining;
 
 public:
-    CheckInputsLimiter(int64_t limit) : remaining(limit) {}
+    CheckInputsLimiter(int64_t limit) noexcept : remaining(limit) {}
 
-    bool consume_and_check(int consumed) {
+    bool consume_and_check(int64_t consumed) {
         auto newvalue = (remaining -= consumed);
         return newvalue >= 0;
     }
 
-    bool check() { return remaining >= 0; }
+    bool check() const { return remaining.load() >= 0; }
 };
 
 class TxSigCheckLimiter : public CheckInputsLimiter {
 public:
-    TxSigCheckLimiter() : CheckInputsLimiter(MAX_TX_SIGCHECKS) {}
+    TxSigCheckLimiter() noexcept : CheckInputsLimiter(MAX_TX_SIGCHECKS) {}
 
     // Let's make this bad boy copiable.
-    TxSigCheckLimiter(const TxSigCheckLimiter &rhs)
+    TxSigCheckLimiter(const TxSigCheckLimiter &rhs) noexcept
         : CheckInputsLimiter(rhs.remaining.load()) {}
 
     TxSigCheckLimiter &operator=(const TxSigCheckLimiter &rhs) {
@@ -599,7 +599,7 @@ public:
 
     ScriptError GetScriptError() const { return error; }
 
-    ScriptExecutionMetrics GetScriptExecutionMetrics() const { return metrics; }
+    const ScriptExecutionMetrics & GetScriptExecutionMetrics() const { return metrics; }
 };
 
 /** Functions for validating blocks and updating the block tree */
@@ -819,7 +819,7 @@ private:
 /// Global object to track the exact height when Upgrade 11 activated (may be needed for some consensus rules).
 extern ActivationBlockTracker g_upgrade11_block_tracker;
 
-/// Returns the script flags which are basically nextBlockScriptFlags | STANDARD_SCRIPT_VERIFY_FLAGS
+/// Returns the script flags which are basically nextBlockScriptFlags | STANDARD_SCRIPT_VERIFY_FLAGS | (maybe) SCRIPT_VM_LIMITS_STANDARD
 uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockIndex *pindex,
                                uint32_t *nextBlockFlags = nullptr /* out param: block flags without standard */);
 

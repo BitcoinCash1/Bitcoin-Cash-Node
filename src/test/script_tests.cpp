@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -100,6 +100,9 @@ static ScriptErrorDesc script_errors[] = {
     {ScriptError::MOD_BY_ZERO, "MOD_BY_ZERO"},
     {ScriptError::INVALID_BITFIELD_SIZE, "BITFIELD_SIZE"},
     {ScriptError::INVALID_BIT_RANGE, "BIT_RANGE"},
+    {ScriptError::OP_COST, "OP_COST"},
+    {ScriptError::TOO_MANY_HASH_ITERS, "HASH_ITERS"},
+    {ScriptError::CONDITIONAL_STACK_DEPTH, "CONDITIONAL_STACK_DEPTH"},
 };
 
 static const char *FormatScriptError(ScriptError err) {
@@ -162,7 +165,7 @@ static void DoTest(const CScript &scriptPubKey, const CScript &scriptSig,
         // anything about what happens when they are flipped. Keep them as-is.
         extra_flags &=
             ~(SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_ENABLE_SCHNORR_MULTISIG | SCRIPT_64_BIT_INTEGERS
-              | SCRIPT_NATIVE_INTROSPECTION | SCRIPT_ENABLE_TOKENS | SCRIPT_ENABLE_P2SH_32);
+              | SCRIPT_NATIVE_INTROSPECTION | SCRIPT_ENABLE_TOKENS | SCRIPT_ENABLE_P2SH_32 | SCRIPT_ENABLE_MAY2025);
         uint32_t combined_flags =
             expect ? (flags & ~extra_flags) : (flags | extra_flags);
         // Weed out invalid flag combinations.
@@ -356,7 +359,7 @@ public:
                  Amount amount = Amount::zero(),
                  uint32_t sigFlags = SCRIPT_ENABLE_SIGHASH_FORKID) {
         const ScriptExecutionContext limitedContext{0, CTxOut{amount, script}, spendTx};
-        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags);
+        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags).signatureHash;
         std::vector<uint8_t> vchSig = DoSignECDSA(key, hash, lenR, lenS);
         vchSig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
         DoPush(vchSig);
@@ -368,7 +371,7 @@ public:
                    Amount amount = Amount::zero(),
                    uint32_t sigFlags = SCRIPT_ENABLE_SIGHASH_FORKID) {
         const ScriptExecutionContext limitedContext{0, CTxOut{amount, script}, spendTx};
-        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags);
+        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags).signatureHash;
         std::vector<uint8_t> vchSig = DoSignSchnorr(key, hash);
         vchSig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
         DoPush(vchSig);
@@ -402,7 +405,7 @@ public:
         const ScriptExecutionContext limitedContext{0, CTxOut{amount, script}, spendTx};
         // This calculates a pubkey to verify with a given ECDSA transaction
         // signature.
-        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags);
+        uint256 hash = SignatureHash(script, limitedContext, sigHashType, nullptr, sigFlags).signatureHash;
 
         assert(rdata.size() <= 32);
         assert(sdata.size() <= 32);
@@ -2596,7 +2599,7 @@ static CScript sign_multisig(const CScript &scriptPubKey,
                              const std::vector<CKey> &keys,
                              const CTransaction &transaction) {
     const ScriptExecutionContext limitedContext{0, CTxOut{Amount::zero(), scriptPubKey}, transaction};
-    uint256 hash = SignatureHash(scriptPubKey, limitedContext, SigHashType(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+    const auto & [hash, nBytes] = SignatureHash(scriptPubKey, limitedContext, SigHashType(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
 
     CScript result;
     //
@@ -2812,7 +2815,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     // P2SH, single-signature case:
     CScript pkSingle;
     pkSingle << ToByteVector(keys[0].GetPubKey()) << OP_CHECKSIG;
-    BOOST_CHECK(keystore.AddCScript(pkSingle, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(pkSingle, false /*=p2sh_20*/, false /* legacy vm limits */));
     scriptPubKey = GetScriptForDestination(ScriptID(pkSingle, false /*=p2sh_20*/));
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(),
                               STANDARD_SCRIPT_VERIFY_FLAGS, context));
@@ -2830,7 +2833,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
                 combined.scriptSig == scriptSig.scriptSig);
 
     // P2SH_32, single-signature case:
-    BOOST_CHECK(keystore.AddCScript(pkSingle, true /*=p2sh_32*/));
+    BOOST_CHECK(keystore.AddCScript(pkSingle, true /*=p2sh_32*/, false /* legacy vm limits */));
     scriptPubKey = GetScriptForDestination(ScriptID(pkSingle, true /*=p2sh_32*/));
     BOOST_CHECK(!SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(),
                                STANDARD_SCRIPT_VERIFY_FLAGS & ~SCRIPT_ENABLE_P2SH_32, context));
@@ -2853,7 +2856,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
 
     // Hardest case:  Multisig 2-of-3
     scriptPubKey = GetScriptForMultisig(2, pubkeys);
-    BOOST_CHECK(keystore.AddCScript(scriptPubKey, false /*=p2sh_20*/));
+    BOOST_CHECK(keystore.AddCScript(scriptPubKey, false /*=p2sh_20*/, false /* legacy vm limits */));
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SigHashType().withFork(),
                               STANDARD_SCRIPT_VERIFY_FLAGS, context));
     scriptSig = DataFromTransaction(ScriptExecutionContext{0, txFrom.vout[0], txTo}, STANDARD_SCRIPT_VERIFY_FLAGS);
@@ -2866,19 +2869,19 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     std::vector<uint8_t> sig1;
     const ScriptExecutionContext limited_context{0, CTxOut{Amount::zero(), scriptPubKey}, txTo};
     uint256 hash1 = SignatureHash(scriptPubKey, limited_context, SigHashType().withFork(), nullptr,
-                                  STANDARD_SCRIPT_VERIFY_FLAGS);
+                                  STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
     BOOST_CHECK(keys[0].SignECDSA(hash1, sig1));
     sig1.push_back(SIGHASH_ALL | SIGHASH_FORKID);
     std::vector<uint8_t> sig2;
     uint256 hash2 = SignatureHash(scriptPubKey, limited_context,
                                   SigHashType().withBaseType(BaseSigHashType::NONE).withFork(),
-                                  nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                  nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
     BOOST_CHECK(keys[1].SignECDSA(hash2, sig2));
     sig2.push_back(SIGHASH_NONE | SIGHASH_FORKID);
     std::vector<uint8_t> sig3;
     uint256 hash3 = SignatureHash(scriptPubKey, limited_context,
                                   SigHashType().withBaseType(BaseSigHashType::SINGLE).withFork(),
-                                  nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+                                  nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
     BOOST_CHECK(keys[2].SignECDSA(hash3, sig3));
     sig3.push_back(SIGHASH_SINGLE | SIGHASH_FORKID);
 
@@ -2930,7 +2933,7 @@ BOOST_AUTO_TEST_CASE(script_standard_push) {
         BOOST_CHECK_MESSAGE(err == ScriptError::OK, ScriptErrorString(err));
     }
 
-    for (unsigned int i = 0; i <= MAX_SCRIPT_ELEMENT_SIZE; ++i) {
+    for (unsigned int i = 0; i <= MAX_SCRIPT_ELEMENT_SIZE_LEGACY; ++i) {
         std::vector<uint8_t> data(i, '\111');
         CScript script;
         script << data;
@@ -3231,24 +3234,24 @@ BOOST_AUTO_TEST_CASE(script_HasValidOps) {
     // Exercise the HasValidOps functionality
     // Normal script
     CScript script = ScriptFromHex("76a9141234567890abcdefa1a2a3a4a5a6a7a8a9a0aaab88ac");
-    BOOST_CHECK(script.HasValidOps());
+    BOOST_CHECK(script.HasValidOps(0));
     script = ScriptFromHex("76a914ff34567890abcdefa1a2a3a4a5a6a7a8a9a0aaab88ac");
-    BOOST_CHECK(script.HasValidOps());
+    BOOST_CHECK(script.HasValidOps(0));
     // Script with INVALIDOPCODE explicit
     script = ScriptFromHex("ff88ac");
-    BOOST_CHECK(!script.HasValidOps());
+    BOOST_CHECK(!script.HasValidOps(0));
     // Script with undefined opcode
     script = ScriptFromHex("88acd6");
-    BOOST_CHECK(!script.HasValidOps());
+    BOOST_CHECK(!script.HasValidOps(0));
 
     // Check all non push opcodes.
     for (uint8_t opcode = OP_1NEGATE; opcode < FIRST_UNDEFINED_OP_VALUE; ++opcode) {
         script = CScript() << ScriptInt::fromIntUnchecked(opcode);
-        BOOST_CHECK(script.HasValidOps());
+        BOOST_CHECK(script.HasValidOps(0));
     }
 
     script = CScript() << FIRST_UNDEFINED_OP_VALUE;
-    BOOST_CHECK(!script.HasValidOps());
+    BOOST_CHECK(!script.HasValidOps(0));
 }
 
 BOOST_AUTO_TEST_CASE(script_can_append_self) {

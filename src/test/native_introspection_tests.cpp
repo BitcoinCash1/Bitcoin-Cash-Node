@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -78,7 +78,7 @@ void CheckPassWithFlags(uint32_t flags, stacktype const& original_stack, CScript
 }
 
 static
-std::vector<uint8_t> MakeOversizedData(size_t targetSize = MAX_SCRIPT_ELEMENT_SIZE + 1) {
+std::vector<uint8_t> MakeOversizedData(size_t targetSize = MAX_SCRIPT_ELEMENT_SIZE_LEGACY + 1) {
     std::vector<uint8_t> ret;
     ret.reserve(targetSize);
     // fill with random bytes (32 bytes at a time since that is the limit of GetRandBytes())
@@ -99,12 +99,12 @@ CScript MakeOversizedScript(bool pushOnly = false) {
     CScript ret;
     if (pushOnly) {
         // for scriptSigs, "push only" -- keep pushing 32-byte blobs until we exceed the total size
-        while (ret.size() < MAX_SCRIPT_ELEMENT_SIZE + 1) {
+        while (ret.size() < MAX_SCRIPT_ELEMENT_SIZE_LEGACY + 1) {
             ret << MakeOversizedData(chunkSize);
         }
     } else {
         // for scriptPubKeys, keep pushing an untaken branch
-        while (ret.size() < MAX_SCRIPT_ELEMENT_SIZE + 1) {
+        while (ret.size() < MAX_SCRIPT_ELEMENT_SIZE_LEGACY + 1) {
             ret << OP_0 << OP_IF << MakeOversizedData(chunkSize) << OP_ENDIF;
         }
     }
@@ -727,7 +727,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         for (size_t token_containing_in = 0; token_containing_in < n_token_ins; ++token_containing_in) {
             const auto &tokenData = tokenInputData[token_containing_in];
             const auto script = CScript() << ScriptInt::fromIntUnchecked(token_containing_in) << OP_UTXOTOKENCOMMITMENT;
-            if (tokenData.GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE) {
+            if (tokenData.GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE_LEGACY) {
                 valtype expected;
                 if (tokenData.HasNFT()) {
                     expected = valtype(tokenData.GetCommitment().begin(), tokenData.GetCommitment().end());
@@ -856,7 +856,7 @@ BOOST_AUTO_TEST_CASE(opcodes_basic) {
         for (size_t i = 0; i < tx.vout.size(); ++i) {
             const auto &pdata = tx.vout[i].tokenDataPtr;
             const auto script = CScript() << ScriptInt::fromIntUnchecked(i) << OP_OUTPUTTOKENCOMMITMENT;
-            if (!pdata || pdata->GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE) {
+            if (!pdata || pdata->GetCommitment().size() <= MAX_SCRIPT_ELEMENT_SIZE_LEGACY) {
                 valtype expected{};
                 if (pdata && pdata->HasNFT()) {
                     expected.assign(pdata->GetCommitment().begin(), pdata->GetCommitment().end());

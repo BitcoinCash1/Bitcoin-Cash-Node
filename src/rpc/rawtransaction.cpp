@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2020-2023 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1069,6 +1069,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
     uint32_t scriptFlags = 0;
     int chainHeight;
     std::optional<int> upgrade9Height; // the first actual block height for upgrade9 rules, if unset, not activated
+    bool targetedVmLimitsEnabled = false;
     {
         LOCK2(cs_main, g_mempool.cs);
         CCoinsViewCache &viewChain = *pcoinsTip;
@@ -1092,6 +1093,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
         if (IsUpgrade9Enabled(params, tip)) {
             upgrade9Height = GetUpgrade9ActivationHeight(params) + 1;
         }
+        targetedVmLimitsEnabled = bool(scriptFlags & SCRIPT_ENABLE_MAY2025);
     }
 
     // Add previous txouts given in the RPC call:
@@ -1177,7 +1179,7 @@ UniValue::Object SignTransaction(interfaces::Chain &, CMutableTransaction &mtx, 
                                 });
                 std::vector<uint8_t> rsData(ParseHexO(prevOut, "redeemScript"));
                 CScript redeemScript(rsData.begin(), rsData.end());
-                keystore->AddCScript(redeemScript, isP2SH32);
+                keystore->AddCScript(redeemScript, isP2SH32, targetedVmLimitsEnabled);
             }
         }
     }

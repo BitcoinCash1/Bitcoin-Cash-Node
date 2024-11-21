@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,7 +27,7 @@ static CScript sign_multisig(const CScript &scriptPubKey,
                              const CMutableTransaction &tx, int whichIn) {
     const CTxOut fakeUtxo{Amount::zero(), scriptPubKey};
     const ScriptExecutionContext limitedContext{unsigned(whichIn), fakeUtxo, tx};
-    uint256 hash = SignatureHash(scriptPubKey, limitedContext, SigHashType(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS);
+    uint256 hash = SignatureHash(scriptPubKey, limitedContext, SigHashType(), nullptr, STANDARD_SCRIPT_VERIFY_FLAGS).signatureHash;
 
     CScript result;
     // CHECKMULTISIG bug workaround

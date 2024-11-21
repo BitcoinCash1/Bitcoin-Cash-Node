@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 The Bitcoin developers
+// Copyright (c) 2019-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -73,13 +73,18 @@ static class : public BaseSignatureChecker {
 
     bool CheckSig(const std::vector<uint8_t> &vchSigIn,
                   const std::vector<uint8_t> &vchPubKey,
-                  const CScript &scriptCode, uint32_t flags) const final {
+                  const CScript &scriptCode, uint32_t flags, size_t *) const final {
         if (vchPubKey == badpub) {
             return false;
         }
         return !vchSigIn.empty();
     }
 } dummysigchecker;
+
+struct TestableScriptExecutionMetrics : ScriptExecutionMetrics {
+    TestableScriptExecutionMetrics(int sigChecks = 0, int64_t opCost = 0, int64_t hashIters = 0)
+        : ScriptExecutionMetrics(sigChecks, opCost, hashIters) {}
+};
 
 // construct a 'checkbits' stack element for OP_CHECKMULTISIG (set lower m bits
 // to 1, but make sure it's at least n bits long).
@@ -121,7 +126,7 @@ static void CheckEvalScript(const stacktype &original_stack,
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(err, ScriptError::OK);
         BOOST_CHECK(stack == expected_stack);
-        BOOST_CHECK_EQUAL(metrics.nSigChecks, expected_sigchecks);
+        BOOST_CHECK_EQUAL(metrics.GetSigChecks(), expected_sigchecks);
     }
 }
 
@@ -244,23 +249,22 @@ BOOST_AUTO_TEST_CASE(test_evalscript) {
     // EvalScript cumulatively increases the sigchecks count.
     {
         stacktype stack{txsigschnorr};
-        ScriptExecutionMetrics metrics;
-        metrics.nSigChecks = 12345;
+        TestableScriptExecutionMetrics metrics(12345);
         bool r = EvalScript(stack, CScript() << pub << OP_CHECKSIG, SCRIPT_VERIFY_NONE, dummysigchecker, metrics);
         BOOST_CHECK(r);
-        BOOST_CHECK_EQUAL(metrics.nSigChecks, 12346);
+        BOOST_CHECK_EQUAL(metrics.GetSigChecks(), 12346);
     }
 
     // Other opcodes may be cryptographic and/or CPU intensive, but they do not
     // add any additional sigchecks.
     static_assert(
-        (MAX_SCRIPT_SIZE <= 10000 && MAX_OPS_PER_SCRIPT <= 201 &&
-         MAX_STACK_SIZE <= 1000 && MAX_SCRIPT_ELEMENT_SIZE <= 520),
+        (MAX_SCRIPT_SIZE <= 10000 && MAX_OPS_PER_SCRIPT_LEGACY <= 201 &&
+         MAX_STACK_SIZE <= 1000 && MAX_SCRIPT_ELEMENT_SIZE_LEGACY <= 520),
         "These can be made far worse with higher limits. Update accordingly.");
 
     // Hashing operations on the largest stack element.
     {
-        valtype bigblob(MAX_SCRIPT_ELEMENT_SIZE);
+        valtype bigblob(MAX_SCRIPT_ELEMENT_SIZE_LEGACY);
         CheckEvalScript({},
                         CScript()
                             << bigblob << OP_RIPEMD160 << bigblob << OP_SHA1
@@ -324,10 +328,9 @@ BOOST_AUTO_TEST_CASE(test_evalscript) {
 }
 
 void CheckVerifyScript(CScript scriptSig, CScript scriptPubKey, uint32_t flags, int expected_sigchecks) {
-    ScriptExecutionMetrics metricsRet;
-    metricsRet.nSigChecks = 12345 ^ expected_sigchecks;
+    TestableScriptExecutionMetrics metricsRet(12345 ^ expected_sigchecks);
     BOOST_CHECK(VerifyScript(scriptSig, scriptPubKey, flags, dummysigchecker, metricsRet));
-    BOOST_CHECK_EQUAL(metricsRet.nSigChecks, expected_sigchecks);
+    BOOST_CHECK_EQUAL(metricsRet.GetSigChecks(), expected_sigchecks);
 }
 
 #define CHECK_VERIFYSCRIPT(...)                                                \

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -73,11 +73,10 @@ bool CBasicKeyStore::GetKey(const CKeyID &address, CKey &keyOut) const {
     return false;
 }
 
-bool CBasicKeyStore::AddCScript(const CScript &redeemScript, bool is_p2sh32) {
-    if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
-        return error("CBasicKeyStore::AddCScript(): redeemScripts > %i bytes "
-                     "are invalid",
-                     MAX_SCRIPT_ELEMENT_SIZE);
+bool CBasicKeyStore::AddCScript(const CScript &redeemScript, bool is_p2sh32, bool chipVmLimitsEnabled) {
+    if (const size_t maxElemSz = chipVmLimitsEnabled ? may2025::MAX_SCRIPT_ELEMENT_SIZE : MAX_SCRIPT_ELEMENT_SIZE_LEGACY;
+        redeemScript.size() > maxElemSz) {
+        return error("CBasicKeyStore::AddCScript(): redeemScripts > %i bytes are invalid", maxElemSz);
     }
 
     LOCK(cs_KeyStore);
