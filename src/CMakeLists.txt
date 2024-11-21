@@ -493,6 +493,7 @@ target_link_libraries(common util secp256k1)
 
 # script library
 add_library(script
+  script/bigint.cpp
   script/bitfield.cpp
   script/descriptor.cpp
   script/interpreter.cpp
@@ -500,12 +501,16 @@ add_library(script
   script/script.cpp
   script/script_error.cpp
   script/script_execution_context.cpp
+  script/script_num_encoding.cpp
   script/sigencoding.cpp
   script/sign.cpp
   script/standard.cpp
 )
 
-target_link_libraries(script common)
+find_package(GMP 6.1.2 REQUIRED)
+# Note: the order here matters. gmpxx should appear before gmp.
+# See: https://stackoverflow.com/questions/10269464/gmp-library-compile-error-in-c-mingw-codeblocks
+target_link_libraries(script common GMP::gmpxx GMP::gmp)
 
 # libbitcoinconsensus
 add_library(bitcoinconsensus

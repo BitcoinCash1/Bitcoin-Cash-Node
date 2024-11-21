@@ -6,6 +6,7 @@
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 include(CheckCXXSourceCompiles)
+include(CheckCXXCompilerFlag)
 
 # Version
 set(CLIENT_VERSION_MAJOR ${bitcoin-cash-node_VERSION_MAJOR})
@@ -191,6 +192,8 @@ check_cxx_source_compiles("
       (void)p;
     }
 " STRERROR_R_CHAR_P)
+
+check_cxx_compiler_flag(-Wstringop-overflow HAVE_W_STRINGOP_OVERFLOW)
 
 #__fdelt_chk's params and return type have changed from long unsigned int to
 # long int. See which one is present here.

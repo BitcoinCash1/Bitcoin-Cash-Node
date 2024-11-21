@@ -70,6 +70,7 @@ apt-get -y install bison \
     libdb++-dev \
     libdb-dev \
     libevent-dev \
+    libgmp-dev \
     libminiupnpc-dev \
     libnatpmp-dev \
     libprotobuf-dev \

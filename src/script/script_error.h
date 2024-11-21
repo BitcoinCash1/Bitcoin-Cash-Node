@@ -95,6 +95,9 @@ enum class ScriptError {
     TOO_MANY_HASH_ITERS,
     CONDITIONAL_STACK_DEPTH,
 
+    /* Big Integers */
+    INVALID_NUMBER_RANGE_BIG_INT,
+
     ERROR_COUNT,
 };
 

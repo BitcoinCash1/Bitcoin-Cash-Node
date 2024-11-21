@@ -20,6 +20,7 @@ These dependencies are required:
 | help2man |  |  |  |  |  | Manpages | Optional, used for building manpages |
 | jemalloc | [5.2.1](https://github.com/jemalloc/jemalloc/releases) |  |  |  |  |
 | libevent | [2.1.12-stable](https://github.com/libevent/libevent/releases) | 2.0.22 | No |  |  |  Networking       | OS independent asynchronous networking |
+| libgmp | [6.3.0](https://gmplib.org/download/gmp/) | 6.1.2 | No |  |  |  Math       | Large integer support |
 | libjpeg |  |  |  |  | Yes |  |  |
 | libnatpmp | commit [07004b9...](https://github.com/miniupnp/libnatpmp/commit/07004b97cf691774efebe70404cf22201e4d330d) |  | No |  |  | NAT-PMP Support  | Firewall-jumping support |
 | libpng |  |  |  |  | Yes |  |  |

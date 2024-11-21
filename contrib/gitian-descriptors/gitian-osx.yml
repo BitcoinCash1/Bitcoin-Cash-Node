@@ -38,6 +38,7 @@ packages:
 - "libdb-dev"
 - "libdb++-dev"
 - "libevent-dev"
+- "libgmp-dev"
 - "libminiupnpc-dev"
 - "libprotobuf-dev"
 - "libqrencode-dev"

@@ -87,3 +87,6 @@
 
 /* Define to 1 if strerror_r returns char *. */
 #cmakedefine STRERROR_R_CHAR_P 1
+
+/* Define to 1 if compiler has -Wstringop-overflow (usually GCC) */
+#cmakedefine HAVE_W_STRINGOP_OVERFLOW 1

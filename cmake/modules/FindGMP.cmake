@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2020 The Bitcoin developers
+# Copyright (c) 2017-2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,7 @@
 #
 # Find the GNU Multiple Precision Arithmetic library. The following components
 # are available::
-#   gmp
+#   gmp gmpxx
 #
 # This will define the following variables::
 #
@@ -22,7 +22,7 @@
 #
 # And the following imported target::
 #
-#   GMP::gmp
+#   GMP::gmp GMP::gmpxx
 
 include(BrewHelper)
 find_brew_prefix(_GMP_BREW_HINT gmp)
@@ -79,6 +79,11 @@ if(GMP_INCLUDE_DIR)
 	include(ExternalLibraryHelper)
 	find_component(GMP gmp
 		NAMES gmp
+		HINTS ${_GMP_BREW_HINT}
+		INCLUDE_DIRS ${GMP_INCLUDE_DIRS}
+	)
+	find_component(GMP gmpxx
+		NAMES gmpxx
 		HINTS ${_GMP_BREW_HINT}
 		INCLUDE_DIRS ${GMP_INCLUDE_DIRS}
 	)

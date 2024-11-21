@@ -140,3 +140,6 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_
 }
 
 int FindAndDelete(CScript &script, const CScript &b);
+
+/** Used internally by interpreter.cpp but also exported here for use by tests. */
+bool CastToBool(const StackT::value_type &vch);

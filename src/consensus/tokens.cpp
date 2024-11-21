@@ -218,7 +218,7 @@ bool CheckTxTokens(const CTransaction &tx, CValidationState &state, const CCoins
             const int64_t amt = pdata->GetAmount().getint64();
 
             // find the category, and debit/credit the amount
-            using SafeAddMemberPtr = std::optional<token::SafeAmount> (token::SafeAmount::*)(int64_t) const;
+            using SafeAddMemberPtr = std::optional<token::SafeAmount> (token::SafeAmount::*)(const int64_t &) const;
             SafeAddMemberPtr pmember{}; // pointer to member either safeAdd or safeSub
             token::SafeAmount *tally{};
             bool isGenesis = false;

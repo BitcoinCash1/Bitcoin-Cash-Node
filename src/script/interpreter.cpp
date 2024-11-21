@@ -163,11 +163,15 @@ public:
 
     constexpr uint32_t size() const noexcept { return m_stack_size; }
 };
-} // namespace
 
-bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t flags,
-                const BaseSignatureChecker &checker, ScriptExecutionMetrics &metrics, ScriptError *serror) {
-    static auto const bnZero = CScriptNum::fromIntUnchecked(0);
+template<bool UsesBigInt>
+bool EvalScriptImpl(std::vector<valtype> &stack, const CScript &script, uint32_t flags,
+                    const BaseSignatureChecker &checker, ScriptExecutionMetrics &metrics, ScriptError *serror) {
+    // UsesBigInt template arg must match flags
+    assert(UsesBigInt == bool(flags & SCRIPT_ENABLE_MAY2025));
+    using ScriptNumType = std::conditional_t<UsesBigInt, ScriptBigInt, CScriptNum>;
+
+    static auto const bnZero = ScriptNumType::fromIntUnchecked(0);
     static const valtype vchFalse(0);
     static const valtype vchTrue(1, 1);
 
@@ -188,13 +192,18 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
     bool const nativeTokens = (flags & SCRIPT_ENABLE_TOKENS) != 0;
     const ScriptExecutionContext * const context = checker.GetContext();
 
-    size_t const maxIntegerSize = integers64Bit ?
-        CScriptNum::MAXIMUM_ELEMENT_SIZE_64_BIT :
-        CScriptNum::MAXIMUM_ELEMENT_SIZE_32_BIT;
+    size_t const maxIntegerSizeLegacy =
+        integers64Bit ? CScriptNum::MAXIMUM_ELEMENT_SIZE_64_BIT
+                      : CScriptNum::MAXIMUM_ELEMENT_SIZE_32_BIT;
 
-    ScriptError const invalidNumberRangeError = integers64Bit ?
-        ScriptError::INVALID_NUMBER_RANGE_64_BIT :
-        ScriptError::INVALID_NUMBER_RANGE;
+    size_t const maxIntegerSize = UsesBigInt ? ScriptBigInt::MAXIMUM_ELEMENT_SIZE_BIG_INT : maxIntegerSizeLegacy;
+
+    ScriptError const invalidNumberRangeErrorLegacy =
+        integers64Bit ? ScriptError::INVALID_NUMBER_RANGE_64_BIT
+                      : ScriptError::INVALID_NUMBER_RANGE;
+
+    ScriptError const invalidNumberRangeError = UsesBigInt ? ScriptError::INVALID_NUMBER_RANGE_BIG_INT
+                                                           : invalidNumberRangeErrorLegacy;
 
     bool const chipVmLimitsEnabled = (flags & SCRIPT_ENABLE_MAY2025) != 0;
     size_t const maxScriptElementSize = chipVmLimitsEnabled ? may2025::MAX_SCRIPT_ELEMENT_SIZE
@@ -619,7 +628,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 2) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        int64_t const n = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSize).getint64();
+                        int64_t const n = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         popstack(stack);
                         if (n < 0 || uint64_t(n) >= stack.size()) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
@@ -770,24 +779,24 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 1) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        CScriptNum bn(stacktop(-1), fRequireMinimal, maxIntegerSize);
+                        ScriptNumType bn(stacktop(-1), fRequireMinimal, maxIntegerSize);
                         uint32_t pushCostFactor = 2u; // all except OP_NOT and OP_0NOTEQUAL will be costed 2x
 
                         switch (opcode) {
                             case OP_1ADD: {
                                 auto res = bn.safeAdd(1);
                                 if ( ! res) {
-                                    return set_error(serror, ScriptError::INVALID_NUMBER_RANGE_64_BIT);
+                                    return set_error(serror, invalidNumberRangeError);
                                 }
-                                bn = *res;
+                                bn = std::move(*res);
                                 break;
                             }
                             case OP_1SUB: {
                                 auto res = bn.safeSub(1);
                                 if ( ! res) {
-                                    return set_error(serror, ScriptError::INVALID_NUMBER_RANGE_64_BIT);
+                                    return set_error(serror, invalidNumberRangeError);
                                 }
-                                bn = *res;
+                                bn = std::move(*res);
                                 break;
                             }
                             case OP_NEGATE:
@@ -799,11 +808,11 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                                 }
                                 break;
                             case OP_NOT:
-                                bn = CScriptNum::fromIntUnchecked(bn == bnZero);
+                                bn = ScriptNumType::fromIntUnchecked(bn == bnZero);
                                 pushCostFactor = 1u; // as per spec, this op gets costed 1x
                                 break;
                             case OP_0NOTEQUAL:
-                                bn = CScriptNum::fromIntUnchecked(bn != bnZero);
+                                bn = ScriptNumType::fromIntUnchecked(bn != bnZero);
                                 pushCostFactor = 1u; // as per spec, this op gets costed 1x
                                 break;
                             default:
@@ -811,7 +820,12 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                                 break;
                         }
                         popstack(stack);
-                        stack.push_back(bn.getvch());
+                        auto vch = bn.getvch();
+                        // belt-and-suspenders check (BigInt case only)
+                        if (UsesBigInt && vch.size() > maxScriptElementSize) {
+                            return set_error(serror, invalidNumberRangeError);
+                        }
+                        stack.push_back(std::move(vch));
                         metrics.TallyPushOp(stack.back().size() * pushCostFactor);
                     } break;
 
@@ -837,9 +851,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         }
                         const valtype &vch1 = stacktop(-2);
                         const valtype &vch2 = stacktop(-1);
-                        CScriptNum const bn1(vch1, fRequireMinimal, maxIntegerSize);
-                        CScriptNum const bn2(vch2, fRequireMinimal, maxIntegerSize);
-                        auto bn = CScriptNum::fromIntUnchecked(0);
+                        ScriptNumType const bn1(vch1, fRequireMinimal, maxIntegerSize);
+                        ScriptNumType const bn2(vch2, fRequireMinimal, maxIntegerSize);
+                        auto bn = ScriptNumType::fromIntUnchecked(0);
                         uint32_t quadraticOpCost = 0u; // for OP_MUL, OP_DIV, and OP_MOD
                         uint32_t pushCostFactor = 1u; // arithmetic and min/max ops below set this to 2x
                         constexpr uint64_t worstCaseSize = std::max(MAX_SCRIPT_ELEMENT_SIZE_LEGACY, may2025::MAX_SCRIPT_ELEMENT_SIZE);
@@ -850,9 +864,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                             case OP_ADD: {
                                 auto res = bn1.safeAdd(bn2);
                                 if ( ! res) {
-                                    return set_error(serror, ScriptError::INVALID_NUMBER_RANGE_64_BIT);
+                                    return set_error(serror, invalidNumberRangeError);
                                 }
-                                bn = *res;
+                                bn = std::move(*res);
                                 pushCostFactor = 2u;
                                 break;
                             }
@@ -860,9 +874,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                             case OP_SUB: {
                                 auto res = bn1.safeSub(bn2);
                                 if ( ! res) {
-                                    return set_error(serror, ScriptError::INVALID_NUMBER_RANGE_64_BIT);
+                                    return set_error(serror, invalidNumberRangeError);
                                 }
-                                bn = *res;
+                                bn = std::move(*res);
                                 pushCostFactor = 2u;
                                 break;
                             }
@@ -870,9 +884,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                             case OP_MUL: {
                                 auto res = bn1.safeMul(bn2);
                                 if ( ! res) {
-                                    return set_error(serror, ScriptError::INVALID_NUMBER_RANGE_64_BIT);
+                                    return set_error(serror, invalidNumberRangeError);
                                 }
-                                bn = *res;
+                                bn = std::move(*res);
                                 quadraticOpCost = vch1.size() * vch2.size();
                                 pushCostFactor = 2u;
                                 break;
@@ -899,31 +913,31 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                                 break;
 
                             case OP_BOOLAND:
-                                bn = CScriptNum::fromIntUnchecked(bn1 != bnZero && bn2 != bnZero);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 != bnZero && bn2 != bnZero);
                                 break;
                             case OP_BOOLOR:
-                                bn = CScriptNum::fromIntUnchecked(bn1 != bnZero || bn2 != bnZero);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 != bnZero || bn2 != bnZero);
                                 break;
                             case OP_NUMEQUAL:
-                                bn = CScriptNum::fromIntUnchecked(bn1 == bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 == bn2);
                                 break;
                             case OP_NUMEQUALVERIFY:
-                                bn = CScriptNum::fromIntUnchecked(bn1 == bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 == bn2);
                                 break;
                             case OP_NUMNOTEQUAL:
-                                bn = CScriptNum::fromIntUnchecked(bn1 != bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 != bn2);
                                 break;
                             case OP_LESSTHAN:
-                                bn = CScriptNum::fromIntUnchecked(bn1 < bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 < bn2);
                                 break;
                             case OP_GREATERTHAN:
-                                bn = CScriptNum::fromIntUnchecked(bn1 > bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 > bn2);
                                 break;
                             case OP_LESSTHANOREQUAL:
-                                bn = CScriptNum::fromIntUnchecked(bn1 <= bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 <= bn2);
                                 break;
                             case OP_GREATERTHANOREQUAL:
-                                bn = CScriptNum::fromIntUnchecked(bn1 >= bn2);
+                                bn = ScriptNumType::fromIntUnchecked(bn1 >= bn2);
                                 break;
                             case OP_MIN:
                                 bn = (bn1 < bn2 ? bn1 : bn2);
@@ -942,8 +956,14 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
 
                         popstack(stack); // invalidates: vch1 and vch2
                         popstack(stack);
-
-                        stack.push_back(bn.getvch());
+                        {
+                            auto vch = bn.getvch();
+                            // Belt-and-suspenders check that we aren't overflowing the push limit in the BigInt case
+                            if (UsesBigInt && vch.size() > maxScriptElementSize) {
+                                return set_error(serror, invalidNumberRangeError);
+                            }
+                            stack.push_back(std::move(vch));
+                        }
                         metrics.TallyPushOp(stack.back().size() * pushCostFactor);
 
                         if (opcode == OP_NUMEQUALVERIFY) {
@@ -960,9 +980,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 3) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        CScriptNum const bn1(stacktop(-3), fRequireMinimal, maxIntegerSize);
-                        CScriptNum const bn2(stacktop(-2), fRequireMinimal, maxIntegerSize);
-                        CScriptNum const bn3(stacktop(-1), fRequireMinimal, maxIntegerSize);
+                        ScriptNumType const bn1(stacktop(-3), fRequireMinimal, maxIntegerSize);
+                        ScriptNumType const bn2(stacktop(-2), fRequireMinimal, maxIntegerSize);
+                        ScriptNumType const bn3(stacktop(-1), fRequireMinimal, maxIntegerSize);
 
                         bool fValue = (bn2 <= bn1 && bn1 < bn3);
                         popstack(stack);
@@ -1126,7 +1146,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < idxKeyCount) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        int64_t const nKeysCount = CScriptNum(stacktop(-idxKeyCount), fRequireMinimal, maxIntegerSize).getint64();
+                        int64_t const nKeysCount = CScriptNum(stacktop(-idxKeyCount), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG) {
                             return set_error(serror, ScriptError::PUBKEY_COUNT);
                         }
@@ -1147,7 +1167,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < idxSigCount) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        int64_t const nSigsCount = CScriptNum(stacktop(-idxSigCount), fRequireMinimal, maxIntegerSize).getint64();
+                        int64_t const nSigsCount = CScriptNum(stacktop(-idxSigCount), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         if (nSigsCount < 0 || nSigsCount > nKeysCount) {
                             return set_error(serror, ScriptError::SIG_COUNT);
                         }
@@ -1369,7 +1389,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         const valtype &data = stacktop(-2);
 
                         // Make sure the split point is appropriate.
-                        int64_t const position = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSize).getint64();
+                        int64_t const position = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         if (position < 0 || uint64_t(position) > data.size()) {
                             return set_error(serror, ScriptError::INVALID_SPLIT_RANGE);
                         }
@@ -1405,7 +1425,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
 
-                        uint64_t const size = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSize).getint64();
+                        uint64_t const size = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         if (size > maxScriptElementSize) {
                             return set_error(serror, ScriptError::PUSH_SIZE);
                         }
@@ -1414,7 +1434,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         valtype &rawnum = stacktop(-1);
 
                         // Try to see if we can fit that number in the number of byte requested.
-                        CScriptNum::MinimallyEncode(rawnum);
+                        ScriptNumType::MinimallyEncode(rawnum);
                         if (rawnum.size() > size) {
                             // We definitively cannot.
                             return set_error(serror, ScriptError::IMPOSSIBLE_ENCODING);
@@ -1448,15 +1468,20 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         }
 
                         valtype &n = stacktop(-1);
-                        CScriptNum::MinimallyEncode(n);
+                        ScriptNumType::MinimallyEncode(n);
                         metrics.TallyPushOp(n.size());
 
                         // The resulting number must be a valid number.
                         // Note: IsMinimallyEncoded() here is really just checking if the number is in range.
-                        if ( ! CScriptNum::IsMinimallyEncoded(n, maxIntegerSize)) {
+                        if ( ! ScriptNumType::IsMinimallyEncoded(n, maxIntegerSize)) {
                             return set_error(serror, invalidNumberRangeError);
                         }
                     } break;
+
+
+                    // Note: For the introspection opcodes, we intentionally use CScriptNum for reading/writing the
+                    //       inputs/outputs of these opcodes as a performance optimization, since their parameters
+                    //       and their results can never exceed 64-bits.
 
                     // Native Introspection opcodes (Nullary)
                     case OP_INPUTINDEX:
@@ -1543,7 +1568,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
                         if (stack.size() < 1) {
                             return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
                         }
-                        auto const index = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSize).getint64();
+                        auto const index = CScriptNum(stacktop(-1), fRequireMinimal, maxIntegerSizeLegacy).getint64();
                         popstack(stack); // consume element
 
                         auto is_valid_input_index = [&] {
@@ -1847,8 +1872,6 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t fla
 
     return set_success(serror);
 }
-
-namespace {
 
 /**
  * Wrapper that serializes like CTransaction, but with the modifications
@@ -2232,6 +2255,15 @@ bool TransactionSignatureChecker::CheckSequence(const CScriptNum &nSequence) con
     }
 
     return true;
+}
+
+bool EvalScript(std::vector<valtype> &stack, const CScript &script, uint32_t flags,
+                const BaseSignatureChecker &checker, ScriptExecutionMetrics &metrics, ScriptError *serror) {
+    if (flags & SCRIPT_ENABLE_MAY2025) {
+        return EvalScriptImpl<true>(stack, script, flags, checker, metrics, serror);
+    } else {
+        return EvalScriptImpl<false>(stack, script, flags, checker, metrics, serror);
+    }
 }
 
 bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey, uint32_t flags, const BaseSignatureChecker &checker,
