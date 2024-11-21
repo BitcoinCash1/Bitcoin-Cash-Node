@@ -7,7 +7,7 @@ Instructions for alpine 3.13
 Minimal dependencies:
 
 ```sh
-    apk add git boost-dev cmake libevent-dev openssl-dev build-base py-pip db-dev miniupnpc-dev libnatpmp-dev zeromq-dev help2man bash
+    apk add git boost-dev cmake libevent-dev openssl-dev build-base py-pip db-dev miniupnpc-dev libnatpmp-dev zeromq-dev help2man bash gmp-dev
     pip install ninja
 ```
 

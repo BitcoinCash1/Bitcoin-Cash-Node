@@ -7,7 +7,7 @@
 Minimal build requirements:
 
 ```bash
-sudo dnf install boost-devel cmake gcc-c++ git libevent-devel miniupnpc-devel libnatpmp-devel ninja-build openssl-devel python3 zeromq-devel help2man
+sudo dnf install boost-devel cmake gcc-c++ git libevent-devel miniupnpc-devel libnatpmp-devel ninja-build openssl-devel python3 zeromq-devel help2man gmp-devel
 ```
 
 You can do without the `miniupnpc-devel`, `libnatpmp-devel`, `zeromq-devel`, and `help2man`

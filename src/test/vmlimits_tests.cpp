@@ -708,9 +708,19 @@ BOOST_AUTO_TEST_CASE(test_individual_opcode_counts) {
         MkT({"1234"_v, "1234"_v}, CScript() << OP_EQUALVERIFY, {}, 0, 0, 101),// OP_EQUALVERIFY
         MkT({"1234"_v, "1235"_v}, CScript() << OP_EQUALVERIFY, {vfalse}, 0, 0, 100, false), // OP_EQUALVERIFY fail case
         MkT({"00020342"_v}, CScript() << OP_1ADD, {"01020342"_v}, 0, 0, 100 + 4*2),// OP_1ADD
-        MkT({"ffffffffffffff7f"_v}, CScript() << OP_1ADD, {"ffffffffffffff7f"_v}, 0, 0, 100, false), // OP_1ADD fail due to wraparound
+        MkT({"ffffffffffffff7f"_v}, CScript() << OP_1ADD, {"000000000000008000"_v}, 0, 0, 100 + 9*2), // OP_1ADD at 2^63 limit succeed since bigint exists
+        MkT({(ScriptBigInt::bigIntConsensusMax() - 1).serialize()}, CScript() << OP_1ADD,
+            {ScriptBigInt::bigIntConsensusMax().serialize()}, 0, 0,
+            100 + ScriptBigInt::MAXIMUM_ELEMENT_SIZE_BIG_INT * 2), // OP_1ADD success just under bigint upper limit
+        MkT({ScriptBigInt::bigIntConsensusMax().serialize()}, CScript() << OP_1ADD,
+            {ScriptBigInt::bigIntConsensusMax().serialize()}, 0, 0, 100, false), // OP_1ADD fail beyond bigint limit due to wraparound
         MkT({"01020342"_v}, CScript() << OP_1SUB, {"00020342"_v}, 0, 0, 100 + 4*2),// OP_1SUB
-        MkT({"ffffffffffffffff"_v}, CScript() << OP_1SUB, {"ffffffffffffffff"_v}, 0, 0, 100, false), // OP_1SUB fail due to wraparound
+        MkT({"ffffffffffffffff"_v}, CScript() << OP_1SUB, {"000000000000008080"_v}, 0, 0, 100 + 9*2), // OP_1SUB at 2^63 limit succeed since bigint exists
+        MkT({(ScriptBigInt::bigIntConsensusMin() + 1).serialize()}, CScript() << OP_1SUB,
+            {ScriptBigInt::bigIntConsensusMin().serialize()}, 0, 0,
+            100 + ScriptBigInt::MAXIMUM_ELEMENT_SIZE_BIG_INT * 2), // OP_1SUB success just above bigint lower limit
+        MkT({ScriptBigInt::bigIntConsensusMin().serialize()}, CScript() << OP_1SUB,
+            {ScriptBigInt::bigIntConsensusMin().serialize()}, 0, 0, 100, false), // OP_1SUB fail beyond bigint limit due to wraparound
         MkT({CScriptNum::fromInt(42)->getvch()}, CScript() << OP_NEGATE, {CScriptNum::fromInt(-42)->getvch()}, 0, 0, 100 + 1*2),// OP_NEGATE
         MkT({CScriptNum::fromInt(424242)->getvch()}, CScript() << OP_NEGATE, {CScriptNum::fromInt(-424242)->getvch()}, 0, 0, 100 + 3*2), // OP_NEGATE (3 byte)
         MkT({CScriptNum::fromInt(-424242)->getvch()}, CScript() << OP_ABS, {CScriptNum::fromInt(424242)->getvch()}, 0, 0, 100 + 3*2),// OP_ABS

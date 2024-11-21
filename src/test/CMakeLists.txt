@@ -32,6 +32,12 @@ endfunction()
 
 gen_json_header(JSON_HEADERS
   data/base58_encode_decode.json
+  data/bigint_exp_tests.json
+  data/bigint_mod_tests.json
+  data/bigint_mul_tests.json
+  data/bigint_shift_tests.json
+  data/bigint_sum_tests.json
+  data/bigint_test_vectors.json
   data/blockfilters.json
   data/cashaddr_token_types.json
   data/libauth_expected_test_fail_reasons.json
@@ -167,6 +173,8 @@ add_boost_unit_tests_to_suite(bitcoin test_bitcoin
     base32_tests.cpp
     base58_tests.cpp
     base64_tests.cpp
+    bigint_script_property_tests.cpp
+    bigint_tests.cpp
     bip32_tests.cpp
     bip69_tests.cpp
     bitmanip_tests.cpp

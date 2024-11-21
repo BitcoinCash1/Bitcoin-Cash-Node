@@ -105,7 +105,9 @@ static bool IsValidFlagCombination(uint32_t flags) {
             // If native introspection is enabled, 64-bit script integers must be as well
             && ((~flags & SCRIPT_NATIVE_INTROSPECTION) || (flags & SCRIPT_64_BIT_INTEGERS))
             // If tokens are enabled, native introspection must be as well
-            && ((~flags & SCRIPT_ENABLE_TOKENS) || (flags & SCRIPT_NATIVE_INTROSPECTION));
+            && ((~flags & SCRIPT_ENABLE_TOKENS) || (flags & SCRIPT_NATIVE_INTROSPECTION))
+            // If may2025, 64-bit integers must also be enabled
+            && ((~flags & SCRIPT_ENABLE_MAY2025) || (flags & SCRIPT_64_BIT_INTEGERS));
 }
 
 static bool IsExpected(bool ret, bool ret_fuzzed, uint32_t verify_flags, ScriptError serror,
@@ -133,7 +135,19 @@ static bool IsExpected(bool ret, bool ret_fuzzed, uint32_t verify_flags, ScriptE
     }
     // If the reason they mismatch is due to number range encoding, tolerate a diffence in the 64-bit integer flags.
     else if (serror == ScriptError::INVALID_NUMBER_RANGE || serror_fuzzed == ScriptError::INVALID_NUMBER_RANGE) {
-        if ((verify_flags_fuzzed & SCRIPT_64_BIT_INTEGERS) != (verify_flags & SCRIPT_64_BIT_INTEGERS)) {
+        if ((verify_flags_fuzzed & SCRIPT_64_BIT_INTEGERS) != (verify_flags & SCRIPT_64_BIT_INTEGERS)
+            || (verify_flags_fuzzed & SCRIPT_ENABLE_MAY2025) != (verify_flags & SCRIPT_ENABLE_MAY2025)) {
+            return true;
+        }
+    }
+
+    // If the reason they mismatch is due to may2025 flag flip, tolerate errors related to that flag being flipped.
+    else if (serror == ScriptError::INVALID_NUMBER_RANGE_BIG_INT || serror_fuzzed == ScriptError::INVALID_NUMBER_RANGE_BIG_INT
+             || serror == ScriptError::INVALID_NUMBER_RANGE_64_BIT || serror_fuzzed == ScriptError::INVALID_NUMBER_RANGE_64_BIT
+             || serror == ScriptError::OP_COST || serror_fuzzed == ScriptError::OP_COST
+             || serror == ScriptError::TOO_MANY_HASH_ITERS || serror_fuzzed == ScriptError::TOO_MANY_HASH_ITERS
+             || serror == ScriptError::CONDITIONAL_STACK_DEPTH || serror_fuzzed == ScriptError::CONDITIONAL_STACK_DEPTH) {
+        if ((verify_flags_fuzzed & SCRIPT_ENABLE_MAY2025) != (verify_flags & SCRIPT_ENABLE_MAY2025)) {
             return true;
         }
     }

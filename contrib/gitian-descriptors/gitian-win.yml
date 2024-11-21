@@ -30,6 +30,7 @@ packages:
 # improved to avoid requiring all the bitcoin-cash-node dependencies.
 - "libboost-all-dev"
 - "libevent-dev"
+- "libgmp-dev"
 - "libssl-dev"
 remotes:
 - "url": "https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git"

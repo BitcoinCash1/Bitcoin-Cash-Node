@@ -127,6 +127,10 @@ const char *ScriptErrorString(const ScriptError serror) {
         case ScriptError::CONDITIONAL_STACK_DEPTH:
             return "Conditional depth limit exceeded";
 
+        // Big integer errors
+        case ScriptError::INVALID_NUMBER_RANGE_BIG_INT:
+            return "Given operand is not a number within the valid range [-2^79,999 + 1, 2^79,999 - 1]";
+
         case ScriptError::UNKNOWN:
         case ScriptError::ERROR_COUNT:
         default:
