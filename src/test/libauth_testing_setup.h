@@ -11,61 +11,24 @@
 
 #include <map>
 #include <optional>
-#include <set>
 #include <string>
+#include <string_view>
+#include <tuple>
 
 class CValidationState;
+class ScriptExecutionMetrics;
+class TransactionSignatureChecker;
 
 /// Testing setup that:
 /// - loads all of the json data for all of the libauth tests into a static structure (lazy load, upon first use)
 /// - tracks if we overrode ::fRequireStandard, and resets it on test end
-/// For FEATURE tests, subclasses must reimplement "ActivateFeature()" (see libauth_tests.cpp for examples that use
-/// this setup)
 class LibauthTestingSetup : public TestChain100Setup {
 public:
     enum TxStandard { INVALID, NONSTANDARD, STANDARD };
 
-    // A structure to hold all failure reason messages for all tests for all test packs
-    // packName: {featureActive: {standardValidation: {ident: "reason"}}}
-    using AllReasonsDict = std::map<std::string, std::map<bool, std::map<bool, std::map<std::string, std::string>>>>;
-
-    // libauthReason: {bchnReason: [idents]}
-    using Mappings = std::map<std::string, std::map<std::string, std::set<std::string>>>;
-    // ident: bchnReason
-    using Overrides = std::map<std::string, std::string>;
-
-    // A workspace to help produce the optimized libauth -> bchn failure message lookup table
-    struct ReasonsMapTree {
-        struct TestPackEntries {
-            struct ActivationEntries {
-                struct StandardnessEntries {
-                    Mappings mappings;
-                    Overrides overrides;
-                };
-                std::map<bool, StandardnessEntries> entries;
-                Mappings mappings;
-            };
-            std::map<bool, ActivationEntries> entries;
-            Mappings mappings;
-        };
-        std::map<std::string, TestPackEntries> entries;
-        Mappings mappings;
-
-        // Constructs the tree with all information from `allLibauthReasons` and `bchnProducedErrors`
-        ReasonsMapTree();
-        // Optimize the tree structure
-        void Prune();
-        // Get JSON representation of the lookup table ready to be exported to file
-        UniValue::Object GetLookupTable() const;
-        // Get a human readable checklist to help manually confirm the failure message lookup table
-        std::string GetReasonsLookupChecklist(const UniValue::Object &newLookup) const;
-    };
-    using ReasonsMapLeaf = ReasonsMapTree::TestPackEntries::ActivationEntries::StandardnessEntries;
-
     struct TestVector {
         std::string name;
         std::string description;
-        bool featureActive = true; // Only pack.type == FEATURE; activate/deactivate the consensus rule in question
         TxStandard standardness{}; // Which validation standard this test should meet
 
         struct Test {
@@ -76,13 +39,9 @@ public:
             CTransactionRef tx;
             size_t txSize{};
             CCoinsMap inputCoins;
-            std::string standardReason; //! Expected failure reason when validated in standard mode
-            std::string nonstandardReason; //! Expected failure reason when validated in nonstandard mode
-            std::string libauthStandardReason; //! Libauth suggested failure reason when validated in standard mode
-            std::string libauthNonstandardReason; //! Libauth suggested failure reason when validated in nonstandard mode
-            bool scriptOnly = false; //< If true, this test vector should not test against AcceptToMemoryPool() for the
+            bool scriptOnly = false; //< If true, this test should *not* test against AcceptToMemoryPool() for the
                                      //< whole txn, but should just evaluate the script for input `inputNum`.
-            bool benchmark = false;  //< True if the test description contains the string "[benchmark]"
+            bool benchmark = false;  //< True if the test description contains the string " benchmark:"
             bool baselineBench = false; //< True if `benchmark==true` and the description contains "[baseline]"
             unsigned inputNum = 0;   //< The input number to test. Comes from the optional 7th column of the JSON array
                                      //< for this test, defaults to 0 if unspecified. Only used if scriptOnly == true.
@@ -93,8 +52,7 @@ public:
         std::optional<size_t> baselineBench; // if set, index into the above vector for the first Test that is `baselineBench`
     };
 
-    // Container for a group of test vectors. Corresponds to either an individual "CHIP" test pack or a regression or
-    // other named package of tests imported from libauth.
+    // Container for a group of test vectors, corresponds to a consensus year packname .e.g "2022", "2023", "2025, etc.
     struct TestPack {
         std::string name; //! Test pack name, same as the key in the `allTestPacks` map below
         std::vector<TestVector> testVectors;
@@ -102,39 +60,77 @@ public:
         // if set: the baseline benchmark; pair of: .first = index into testVectors, .second = index into testVector.vec.
         std::optional<std::pair<size_t, size_t>> baselineBenchmark;
 
-        enum Type {
-            FEATURE, //! Feature-specific test pack. May toggle the "featureActive" bool to test pre and post activation
-            OTHER,   //! Non-feature-specific or general regression test pack. The "featureActive" bool is not toggled.
-        };
-
-        Type type = OTHER;
-
         TestPack() = default;
     };
+
+    // Utility that returns one of: "I", "S", "N"
+    static const char *TxStd2Letter(TxStandard std);
+    // Inverse of above. Throws if the "letter" arg is not one of "I", "S", "N"
+    static TxStandard Letter2TxStd(std::string_view letter);
 
 private:
     static std::map<std::string, TestPack> allTestPacks;  //! key: testPack.name, value: testPack
 
-    // A lookup table that can be used to find a single expected failure test message given information about the
-    // particular Libauth test and the testing context
-    static UniValue::Object reasonsLookupTable;
-    static std::string LookupReason(const std::string &libauthReason, const std::string &ident,
-                                    const std::string &packName, const bool featureActive, const bool standardValidation,
-                                    const UniValue::Object &table=reasonsLookupTable);
+    // Uniquely identifies an individual test run vs standard or nonstandard eval rules.
+    struct TestRunKey {
+        std::string packName; // pack name e.g. "2023", etc
+        std::string ident; // test identifier e.g. "skjac9"
+        TxStandard testStd; // standardness setting for the test itself: may be INVALID, STANDARD, or NONSTANDARD
+        TxStandard evalStd; // standardness setting for the evaluation, one of: STANDARD or NONSTANDARD
 
-    // These dictionaries are populated per-pack by running `RunTestPack`
-    static AllReasonsDict allLibauthReasons; // All error messages suggested by Libauth
-    static AllReasonsDict bchnProducedReasons; // All error messages actually produced
+        auto toTupleRef() const { return std::tie(packName, ident, testStd, evalStd); }
+        bool operator<(const TestRunKey &o) const { return toTupleRef() < o.toTupleRef(); }
+        bool operator==(const TestRunKey &o) const { return toTupleRef() == o.toTupleRef(); }
+    };
+
+    // A structure to hold all BCHN failure reason messages for all tests for all test packs
+    // Maps: TestRunKey -> "bchn-reason-string"
+    using ReasonsMap = std::map<TestRunKey, std::string>;
+
+    // All error messages that were expected and loaded from `libauth_expected_test_fail_reasons.json`.
+    // This map is populated by `LoadAllTestPacks()`.
+    static ReasonsMap expectedReasons;
+    // All error messages actually produced that disagree with `expectedReasons`.
+    // This map is populated per pack by running `RunTestPack()`.
+    static ReasonsMap newReasons;
+
+    // Returns the test fail reason from expectedReasons, for a particular test, or std::nullopt if no reason is known.
+    static std::optional<std::string> LookupExpectedReason(const TestRunKey &k);
+
+    // Registers an unexpected reason with the newReasons map, to be saved to a new `libauth_expected_test_fail_reasons.json`
+    static void GotUnexpectedReason(const TestRunKey &k, const std::string &reason);
+
+    // Keeps track of the op costs for individual inputs
+    struct Metrics {
+        int inputNum{};
+        int64_t opCost{}, opCostLimit{-1}, hashIters{}, hashItersLimit{-1}, sigChecks{}, sigChecksLimit{-1};
+
+        UniValue::Array toUniValue() const;
+        static Metrics fromUniValue(const UniValue::Array &uv);
+        static Metrics fromScriptMetrics(unsigned inputNum, const ScriptExecutionMetrics &metrics, uint32_t flags,
+                                         size_t scriptSigSize);
+        auto toTup() const {
+            return std::tuple(inputNum, opCost, opCostLimit, hashIters, hashItersLimit, sigChecks, sigChecksLimit);
+        }
+
+        bool operator==(const Metrics &o) const { return toTup() == o.toTup(); }
+        bool operator!=(const Metrics &o) const { return ! this->operator==(o); }
+    };
+
+    // Mapping of test run -> metrics for each input evaluated for that run. (Successful runs only).
+    using MetricsMap = std::map<TestRunKey, std::vector<Metrics>>;
+    static MetricsMap metricsMap;
+    static size_t metricsMapNewCt;
+
+    static const std::vector<Metrics> *LookupExpectedMetrics(const TestRunKey &k);
+    static void GotUnexpectedMetrics(const TestRunKey &k, const std::vector<Metrics> &metrics);
 
     static void RunTestVector(const TestVector &test, const std::string &packName);
-    static bool RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state);
+    static bool RunScriptOnlyTest(const TestVector::Test &tv, bool standard, CValidationState &state,
+                                  Metrics *metricsOut = nullptr, bool skipChecks = false,
+                                  const TransactionSignatureChecker *checker = nullptr);
 
     const bool saved_fRequireStandard;
-
-protected:
-    /// Reimplement this in subclasses to turn on/off the consensus rule or feature in question. Only called for
-    /// test packs of type TestPack::FEATURE.
-    virtual void ActivateFeature(bool) {}
 
 public:
     LibauthTestingSetup();
@@ -146,11 +142,13 @@ public:
     /// Run all tests for the test pack named `name`.
     void RunTestPack(const std::string &name);
 
-    /// Returns the TestPack named `name`, or `nullptr` if no such TestPack exists
+    /// Returns the TestPack named `name`, or `nullptr` if no such TestPack exists.
     static const TestPack *GetTestPack(const std::string &name);
 
-    /// Generate the reasons lookup table and compare it against the currently loaded table. Returns false and outputs
-    /// the corrected version to a file if it differs, and includes a human-readable checklist file to help with manual
-    /// confirmation. This should be called exactly once after all of the test pack tests have executed.
-    static bool ProcessReasonsLookupTable();
+    /// If new unexpected/mismatched reasons occurred, generate the reasons lookup JSON file, and print a message to
+    /// the boost log and to stderr on the console. The generated file is a JSON file with the updated reasons, ready to
+    /// be copied into the source tree. If all failure reasons were known and were not unexpected, does nothing.
+    static void ProcessExpectedReasonsTable();
+    /// Same as above, but do it for the expected metrics table and produce a JSON file if some metrics are missing.
+    static void ProcessExpectedMetricsTable();
 };

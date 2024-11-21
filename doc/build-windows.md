@@ -77,7 +77,7 @@ First, install the general dependencies:
 ```bash
     sudo apt update
     sudo apt upgrade
-    sudo apt install autoconf automake build-essential bsdmainutils cmake curl git libboost-all-dev libevent-dev libssl-dev libtool ninja-build nsis pkg-config python3 libgmp-dev
+    sudo apt install autoconf automake build-essential bsdmainutils cmake curl git libboost-all-dev libevent-dev libssl-dev libtool ninja-build nsis pkg-config python3 libgmp-dev zlib1g-dev
 ```
 
 A host toolchain (`build-essential`) is necessary because some dependency

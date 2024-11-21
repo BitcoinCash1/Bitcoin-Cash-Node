@@ -32,6 +32,7 @@ packages:
 - "libevent-dev"
 - "libgmp-dev"
 - "libssl-dev"
+- "zlib1g-dev"
 remotes:
 - "url": "https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git"
   "dir": "bitcoin"

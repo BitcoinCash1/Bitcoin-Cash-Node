@@ -4,6 +4,9 @@ project(bitcoin-test)
 
 option(ENABLE_PROPERTY_BASED_TESTS "Enable property based tests" OFF)
 
+# ZLib is required (we compresss the json libauth tests)
+find_package(ZLIB)
+
 # Process json files.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/data")
 
@@ -32,15 +35,8 @@ endfunction()
 
 gen_json_header(JSON_HEADERS
   data/base58_encode_decode.json
-  data/bigint_exp_tests.json
-  data/bigint_mod_tests.json
-  data/bigint_mul_tests.json
-  data/bigint_shift_tests.json
-  data/bigint_sum_tests.json
-  data/bigint_test_vectors.json
   data/blockfilters.json
   data/cashaddr_token_types.json
-  data/libauth_expected_test_fail_reasons.json
   data/key_io_valid.json
   data/key_io_invalid.json
   data/script_tests.json
@@ -51,11 +47,50 @@ gen_json_header(JSON_HEADERS
   data/tx_valid.json
 )
 
+function(gen_json_header_and_cpp NAME)
+  set(CPPS "")
+  foreach(f ${ARGN})
+    set(h "${CMAKE_CURRENT_BINARY_DIR}/${f}.h")
+    set(cpp "${CMAKE_CURRENT_BINARY_DIR}/${f}.cpp")
+
+    # Get the proper name for the test variable.
+    get_filename_component(TEST_NAME ${f} NAME_WE)
+    add_custom_command(OUTPUT ${h} ${cpp}
+      COMMAND
+        "${Python_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/data/generate_header_and_cpp.py"
+        "${TEST_NAME}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/${f}"
+        "${h}"
+        "${cpp}"
+      MAIN_DEPENDENCY ${f}
+      DEPENDS
+        "data/generate_header_and_cpp.py"
+      VERBATIM
+    )
+    list(APPEND CPPS ${cpp})
+  endforeach(f)
+  set(${NAME} "${CPPS}" PARENT_SCOPE)
+endfunction()
+
+gen_json_header_and_cpp(JSON_CPPS
+    data/bigint_exp_tests.json
+    data/bigint_mod_tests.json
+    data/bigint_mul_tests.json
+    data/bigint_shift_tests.json
+    data/bigint_sum_tests.json
+    data/bigint_test_vectors.json
+    data/libauth_expected_test_fail_reasons.json
+    data/libauth_expected_test_metrics.json
+)
+
+
 function(gen_libauth_tests_autogen NAME)
   set(combined_vec_cpp "${CMAKE_CURRENT_BINARY_DIR}/data/libauth_test_vectors.json.cpp")
   set(combined_vec_h "${CMAKE_CURRENT_BINARY_DIR}/data/libauth_test_vectors.json.h")
   file(GLOB_RECURSE test_files LIST_DIRECTORIES false
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/libauth_test_vectors/bch_vmb_tests_*.json"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/vmb_tests/*/*.vmb_tests.json"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/vmb_tests/*/*.scriptonly.json"
   )
   # We run the generate_libauth_test_vectors.py script twice, once to generate the header, and once for the .cpp file
   add_custom_command(OUTPUT ${combined_vec_cpp}
@@ -302,6 +337,7 @@ add_library(test_common OBJECT EXCLUDE_FROM_ALL
 
     # Tests generated from JSON
     ${JSON_HEADERS}
+    ${JSON_CPPS}
     ${LIBAUTH_TESTS_AUTOGEN}
     ${ABLA_HEADER}
 
@@ -311,7 +347,7 @@ add_library(test_common OBJECT EXCLUDE_FROM_ALL
     # Properties based test fixture
     ${BITCOIN_PROPERTY_BASED_TEST_FIXTURE}
 )
-target_link_libraries(test_common PUBLIC server Boost::unit_test_framework)
+target_link_libraries(test_common PUBLIC server Boost::unit_test_framework ZLIB::ZLIB)
 
 if(ENABLE_PROPERTY_BASED_TESTS)
   target_link_libraries(test_bitcoin Rapidcheck::rapidcheck)

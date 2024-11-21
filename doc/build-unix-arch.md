@@ -5,7 +5,7 @@
 You will need the following dependencies:
 
 ```bash
-    pacman -S boost cmake git libevent ninja python miniupnpc libnatpmp zeromq help2man gmp
+    pacman -S boost cmake git libevent ninja python miniupnpc libnatpmp zeromq help2man gmp zlib
 ```
 
 You can do without the `miniupnpc`, `libnatpmp`, `zeromq`, and `help2man` packages, then you
