@@ -99,7 +99,7 @@ public:
     double GetTotal() const { assert(m_calced_stats); return m_total; }
     double GetMin() const { assert(m_calced_stats); return m_min; }
     double GetMax() const { assert(m_calced_stats); return m_max; }
-    double GetMedian() const { assert(m_calced_stats); return m_max; }
+    double GetMedian() const { assert(m_calced_stats); return m_median; }
 
     friend class BenchRunner;
 };
@@ -112,16 +112,18 @@ class BenchRunner {
         BenchFunction func;
         uint64_t num_iters_for_one_second;
         CompletionFunction completionFunc;
+        bool reuseChain = false;
     };
     using BenchmarkMap = std::map<std::string, Bench>;
     static BenchmarkMap &benchmarks();
 
 public:
     BenchRunner(const std::string &name, BenchFunction func,
-                uint64_t num_iters_for_one_second, CompletionFunction = {});
+                uint64_t num_iters_for_one_second, CompletionFunction = {},
+                bool reuseChain = false);
 
     static void RunAll(Printer &printer, uint64_t num_evals, double scaling,
-                       const std::string &filter, bool is_list_only);
+                       const std::string &userFilter, bool is_list_only, const std::string &internalFilter = "");
 };
 
 // interface to output benchmark results.

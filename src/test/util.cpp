@@ -13,6 +13,11 @@
 #include <pow.h>
 #include <validation.h>
 
+#include <zlib.h>
+
+#include <cassert>
+#include <stdexcept>
+
 CTxIn MineBlock(const Config &config, const CScript &coinbase_scriptPubKey) {
     auto block = PrepareBlock(config, coinbase_scriptPubKey);
 
@@ -39,4 +44,37 @@ std::shared_ptr<CBlock> PrepareBlock(const Config &config,
     block->hashMerkleRoot = BlockMerkleRoot(*block);
 
     return block;
+}
+
+Span<uint8_t> UncompressInPlace(Span<uint8_t> outputBuf, Span<const uint8_t> compressedBytes) {
+    const size_t uncompBufSpace = outputBuf.size();
+    Span<const Bytef> compressed(reinterpret_cast<const Bytef *>(compressedBytes.data()), compressedBytes.size());
+    Bytef *outb = reinterpret_cast<Bytef *>(outputBuf.data());
+    unsigned long uncompSzResult = uncompBufSpace;
+    const auto r = uncompress(outb, &uncompSzResult, compressed.data(), compressed.size());
+    if (r != Z_OK) {
+        throw std::runtime_error(strprintf("zlib uncompress returned %i", r));
+    }
+    assert(uncompSzResult <= uncompBufSpace);
+    return outputBuf.subspan(0, uncompSzResult);
+}
+
+namespace {
+template <typename Container>
+Container UncompressGeneric(Span<const uint8_t> compressedBytes, const size_t uncompSz) {
+    Container uncompressedData;
+    uncompressedData.resize(uncompSz);
+    auto span = MakeUInt8Span(uncompressedData);
+    span = UncompressInPlace(span, compressedBytes);
+    uncompressedData.resize(span.size());
+    return uncompressedData;
+}
+}
+
+std::string UncompressStr(Span<const uint8_t> compressedBytes, size_t uncompressedByteSize) {
+    return UncompressGeneric<std::string>(compressedBytes, uncompressedByteSize);
+}
+
+std::vector<uint8_t> Uncompress(Span<const uint8_t> compressedBytes, size_t uncompressedByteSize) {
+    return UncompressGeneric<std::vector<uint8_t>>(compressedBytes, uncompressedByteSize);
 }

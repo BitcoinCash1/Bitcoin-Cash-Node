@@ -16,8 +16,10 @@
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <optional>
 #include <regex>
 #include <set>
+#include <utility>
 
 namespace benchmark {
 
@@ -121,13 +123,13 @@ BenchRunner::BenchmarkMap &BenchRunner::benchmarks() {
 BenchRunner::BenchRunner(const std::string &name,
                          BenchFunction func,
                          uint64_t num_iters_for_one_second,
-                         CompletionFunction completionFunc) {
-    benchmarks().try_emplace(name, Bench{func, num_iters_for_one_second, completionFunc});
+                         CompletionFunction completionFunc, bool reuseChain) {
+    benchmarks().try_emplace(name, Bench{std::move(func), num_iters_for_one_second, std::move(completionFunc), reuseChain});
 }
 
 void BenchRunner::RunAll(Printer &printer, uint64_t num_evals,
-                         double scaling, const std::string &filter,
-                         bool is_list_only) {
+                         double scaling, const std::string &userFilter,
+                         bool is_list_only, const std::string &internalFilter) {
     if (!std::ratio_less_equal<clock::period, std::micro>::value) {
         std::cerr << "WARNING: Clock precision is worse than microsecond - "
                      "benchmarks may be less accurate!\n";
@@ -137,12 +139,16 @@ void BenchRunner::RunAll(Printer &printer, uint64_t num_evals,
                  "benchmarks.\n";
 #endif
 
-    std::regex reFilter(filter);
+    std::regex reFilter(userFilter), reFilterInternal(internalFilter);
     std::smatch baseMatch;
 
     printer.header();
 
+    std::optional<TestingSetup> optTestSetup;
     for (const auto &[name, bench] : benchmarks()) {
+        if (!internalFilter.empty() && !std::regex_search(name, reFilterInternal)) {
+            continue;
+        }
         if (!std::regex_match(name, baseMatch, reFilter)) {
             continue;
         }
@@ -156,7 +162,10 @@ void BenchRunner::RunAll(Printer &printer, uint64_t num_evals,
 
         State state(name, num_iters, printer);
         for (uint64_t i = 0; i != num_evals; ++i) {
-            TestingSetup test{CBaseChainParams::REGTEST};
+            if (!optTestSetup || !bench.reuseChain) {
+                // (re)set the chain for this eval
+                optTestSetup.emplace(CBaseChainParams::REGTEST);
+            }
             assert(::ChainActive().Height() == 0);
 
             state.m_num_iters_left = state.m_num_iters;

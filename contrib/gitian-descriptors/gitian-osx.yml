@@ -46,6 +46,7 @@ packages:
 - "libzmq3-dev"
 - "protobuf-compiler"
 - "qttools5-dev"
+- "zlib1g-dev"
 remotes:
 - "url": "https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git"
   "dir": "bitcoin"

@@ -76,4 +76,7 @@ public:
     void SetScriptLimits(uint32_t scriptFlags, uint64_t scriptSigSize) {
         scriptLimits.emplace(IsVmLimitsStandard(scriptFlags), scriptSigSize);
     }
+    const may2025::ScriptLimits *GetScriptLimits() const {
+        return scriptLimits ? &*scriptLimits : nullptr;
+    }
 };

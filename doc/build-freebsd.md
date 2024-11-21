@@ -11,7 +11,7 @@ This guide does not contain instructions for building the GUI.
 You will need the following dependencies, which can be installed as root via pkg:
 
 ```bash
-pkg install cmake libevent ninja openssl boost-libs git gmp
+pkg install cmake libevent ninja openssl boost-libs git gmp zlib-ng
 ```
 
 ### Optional libraries

@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <bench/bench.h>
+#include <bench/libauth_bench.h>
 
 #include <crypto/sha256.h>
 #include <key.h>
@@ -29,7 +30,7 @@ static void SetupBenchArgs() {
 
     gArgs.AddArg("-list",
                  "List benchmarks without executing them. Can be combined "
-                 "with -scaling and -filter",
+                 "with -scaling, -filter, and -libauth",
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg(
         "-evals=<n>",
@@ -40,6 +41,13 @@ static void SetupBenchArgs() {
                  strprintf("Regular expression filter to select benchmark by "
                            "name (default: %s)",
                            DEFAULT_BENCH_FILTER),
+                 ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-libauth=<mode>",
+                 "Run *only* the LibAuth benches, optional <mode> is either empty or one of \"all\", \"slow\", "
+                 "or \"all_slow\". The \"all\" variants run *every* LibAuth test (including ones not marked as "
+                 "benchmarks). The \"slow\" variants run each test with more iterations. "
+                 "If this argument is missing we do not run any LibAuth benches and none appear in -list. If this "
+                 "argument is specified, then all of the normal (non-LibAuth) benches will be completely suppressed.",
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg(
         "-scaling=<n>",
@@ -128,8 +136,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    benchmark::BenchRunner::RunAll(*printer, evaluations, scaling_factor,
-                                   regex_filter, is_list_only);
+    // For LibAuth-only mode
+    std::string internalFilter;
+    if (gArgs.IsArgSet("-libauth")) {
+        internalFilter = "^LibAuth_.*";
+        EnableLibAuthBenches(gArgs.GetArg("-libauth", ""));
+    }
+
+    benchmark::BenchRunner::RunAll(*printer, evaluations, scaling_factor, regex_filter, is_list_only, internalFilter);
 
     return EXIT_SUCCESS;
 }

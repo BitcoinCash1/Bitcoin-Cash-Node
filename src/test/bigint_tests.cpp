@@ -17,7 +17,9 @@
 #include <test/data/bigint_shift_tests.json.h>
 #include <test/data/bigint_sum_tests.json.h>
 #include <test/data/bigint_test_vectors.json.h>
+#include <test/jsonutil.h>
 #include <test/scriptnum10.h>
+#include <test/util.h>
 
 #include <test/setup_common.h>
 
@@ -26,7 +28,6 @@
 #include <algorithm>
 #include <cstring>
 #include <ios>
-#include <iterator>
 #include <ostream>
 #include <sstream>
 #include <string_view>
@@ -1059,30 +1060,22 @@ std::conditional_t<TV == TV_DEFAULT, UniValue::Object, UniValue::Array>
 
     if constexpr (TV == TV_DEFAULT) {
         UniValue uv;
-        const std::string jsonData(reinterpret_cast<const char *>(json_tests::bigint_test_vectors),
-                                   std::size(json_tests::bigint_test_vectors));
-        auto r = uv.read(jsonData);
+        auto r = uv.read(UncompressStr(json_tests::bigint_test_vectors, json_tests::bigint_test_vectors_uncompressed_size));
         BOOST_REQUIRE(r);
 
         return std::move(uv.get_obj());
     } else {
-        Span<const uint8_t> data;
+        auto UncompressJson = [](Span<const uint8_t> bytes, const size_t uncompSz) {
+            return read_json(UncompressStr(bytes, uncompSz));
+        };
         switch (TV) {
-            case TV_EXP: data = json_tests::bigint_exp_tests; break;
-            case TV_MOD: data = json_tests::bigint_mod_tests; break;
-            case TV_MUL: data = json_tests::bigint_mul_tests; break;
-            case TV_SHIFT: data = json_tests::bigint_shift_tests; break;
-            case TV_SUM: data = json_tests::bigint_sum_tests; break;
+            case TV_EXP: return UncompressJson(json_tests::bigint_exp_tests, json_tests::bigint_exp_tests_uncompressed_size);
+            case TV_MOD: return UncompressJson(json_tests::bigint_mod_tests, json_tests::bigint_mod_tests_uncompressed_size);
+            case TV_MUL: return UncompressJson(json_tests::bigint_mul_tests, json_tests::bigint_mul_tests_uncompressed_size);
+            case TV_SHIFT: return UncompressJson(json_tests::bigint_shift_tests, json_tests::bigint_shift_tests_uncompressed_size);
+            case TV_SUM: return UncompressJson(json_tests::bigint_sum_tests, json_tests::bigint_sum_tests_uncompressed_size);
             default: throw std::invalid_argument("This should never happen");
         }
-        BOOST_REQUIRE(!data.empty());
-
-        UniValue uv;
-        const std::string jsonData(reinterpret_cast<const char *>(data.data()), data.size());
-        auto r = uv.read(jsonData);
-        BOOST_REQUIRE(r);
-
-        return std::move(uv.get_array());
     }
 }
 
