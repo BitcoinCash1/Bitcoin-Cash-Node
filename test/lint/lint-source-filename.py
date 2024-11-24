@@ -17,7 +17,8 @@ EXCLUDE_FOLDERS = [
     'src/leveldb',
     'src/secp256k1',
     'src/tinyformat.h',
-    'src/univalue'
+    'src/univalue',
+    'src/test/fuzz/FuzzedDataProvider.h',
 ]
 
 SOURCE_PATTERNS = [
