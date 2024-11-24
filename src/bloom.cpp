@@ -1,5 +1,5 @@
 // Copyright (c) 2012-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -38,7 +38,6 @@ CBloomFilter::CBloomFilter(const uint32_t nElements, const double nFPRate,
     : vData(std::min<uint32_t>(-1 / LN2SQUARED * nElements * log(nFPRate),
                                MAX_BLOOM_FILTER_SIZE * 8) /
             8),
-      isFull(false), isEmpty(true),
       nHashFuncs(std::min<uint32_t>(vData.size() * 8 / nElements * LN2,
                                     MAX_HASH_FUNCS)),
       nTweak(nTweakIn), nFlags(nFlagsIn) {}
@@ -46,6 +45,10 @@ CBloomFilter::CBloomFilter(const uint32_t nElements, const double nFPRate,
 inline uint32_t
 CBloomFilter::Hash(uint32_t nHashNum,
                    const std::vector<uint8_t> &vDataToHash) const {
+    if (vData.empty()) {
+        // Avoid divide-by-zero (CVE-2013-5700)
+        return 0u;
+    }
     // 0xFBA4C795 chosen as it guarantees a reasonable bit difference between
     // nHashNum values.
     return MurmurHash3(nHashNum * 0xFBA4C795 + nTweak, vDataToHash) %
@@ -53,16 +56,15 @@ CBloomFilter::Hash(uint32_t nHashNum,
 }
 
 void CBloomFilter::insert(const std::vector<uint8_t> &vKey) {
-    if (isFull) {
+    if (vData.empty()) {
+        // Avoid out-of-range access below; zero-size = "match-all" filter
         return;
     }
-
     for (uint32_t i = 0; i < nHashFuncs; i++) {
         uint32_t nIndex = Hash(i, vKey);
         // Sets bit nIndex of vData
         vData[nIndex >> 3] |= (1 << (7 & nIndex));
     }
-    isEmpty = false;
 }
 
 void CBloomFilter::insert(const COutPoint &outpoint) {
@@ -78,11 +80,9 @@ void CBloomFilter::insert(const uint256 &hash) {
 }
 
 bool CBloomFilter::contains(const std::vector<uint8_t> &vKey) const {
-    if (isFull) {
+    if (vData.empty()) {
+        // Avoid out-of-range access below; zero-size = "match-all" filter
         return true;
-    }
-    if (isEmpty) {
-        return false;
     }
     for (uint32_t i = 0; i < nHashFuncs; i++) {
         uint32_t nIndex = Hash(i, vKey);
@@ -108,8 +108,6 @@ bool CBloomFilter::contains(const uint256 &hash) const {
 
 void CBloomFilter::clear() {
     vData.assign(vData.size(), 0);
-    isFull = false;
-    isEmpty = true;
 }
 
 void CBloomFilter::reset(const uint32_t nNewTweak) {
@@ -123,15 +121,13 @@ bool CBloomFilter::IsWithinSizeConstraints() const {
 }
 
 bool CBloomFilter::MatchAndInsertOutputs(const CTransaction &tx) {
+    if (vData.empty()) {
+        // zero-size = "match-all" filter
+        return true;
+    }
     bool fFound = false;
     // Match if the filter contains the hash of tx for finding tx when they
     // appear in a block
-    if (isFull) {
-        return true;
-    }
-    if (isEmpty) {
-        return false;
-    }
 
     const TxId &txid = tx.GetId();
     if (contains(txid)) {
@@ -174,8 +170,9 @@ bool CBloomFilter::MatchAndInsertOutputs(const CTransaction &tx) {
 }
 
 bool CBloomFilter::MatchInputs(const CTransaction &tx) {
-    if (isEmpty) {
-        return false;
+    if (vData.empty()) {
+        // zero-size = "match-all" filter
+        return true;
     }
 
     for (const CTxIn &txin : tx.vin) {
@@ -200,17 +197,6 @@ bool CBloomFilter::MatchInputs(const CTransaction &tx) {
     }
 
     return false;
-}
-
-void CBloomFilter::UpdateEmptyFull() {
-    bool full = true;
-    bool empty = true;
-    for (const auto d : vData) {
-        full &= (d == 0xff);
-        empty &= (d == 0);
-    }
-    isFull = full;
-    isEmpty = empty;
 }
 
 CRollingBloomFilter::CRollingBloomFilter(const uint32_t nElements,

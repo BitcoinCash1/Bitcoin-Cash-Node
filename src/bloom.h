@@ -1,5 +1,5 @@
 // Copyright (c) 2012-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2021 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -45,8 +45,6 @@ enum bloomflags {
 class CBloomFilter {
 private:
     std::vector<uint8_t> vData;
-    bool isFull;
-    bool isEmpty;
     uint32_t nHashFuncs;
     uint32_t nTweak;
     uint8_t nFlags;
@@ -69,7 +67,7 @@ public:
     CBloomFilter(const uint32_t nElements, const double nFPRate,
                  const uint32_t nTweak, uint8_t nFlagsIn);
     CBloomFilter()
-        : isFull(true), isEmpty(false), nHashFuncs(0), nTweak(0), nFlags(0) {}
+        : nHashFuncs(0), nTweak(0), nFlags(0) {}
 
     SERIALIZE_METHODS(CBloomFilter, obj) { READWRITE(obj.vData, obj.nHashFuncs, obj.nTweak, obj.nFlags); }
 
@@ -104,9 +102,6 @@ public:
     bool IsRelevantAndUpdate(const CTransaction &tx) {
         return MatchAndInsertOutputs(tx) || MatchInputs(tx);
     }
-
-    //! Checks for empty and full filters to avoid wasting cpu
-    void UpdateEmptyFull();
 };
 
 /**
