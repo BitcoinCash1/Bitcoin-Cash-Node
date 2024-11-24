@@ -89,3 +89,11 @@ add_fuzz_target(
     # Sources
     bloom_filter.cpp
 )
+
+add_fuzz_target(
+    fuzz-rolling_bloom_filter
+    rolling_bloom_filter
+
+    # Sources
+    rolling_bloom_filter.cpp
+)
