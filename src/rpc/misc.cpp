@@ -9,6 +9,7 @@
 #include <config.h>
 #include <core_io.h>
 #include <httpserver.h>
+#include <index/txindex.h>
 #include <key_io.h>
 #include <logging.h>
 #include <net.h>
@@ -26,6 +27,7 @@
 #include <univalue.h>
 
 #include <cstdint>
+#include <utility>
 #ifdef HAVE_MALLOC_INFO
 #include <malloc.h>
 #endif
@@ -534,6 +536,61 @@ static UniValue getinfo_deprecated(const Config &config,
                        "format these in the old format.");
 }
 
+static UniValue getindexinfo(const Config &, const JSONRPCRequest &request) {
+    if (request.fHelp || request.params.size() > 1) {
+        throw std::runtime_error(
+            RPCHelpMan{
+                "getindexinfo",
+                "\nReturns the status of one or all available indices currently running in the node.\n",
+                {
+                    {"index_name", RPCArg::Type::STR, /* optional */ true, /* default */ "", "Filter results for an index with a specific name."},
+                },
+                RPCResult{
+                    "{                               (json object)\n"
+                    "  \"name\" : {                    (json object) The name of the index\n"
+                    "    \"synced\" : true|false,      (boolean) Whether the index is synced or not\n"
+                    "    \"best_block_height\" : n     (numeric) The block height to which the index is synced\n"
+                    "  },\n"
+                    "  ...\n"
+                    "}\n"
+                },
+                RPCExamples{
+                    HelpExampleCli("getindexinfo", "")
+                    + HelpExampleRpc("getindexinfo", "")
+                    + HelpExampleCli("getindexinfo", "txindex")
+                    + HelpExampleRpc("getindexinfo", "\"txindex\"")
+                }
+            }.ToStringWithResultsAndExamples()
+        );
+    }
+
+    UniValue::Object result;
+    const std::string index_name = request.params[0].isNull() ? "" : request.params[0].get_str();
+
+    auto SummaryToJSON = [&index_name](const IndexSummary &summary) {
+        UniValue::Object ret_summary;
+        if (index_name.empty() || index_name == summary.name) {
+            UniValue::Object entry;
+            entry.reserve(2);
+            entry.emplace_back("synced", summary.synced);
+            entry.emplace_back("best_block_height", summary.best_block_height);
+            ret_summary.emplace_back(summary.name, std::move(entry));
+        }
+        return ret_summary;
+    };
+
+    auto ExtendResult = [&result](UniValue::Object &&obj) {
+        for (auto &&kvpair : obj) {
+            result.emplace_back(std::move(kvpair));
+        }
+    };
+
+    if (g_txindex) {
+        ExtendResult(SummaryToJSON(g_txindex->GetSummary()));
+    }
+
+    return result;
+}
 // clang-format off
 static const ContextFreeRPCCommand commands[] = {
     //  category            name                      actor (function)        argNames
@@ -544,6 +601,7 @@ static const ContextFreeRPCCommand commands[] = {
     { "util",               "createmultisig",         createmultisig,         {"nrequired","keys"} },
     { "util",               "verifymessage",          verifymessage,          {"address","signature","message"} },
     { "util",               "signmessagewithprivkey", signmessagewithprivkey, {"privkey","message"} },
+    { "util",               "getindexinfo",           getindexinfo,           {"index_name"} },
     /* Not shown in help */
     { "hidden",             "setmocktime",            setmocktime,            {"timestamp"}},
     { "hidden",             "echo",                   echo,                   {"arg0","arg1","arg2","arg3","arg4","arg5","arg6","arg7","arg8","arg9"}},
