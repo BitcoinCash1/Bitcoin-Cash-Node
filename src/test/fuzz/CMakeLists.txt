@@ -81,3 +81,11 @@ add_fuzz_target(
     # Sources
     partially_downloaded_block.cpp
 )
+
+add_fuzz_target(
+    fuzz-bloom_filter
+    bloom_filter
+
+    # Sources
+    bloom_filter.cpp
+)
