@@ -49,6 +49,9 @@ void BaseIndex::DB::WriteBestBlock(CDBBatch &batch,
     batch.Write(DB_BEST_BLOCK, locator);
 }
 
+BaseIndex::BaseIndex(std::string_view index_name)
+    : m_name{index_name} {}
+
 BaseIndex::~BaseIndex() {
     Interrupt();
     Stop();
@@ -289,7 +292,7 @@ void BaseIndex::Start() {
         return;
     }
 
-    m_thread_sync = std::thread(util::TraceThread, GetName(), [this] { ThreadSync(); });
+    m_thread_sync = std::thread(util::TraceThread, GetName().c_str(), [this] { ThreadSync(); });
 }
 
 void BaseIndex::Stop() {

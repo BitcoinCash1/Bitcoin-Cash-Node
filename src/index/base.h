@@ -12,6 +12,9 @@
 #include <uint256.h>
 #include <validationinterface.h>
 
+#include <string>
+#include <string_view>
+
 class CBlockIndex;
 
 /** Result type returned by BaseIndex::GetSummary() */
@@ -42,6 +45,9 @@ protected:
     };
 
 private:
+    /// The name of this index e.g. "txindex", etc.
+    const std::string m_name;
+
     /// Whether the index is in sync with the main chain. The flag is flipped
     /// from false to true once, after which point this starts processing
     /// ValidationInterface notifications to stay in sync.
@@ -95,9 +101,11 @@ protected:
     virtual DB &GetDB() const = 0;
 
     /// Get the name of the index for display in logs.
-    virtual const char *GetName() const = 0;
+    const std::string &GetName() const { return m_name; }
 
 public:
+    explicit BaseIndex(std::string_view index_name);
+
     /// Destructor interrupts sync thread if running and blocks until it exits.
     virtual ~BaseIndex();
 
