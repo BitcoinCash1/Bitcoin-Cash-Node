@@ -3730,7 +3730,6 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
         } else {
             LOCK(pfrom->cs_filter);
             pfrom->pfilter.reset(new CBloomFilter(filter));
-            pfrom->pfilter->UpdateEmptyFull();
             pfrom->fRelayTxes = true;
         }
         return true;
