@@ -61,7 +61,10 @@ ReadStatus PartiallyDownloadedBlock::InitData(
         return READ_STATUS_INVALID;
     }
 
-    assert(header.IsNull() && txns_available.empty());
+    if (!header.IsNull() || !txns_available.empty()) {
+        return READ_STATUS_INVALID;
+    }
+
     header = cmpctblock.header;
     txns_available.resize(cmpctblock.BlockTxCount());
 
@@ -206,14 +209,17 @@ ReadStatus PartiallyDownloadedBlock::InitData(
 }
 
 bool PartiallyDownloadedBlock::IsTxAvailable(size_t index) const {
-    assert(!header.IsNull());
+    if (header.IsNull())  {
+        return READ_STATUS_INVALID;
+    }
     assert(index < txns_available.size());
     return txns_available[index] != nullptr;
 }
 
-ReadStatus PartiallyDownloadedBlock::FillBlock(
-    CBlock &block, const std::vector<CTransactionRef> &vtx_missing) {
-    assert(!header.IsNull());
+ReadStatus PartiallyDownloadedBlock::FillBlock(CBlock &block, const std::vector<CTransactionRef> &vtx_missing) {
+    if (header.IsNull()) {
+        return READ_STATUS_INVALID;
+    }
     uint256 hash = header.GetHash();
     block = header;
     block.vtx.resize(txns_available.size());
