@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <amount.h>
 #include <serialize.h>
 #include <streams.h>
 #include <test/fuzz/FuzzedDataProvider.h>
@@ -36,4 +37,11 @@ inline std::optional<T> ConsumeDeserializable(FuzzedDataProvider& fuzzed_data_pr
         return std::nullopt;
     }
     return obj;
+}
+
+[[nodiscard]]
+inline Amount ConsumeMoney(FuzzedDataProvider& fuzzed_data_provider,
+                           const std::optional<Amount> &max = std::nullopt) noexcept {
+    auto val = fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, max.value_or(MAX_MONEY) / SATOSHI);
+    return val * SATOSHI;
 }
