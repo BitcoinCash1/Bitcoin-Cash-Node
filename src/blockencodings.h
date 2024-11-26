@@ -5,13 +5,16 @@
 
 #pragma once
 
+#include <consensus/validation.h>
 #include <primitives/block.h>
 
+#include <functional>
 #include <limits>
 #include <type_traits>
 
 class Config;
 class CTxMemPool;
+namespace Consensus { struct Params; }
 
 // Transaction compression schemes for compact block relay can be introduced by
 // writing an actual formatter here.
@@ -148,6 +151,12 @@ protected:
 
 public:
     CBlockHeader header;
+
+    // Can be overriden with a mock block checker for testing (if nullptr, we use real CheckBlock() from validation.h)
+    using CheckBlockFn = std::function<bool(const CBlock &block, CValidationState &state,
+                                            const Consensus::Params &params, BlockValidationOptions validationOptions)>;
+    CheckBlockFn m_check_block_mock{nullptr};
+
     PartiallyDownloadedBlock(const Config &configIn, CTxMemPool *poolIn)
         : pool(poolIn), config(&configIn) {}
 
