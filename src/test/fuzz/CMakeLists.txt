@@ -73,3 +73,11 @@ add_fuzz_target(
     # Sources
     txrequest.cpp
 )
+
+add_fuzz_target(
+    fuzz-partially_downloaded_block
+    partially_downloaded_block
+
+    # Sources
+    partially_downloaded_block.cpp
+)
