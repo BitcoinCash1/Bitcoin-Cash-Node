@@ -15,6 +15,7 @@
 #include <chain.h>
 #include <coins.h>
 #include <consensus/consensus.h>
+#include <consensus/validation.h>
 #include <flatfile.h>
 #include <fs.h>
 #include <policy/policy.h>
@@ -258,36 +259,6 @@ static constexpr unsigned int DEFAULT_CHECKLEVEL = 3;
  * we can respect the target.
  */
 static constexpr uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 550 * 1024 * 1024;
-
-class BlockValidationOptions {
-    bool checkPoW;
-    bool checkMerkleRoot;
-
-public:
-    // Do full validation by default
-    BlockValidationOptions(bool _checkPow = true, bool _checkMerkleRoot = true)
-        : checkPoW(_checkPow), checkMerkleRoot(_checkMerkleRoot) {}
-
-    // Compatibility c'tor to keep old source working (config param unused but may be used again someday)
-    BlockValidationOptions(const Config &config [[maybe_unused]], bool _checkPow = true, bool _checkMerkleRoot = true)
-        : BlockValidationOptions(_checkPow, _checkMerkleRoot) {}
-
-    BlockValidationOptions withCheckPoW(bool _checkPoW = true) const {
-        BlockValidationOptions ret = *this;
-        ret.checkPoW = _checkPoW;
-        return ret;
-    }
-
-    BlockValidationOptions
-    withCheckMerkleRoot(bool _checkMerkleRoot = true) const {
-        BlockValidationOptions ret = *this;
-        ret.checkMerkleRoot = _checkMerkleRoot;
-        return ret;
-    }
-
-    bool shouldValidatePoW() const { return checkPoW; }
-    bool shouldValidateMerkleRoot() const { return checkMerkleRoot; }
-};
 
 /**
  * Process an incoming block. This only returns after the best known valid

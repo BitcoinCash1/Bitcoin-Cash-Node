@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2017-2021 The Bitcoin developers
+// Copyright (c) 2017-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,17 +9,17 @@
 #include <dsproof/dspid.h>
 
 #include <string>
-#include <memory>
-#include <vector>
+
+class Config;
 
 /** "reject" message codes */
-static const uint8_t REJECT_MALFORMED = 0x01;
-static const uint8_t REJECT_INVALID = 0x10;
-static const uint8_t REJECT_OBSOLETE = 0x11;
-static const uint8_t REJECT_DUPLICATE = 0x12;
-static const uint8_t REJECT_NONSTANDARD = 0x40;
-static const uint8_t REJECT_INSUFFICIENTFEE = 0x42;
-static const uint8_t REJECT_CHECKPOINT = 0x43;
+inline constexpr uint8_t REJECT_MALFORMED = 0x01;
+inline constexpr uint8_t REJECT_INVALID = 0x10;
+inline constexpr uint8_t REJECT_OBSOLETE = 0x11;
+inline constexpr uint8_t REJECT_DUPLICATE = 0x12;
+inline constexpr uint8_t REJECT_NONSTANDARD = 0x40;
+inline constexpr uint8_t REJECT_INSUFFICIENTFEE = 0x42;
+inline constexpr uint8_t REJECT_CHECKPOINT = 0x43;
 
 /** Capture information about block/transaction validation */
 class CValidationState {
@@ -94,4 +94,34 @@ public:
     bool HasDspId() const { return bool(dspIdPtr); }
     DspId GetDspId() const { return dspIdPtr ? *dspIdPtr : DspId{}; }
     void SetDspId(const DspId &dspId) { dspIdPtr = dspId; }
+};
+
+/// Class used to paramaterize operation of certain validation functions such as e.g. CheckBlock() in validation.h
+class BlockValidationOptions {
+    bool checkPoW;
+    bool checkMerkleRoot;
+
+public:
+    // Do full validation by default
+    BlockValidationOptions(bool _checkPow = true, bool _checkMerkleRoot = true)
+        : checkPoW(_checkPow), checkMerkleRoot(_checkMerkleRoot) {}
+
+    // Compatibility c'tor to keep old source working (config param unused but may be used again someday)
+    BlockValidationOptions(const Config &config [[maybe_unused]], bool _checkPow = true, bool _checkMerkleRoot = true)
+        : BlockValidationOptions(_checkPow, _checkMerkleRoot) {}
+
+    BlockValidationOptions withCheckPoW(bool _checkPoW = true) const {
+        BlockValidationOptions ret = *this;
+        ret.checkPoW = _checkPoW;
+        return ret;
+    }
+
+    BlockValidationOptions withCheckMerkleRoot(bool _checkMerkleRoot = true) const {
+        BlockValidationOptions ret = *this;
+        ret.checkMerkleRoot = _checkMerkleRoot;
+        return ret;
+    }
+
+    bool shouldValidatePoW() const { return checkPoW; }
+    bool shouldValidateMerkleRoot() const { return checkMerkleRoot; }
 };
