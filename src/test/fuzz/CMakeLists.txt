@@ -61,7 +61,6 @@ add_fuzz_target(
 	script_flags
 
 	# Sources
-	fuzz.cpp
 	script_flags.cpp
 	../scriptflags.cpp
 )
@@ -71,6 +70,5 @@ add_fuzz_target(
     txrequest
 
     # Sources
-    fuzz.cpp
     txrequest.cpp
 )

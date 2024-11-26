@@ -11,6 +11,6 @@
 #include <functional>
 #include <string>
 
-const std::function<std::string(const char *)> G_TRANSLATION_FUN = nullptr;
+extern const std::function<std::string(const char *)> G_TRANSLATION_FUN;
 
 void test_one_input(Span<const uint8_t> buffer);

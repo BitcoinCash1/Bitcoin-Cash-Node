@@ -10,6 +10,8 @@
 #include <memory>
 #include <unistd.h>
 
+const std::function<std::string(const char *)> G_TRANSLATION_FUN = nullptr;
+
 static bool read_stdin(std::vector<uint8_t> &data) {
     uint8_t buffer[1024];
     ssize_t length = 0;
