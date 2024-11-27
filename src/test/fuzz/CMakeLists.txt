@@ -4,6 +4,7 @@ add_custom_target(bitcoin-fuzzers)
 macro(add_fuzz_target TARGET EXE_NAME)
 	add_executable(${TARGET} EXCLUDE_FROM_ALL
 		fuzz.cpp
+		util/mempool.cpp
 		${ARGN}
 	)
 	set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME ${EXE_NAME})
@@ -61,7 +62,6 @@ add_fuzz_target(
 	script_flags
 
 	# Sources
-	fuzz.cpp
 	script_flags.cpp
 	../scriptflags.cpp
 )
@@ -71,6 +71,13 @@ add_fuzz_target(
     txrequest
 
     # Sources
-    fuzz.cpp
     txrequest.cpp
+)
+
+add_fuzz_target(
+    fuzz-partially_downloaded_block
+    partially_downloaded_block
+
+    # Sources
+    partially_downloaded_block.cpp
 )
