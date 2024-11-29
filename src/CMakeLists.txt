@@ -387,6 +387,7 @@ add_library(util
   threadinterrupt.cpp
   uint256.cpp
   util/asmap.cpp
+  util/check.cpp
   util/moneystr.cpp
   util/saltedhashers.cpp
   util/strencodings.cpp
