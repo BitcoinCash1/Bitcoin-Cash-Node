@@ -30,6 +30,9 @@ None
 
 ## Modified functionality
 
+- The peer-to-peer network's block propagation logic has been improved to allow for lower-latency block propagation.
+  In particular, block downloads now request the latest block from up to 3 peers simultaneously so that the node has a
+  better chance of receiving the latest block as quickly as possible.
 - The `getnetworkinfo` RPC method results now include two new keys: `connections_in` and `connections_out`. These
   correspond to the current number of active inbound and outbound peer-to-peer connections, respectively.
 
