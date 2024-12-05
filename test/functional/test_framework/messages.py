@@ -1735,9 +1735,9 @@ class msg_sendcmpct:
     __slots__ = ("announce", "version")
     msgtype = b"sendcmpct"
 
-    def __init__(self):
-        self.announce = False
-        self.version = 1
+    def __init__(self, announce=None, version=None):
+        self.announce = False if announce is None else announce
+        self.version = 1 if version is None else version
 
     def deserialize(self, f):
         self.announce = struct.unpack("<?", f.read(1))[0]
