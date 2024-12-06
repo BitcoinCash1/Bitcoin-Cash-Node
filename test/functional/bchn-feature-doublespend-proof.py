@@ -59,6 +59,12 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         privkey.set(privkeybytes[:-1], True)
         return privkey.get_pubkey()
 
+    @staticmethod
+    def get_dsp_bytes(node):
+        """Returns a tuple of dsproof-msg bytes sent, received"""
+        return (sum(x.get('bytessent_per_msg', {}).get('dsproof-beta', 0) for x in node.getpeerinfo()),
+                sum(x.get('bytesrecv_per_msg', {}).get('dsproof-beta', 0) for x in node.getpeerinfo()))
+
     def run_test(self):
         class P2PInterfaceRequestsMempoolOnConnect(P2PInterface):
             mempool_sent = False
@@ -87,6 +93,10 @@ class DoubleSpendProofTest(BitcoinTestFramework):
         disconnect_nodes(self.nodes[2], non_dsproof_node)
         connect_nodes(self.nodes[1], non_dsproof_node)
 
+        for node in self.nodes:
+            # Ensure msg byte counts for dsproof-beta messages start out as expected
+            assert_equal((0, 0), self.get_dsp_bytes(node))
+
         # Create and mine a regular non-coinbase transaction for spending
         fundingtxid = self.nodes[0].getblock(self.nodes[0].getblockhash(1))['tx'][0]
         fundingtx = FromHex(CTransaction(), self.nodes[0].getrawtransaction(fundingtxid))
@@ -106,6 +116,13 @@ class DoubleSpendProofTest(BitcoinTestFramework):
             lock=p2p_lock,
             timeout=25
         )
+
+        b0 = self.get_dsp_bytes(self.nodes[0])
+        b1 = self.get_dsp_bytes(self.nodes[1])
+        self.log.info(f"Verifying dsproof-beta byte counts: node0={b0} node1={b1} ...")
+        assert_greater_than(b0[0], 0)  # Ensure that node0 sent byte count > 0 (it send to python p2p nodes)
+        assert_greater_than(b0[1] + b1[1], 0)  # Either node0 or node1 received a dsproof, ensure byte count went up.
+        assert_equal(self.get_dsp_bytes(non_dsproof_node)[1], 0)  # non-dsproof node should not have gotten any dsproof
 
         # 1. The DSP message is well-formed and contains all fields
         # If the message arrived and was deserialized successfully, then 1. is satisfied
