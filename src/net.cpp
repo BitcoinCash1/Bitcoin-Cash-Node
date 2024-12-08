@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <type_traits>
 #include <unordered_map>
 
@@ -2003,7 +2004,6 @@ void CConnman::ThreadMessageHandler() {
         }
 
         bool fMoreWork = false;
-        auto nSleepUntil = GetTime<std::chrono::microseconds>() + std::chrono::microseconds{100000};
 
         for (CNode *pnode : vNodesCopy) {
             if (pnode->fDisconnect) {
@@ -2024,14 +2024,48 @@ void CConnman::ThreadMessageHandler() {
                 m_msgproc->SendMessages(*config, pnode, flagInterruptMsgProc);
             }
 
-            // Calculate next wakeup time as the closest time in the future we plan on sending an Inv messgae.
-            // We ignore disconnected nodes or nodes that are still doing a handshake for this calculation.
-            if (pnode->nNextInvSend > std::chrono::microseconds{0} && NodeFullyConnected(pnode)) {
-                nSleepUntil = std::min(pnode->nNextInvSend, nSleepUntil);
-            }
-
             if (flagInterruptMsgProc) {
                 return;
+            }
+        }
+
+        using namespace std::chrono_literals;
+        constexpr auto baseInterval = 100'000us; // shoot for sleeping 100k microseconds or 100 msec if no more work
+        auto nSleepUntil = 0us;
+        std::optional<NodeId> shortenedIntervalDueToNodeId;
+
+        // If no more work to do, we will need to sleep. Determine `nSleepUntil`.
+        if (!fMoreWork) {
+            // Start with base interval of 100msec from now
+            nSleepUntil = GetTime<std::chrono::microseconds>() + baseInterval;
+            // Determine if we maybe need to wake up earlier if there are invs to send. Note: We must loop here again
+            // to determine this accurately since this determination must be made *after* the initial pass for all
+            // nodes' message processing that we did above.
+            for (CNode *pnode : vNodesCopy) {
+                // We ignore disconnected nodes or nodes that are still doing a handshake.
+                if (pnode->nNextInvSend <= 0us || !NodeFullyConnected(pnode)) {
+                    continue;
+                }
+                const bool hasInvToSend =
+                    WITH_LOCK(pnode->cs_inventory,
+                              // Criteria for classifying a node as having invs to send
+                              return pnode->fSendMempool
+                                     || !pnode->vInventoryToSend.empty()
+                                     || !pnode->vInventoryBlockToSend.empty() || !pnode->vBlockHashesToAnnounce.empty()
+                                     || (WITH_LOCK(pnode->cs_filter, return pnode->fRelayTxes)
+                                         && !pnode->setInventoryTxToSend.empty()));
+
+                // Calculate next wakeup time as the closest time in the future we plan on sending an Inv messgae.
+                if (hasInvToSend) {
+                    auto prevVal = nSleepUntil;
+
+                    nSleepUntil = std::min(pnode->nNextInvSend, nSleepUntil);
+
+                    // If the value decreased, remember which peer caused it to decrease for debug printing purposes
+                    if (nSleepUntil < prevVal) {
+                        shortenedIntervalDueToNodeId = pnode->GetId();
+                    }
+                }
             }
         }
 
@@ -2043,11 +2077,16 @@ void CConnman::ThreadMessageHandler() {
         }
 
         WAIT_LOCK(mutexMsgProc, lock);
-        if (!fMoreWork) {
-            auto nSleepFor =
-                std::max(std::chrono::microseconds{0}, std::min(std::chrono::microseconds{100000},
-                                                                nSleepUntil - GetTime<std::chrono::microseconds>()));
-            condMsgProc.wait_for(lock, nSleepFor, [this] { return fMsgProcWake; });
+        if (nSleepUntil > 0us) {
+            auto const delta = (nSleepUntil + 1us /* overshoot by 1 usec */) - GetTime<std::chrono::microseconds>();
+            auto const nSleepFor = std::clamp(delta, 0us, baseInterval); // clamp to [0, 100msec]
+            if (shortenedIntervalDueToNodeId) {
+                LogPrint(BCLog::NET, "%s: Will wake up early in %1.3f msec due to need to send invs to peer=%i\n",
+                         __func__, nSleepFor.count() / 1e3, *shortenedIntervalDueToNodeId);
+            }
+            if (nSleepFor > 0us) {
+                condMsgProc.wait_for(lock, nSleepFor, [this] { return fMsgProcWake; });
+            }
         }
         fMsgProcWake = false;
     }
