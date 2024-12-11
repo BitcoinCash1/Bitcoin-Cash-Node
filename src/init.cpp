@@ -447,6 +447,9 @@ void SetupServerArgs() {
                            "not affected. (default: %d)",
                            DEFAULT_BLOCKSONLY),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-check-abla", strprintf("Whether to run extra ABLA (adaptive blocksize limit algorithm) checks at "
+                                          "startup. (default: %i)", DEFAULT_ABLA_SLOW_CHECKS),
+                 ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
     gArgs.AddArg("-conf=<file>",
                  strprintf("Specify configuration file. Relative paths will be "
                            "prefixed by datadir location. (default: %s)",

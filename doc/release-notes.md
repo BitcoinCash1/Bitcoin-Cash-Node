@@ -32,6 +32,9 @@ None
 
 - The `getnetworkinfo` RPC method results now include two new keys: `connections_in` and `connections_out`. These
   correspond to the current number of active inbound and outbound peer-to-peer connections, respectively.
+- The ABLA startup checks have been simplified and reduced to be simpler and faster. This should improve Bitcoin Cash
+  Node startup times (in particular if running on an HDD-based system). To enable the old more thorough ABLA checks at
+  app startup, start the node with the `-check-abla` option.
 
 ## Removed functionality
 
