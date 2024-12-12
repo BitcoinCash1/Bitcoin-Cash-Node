@@ -293,6 +293,15 @@ public:
     bool RemoveAddedNode(const std::string &node);
     std::vector<AddedNodeInfo> GetAddedNodeInfo();
 
+    /**
+     * Attempts to open a connection. Currently only used from tests.
+     *
+     * @param[in]   address     Address of node to try connecting to
+     * @return      bool        Returns false if there are no available
+     *                          outbound slots for this connection.
+     */
+    bool AddConnection(const std::string& address);
+
     size_t GetNodeCount(NumConnections num);
     void GetNodeStats(std::vector<CNodeStats> &vstats);
     bool DisconnectNode(const std::string &node);

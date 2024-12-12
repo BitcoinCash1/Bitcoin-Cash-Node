@@ -1115,6 +1115,30 @@ void CConnman::AcceptConnection(const ListenSocket &hListenSocket) {
     }
 }
 
+bool CConnman::AddConnection(const std::string& address) {
+    const int max_connections = nMaxOutbound;
+
+    // Count existing connections of outbound type
+    const int existing_connections =
+        WITH_LOCK(cs_vNodes,
+                  return std::count_if(vNodes.begin(), vNodes.end(),
+                                       [](const auto & node) { return !node->fInbound && !node->fFeeler; }););
+
+    // Max connections of outbound type already exist
+    if (existing_connections >= max_connections) {
+        return false;
+    }
+
+    // Max total outbound connections already exist
+    CSemaphoreGrant grant(*semOutbound, true);
+    if (!grant) {
+        return false;
+    }
+
+    OpenNetworkConnection(CAddress(), false, &grant, address.c_str(), false, false, false);
+    return true;
+}
+
 void CConnman::DisconnectNodes() {
     {
         LOCK(cs_vNodes);

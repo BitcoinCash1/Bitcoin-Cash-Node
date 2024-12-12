@@ -517,7 +517,9 @@ static UniValue getnetworkinfo(const Config &config,
                 "  \"localservices\": \"xxxxxxxxxxxxxxxx\",          (string) the services we offer to the network\n"
                 "  \"localrelay\": true|false,                     (bool) true if transaction relay is requested from peers\n"
                 "  \"timeoffset\": xxxxx,                          (numeric) the time offset\n"
-                "  \"connections\": xxxxx,                         (numeric) the number of connections\n"
+                "  \"connections\": xxxxx,                         (numeric) the total number of connections\n"
+                "  \"connections_in\": xxxxx,                      (numeric) the number of inbound connections\n"
+                "  \"connections_out\": xxxxx,                     (numeric) the number of outbound connections\n"
                 "  \"networkactive\": true|false,                  (bool) whether p2p networking is enabled\n"
                 "  \"networks\": [                                 (array) information per network\n"
                 "  {\n"
@@ -563,6 +565,8 @@ static UniValue getnetworkinfo(const Config &config,
     if (g_connman) {
         obj.emplace_back("networkactive", g_connman->GetNetworkActive());
         obj.emplace_back("connections", g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL));
+        obj.emplace_back("connections_in", g_connman->GetNodeCount(CConnman::CONNECTIONS_IN));
+        obj.emplace_back("connections_out", g_connman->GetNodeCount(CConnman::CONNECTIONS_OUT));
     }
     obj.emplace_back("networks", GetNetworksInfo());
     obj.emplace_back("relayfee", ValueFromAmount(::minRelayTxFee.GetFeePerK()));
@@ -846,6 +850,43 @@ static UniValue getnodeaddresses(const Config &config,
     return ret;
 }
 
+static UniValue addconnection(const Config &config, const JSONRPCRequest &request) {
+    if (request.fHelp || request.params.size() > 2) {
+        throw std::runtime_error(RPCHelpMan{
+            "addconnection",
+            "\nOpen an outbound connection to a specified node. This RPC is for testing only.\n" ,
+            {
+                {"address", RPCArg::Type::STR, /* opt */ false, /* default_val */ "",
+                 "The IP address and port to attempt connecting to."},
+                {"dummy", RPCArg::Type::STR, /* opt */ true, /* default_val */ "",
+                 "This parameter is ignored and is provided for compatibility with other software."},
+            },
+            RPCResult{
+                "{\n"
+                "  \"address\": \"addr:port\",      (string) The address and port of the newly added connection.\n"
+                "}\n"},
+            RPCExamples{HelpExampleCli("addconnection", "\"1.2.3.4:8333\"") +
+                        HelpExampleRpc("addconnection", "\"1.2.3.4:8333\"")},
+        }.ToStringWithResultsAndExamples());
+    }
+    // Ensure we are on regtest
+    if (const auto &cparams = config.GetChainParams().GetConsensus(); ! cparams.fPowNoRetargeting) {
+        throw JSONRPCError(RPC_METHOD_DISABLED, "addconnection is for regression testing (-regtest mode) only.");
+    }
+    RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR});
+    const std::string address = request.params[0].get_str();
+    if (!g_connman) {
+        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled.");
+    }
+    const bool success = g_connman->AddConnection(address);
+    if (!success) {
+        throw JSONRPCError(RPC_CLIENT_NODE_CAPACITY_REACHED, "Error: Already at capacity for specified connection type.");
+    }
+    UniValue::Object info;
+    info.emplace_back("address", address);
+    return info;
+}
+
 static UniValue addpeeraddress(const Config &config, const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() > 2) {
         throw std::runtime_error(RPCHelpMan{
@@ -909,6 +950,9 @@ static const ContextFreeRPCCommand commands[] = {
     { "network",            "clearbanned",            clearbanned,            {"manual", "automatic"} },
     { "network",            "setnetworkactive",       setnetworkactive,       {"state"} },
     { "network",            "getnodeaddresses",       getnodeaddresses,       {"count"} },
+
+
+    { "hidden",             "addconnection",          addconnection,          {"address", "dummy"} },
     { "hidden",             "addpeeraddress",         addpeeraddress,         {"address", "port"} },
 };
 // clang-format on
