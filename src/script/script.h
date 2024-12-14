@@ -808,14 +808,9 @@ public:
         return *this;
     }
 
-    CScript &operator<<(const CScript &b) {
-        // I'm not sure if this should push the script or concatenate scripts.
-        // If there's ever a use for pushing a script onto a script, delete this
-        // member fn.
-        assert(!"Warning: Pushing a CScript onto a CScript with << is probably "
-                "not intended, use + to concatenate!");
-        return *this;
-    }
+    // Intentionally unimplemented; it's not clear if this should push the script or concatenate scripts. If there's
+    // ever a use for pushing a script onto a script, this may then be implemented.
+    CScript &operator<<(const CScript &) = delete;
 
     bool GetOp(const_iterator &pc, opcodetype &opcodeRet,
                std::vector<uint8_t> &vchRet) const {
