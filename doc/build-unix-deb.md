@@ -6,10 +6,10 @@ about obtaining the required version of `cmake`.
 
 ## Preparation
 
-Minimal build requirements
+Minimal build requirements:
 
 ```bash
-    sudo apt-get install build-essential cmake git libboost-chrono-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libevent-dev libminiupnpc-dev libnatpmp-dev libssl-dev libzmq3-dev help2man ninja-build python3 libgmp-dev zlib1g-dev
+    sudo apt-get -y install build-essential cmake git libboost-chrono-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libevent-dev libminiupnpc-dev libnatpmp-dev libssl-dev libzmq3-dev help2man ninja-build python3 libgmp-dev zlib1g-dev
 ```
 
 You can do without the `libminiupnpc-dev`, `libnatpmp-dev`, `libzmq3-dev`, and `help2man`
@@ -19,18 +19,24 @@ packages, then you just need to respectively pass `-DENABLE_UPNP=OFF`, `-DENABLE
 BerkeleyDB 5.3 or later is required for the wallet. This can be installed with:
 
 ```bash
-    sudo apt-get install libdb-dev libdb++-dev
+    sudo apt-get -y install libdb-dev libdb++-dev
 ```
 
 If you want to build the GUI client `bitcoin-qt` Qt 5 is necessary.
 To build with Qt 5 you need the following packages installed:
 
 ```bash
-    sudo apt-get install libqrencode-dev qttools5-dev
+    sudo apt-get -y install libqrencode-dev qttools5-dev
 ```
 
 You can do without the `libqrencode` package, just pass `-DENABLE_QRCODE=OFF`
 on the cmake command line.
+
+Install all dependencies:
+
+```bash
+    sudo apt-get -y install build-essential cmake git libboost-chrono-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libevent-dev libminiupnpc-dev libnatpmp-dev libssl-dev libzmq3-dev help2man ninja-build python3 libgmp-dev zlib1g-dev libdb-dev libdb++-dev libqrencode-dev qttools5-dev
+```
 
 ## Building
 
