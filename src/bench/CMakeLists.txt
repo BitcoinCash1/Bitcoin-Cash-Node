@@ -6,6 +6,7 @@ add_custom_command(
   OUTPUT
     ${CMAKE_CURRENT_BINARY_DIR}/data/block413567.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/block556034.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/block877227.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_413567.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_556034.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/data/recv_messages.cpp
@@ -14,11 +15,23 @@ add_custom_command(
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/data/block413567.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/block556034.raw.bz2
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/block877227.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/coins_spent_413567.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/coins_spent_556034.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/recv_messages.raw.bz2
     ${CMAKE_CURRENT_SOURCE_DIR}/data/convert-raw-files.py
 )
+
+add_library(bench_data OBJECT EXCLUDE_FROM_ALL
+    ${CMAKE_CURRENT_BINARY_DIR}/data/block413567.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/block556034.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/block877227.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_413567.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_556034.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/data/recv_messages.cpp
+)
+
+target_link_libraries(bench_data PUBLIC util)
 
 add_executable(bench_bitcoin
 	EXCLUDE_FROM_ALL
@@ -36,11 +49,7 @@ add_executable(bench_bitcoin
 	checkqueue.cpp
 	crypto_aes.cpp
 	crypto_hash.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/data/block413567.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/data/block556034.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_413567.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/data/coins_spent_556034.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/data/recv_messages.cpp
+	disconnectpool.cpp
 	dsproof.cpp
 	duplicate_inputs.cpp
 	examples.cpp
@@ -62,7 +71,7 @@ add_executable(bench_bitcoin
 	verify_script.cpp
 )
 
-target_link_libraries(bench_bitcoin common bitcoinconsensus server test_common)
+target_link_libraries(bench_bitcoin common bitcoinconsensus server test_common bench_data)
 
 if(BUILD_BITCOIN_WALLET)
 	target_sources(bench_bitcoin PRIVATE coin_selection.cpp keypool.cpp)

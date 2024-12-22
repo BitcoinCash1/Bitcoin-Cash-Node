@@ -13,6 +13,7 @@
 #include <indirectmap.h>
 #include <primitives/transaction.h>
 #include <random.h>
+#include <span.h>
 #include <sync.h>
 #include <util/saltedhashers.h>
 
@@ -782,8 +783,10 @@ private:
     TxInfoMap txInfo; ///< populated by importMempool(); the original tx entry times and feeDeltas
 
     void addTransaction(const CTransactionRef &tx) {
-        queuedTx.insert(tx);
-        cachedInnerUsage += RecursiveDynamicUsage(tx);
+        if (queuedTx.insert(tx).second) {
+            // Defensive programming; enforce class invariant for cachedInnerUsage: only increment on successul insert.
+            cachedInnerUsage += RecursiveDynamicUsage(tx);
+        }
     }
 
     /// @returns a pointer into the txInfo map if tx->GetId() exists in the map, or nullptr otherwise.
@@ -827,10 +830,10 @@ public:
 
     // Add entries for a block while reconstructing the topological ordering so
     // they can be added back to the mempool simply.
-    void addForBlock(const std::vector<CTransactionRef> &vtx);
+    void addForBlock(Span<const CTransactionRef> vtx, bool checkSanityForTests = false);
 
     // Remove entries based on txid_index, and update memory usage.
-    void removeForBlock(const std::vector<CTransactionRef> &vtx) {
+    void removeForBlock(Span<const CTransactionRef> vtx) {
         // Short-circuit in the common case of a block being added to the tip
         if (queuedTx.empty()) {
             return;

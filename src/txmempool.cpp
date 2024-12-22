@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2023 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,10 +30,13 @@
 #include <version.h>
 
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 CTxMemPoolEntry::CTxMemPoolEntry(const CTransactionRef &_tx, const Amount _nFee,
@@ -1075,49 +1078,123 @@ void CTxMemPool::SetIsLoaded(bool loaded) {
     return std::max(20 * DEFAULT_CONSENSUS_BLOCK_SIZE, GetConfig().GetMaxMemPoolSize());
 }
 
-void DisconnectedBlockTransactions::addForBlock(const std::vector<CTransactionRef> &vtx) {
-    for (const auto &tx : reverse_iterate(vtx)) {
-        // If we already added it, just skip.
-        auto it = queuedTx.find(tx->GetId());
-        if (it != queuedTx.end()) {
-            continue;
+void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx, const bool checkSanity) {
+
+    // Short-circuit out of here for trivial cases of empty vtx or blocks with only 1 coinbase
+    if (vtx.empty()) {
+        // no work to do
+        return;
+    } else if (vtx.size() == 1 && vtx.front()->IsCoinBase()) {
+        // coinbase, just add it to the end (it has no parents, so it can get enqueued at the end).
+        addTransaction(vtx.front());
+        return;
+    }
+
+    struct Entry;
+    using EntryMap = std::unordered_map<TxId, Entry, SaltedTxIdHasher>;
+    using EntryWeakMap = std::unordered_map<TxId, Entry *, SaltedTxIdHasher>; // Entry * points to EntryMap entries
+    struct Entry {
+        CTransactionRef tx;
+        EntryWeakMap parents, children;
+        size_t in_degree = 0; ///< how many parents link to this child (DAG inbound edge "degree"; used by Kahn's algo)
+
+        explicit Entry(const CTransactionRef &tx_) noexcept : tx(tx_) {}
+    };
+
+    EntryMap allTxns; // Store all the queued txns & block txns so we can quickly look them up by TxId
+    allTxns.reserve(queuedTx.size() + vtx.size());
+    // We ultimately want everything topologically sorted, including with respect to what's already in `queuedTx`;
+    // so we need to process all the txns in `queuedTx` + `vtx` as a whole.
+    for (const auto &tx : queuedTx) {
+        allTxns.try_emplace(tx->GetId(), tx);
+    }
+    for (const auto &tx : vtx) {
+        allTxns.try_emplace(tx->GetId(), tx);
+    }
+
+    // Temporarily clear queuedTx since we will need to re-add to it in total topological order.
+    queuedTx.clear();
+    cachedInnerUsage = 0u;
+
+    auto linkParentAndChild = [](const TxId &parentTxid, Entry &parent, const TxId &childTxid, Entry &child) {
+        // Assumption here: Pointers to mapped_values in an unordered_map remain valid for lifetime of the map entry.
+        // This is guaranteed by the C++ standard.
+        parent.children.try_emplace(childTxid, &child);
+        if (child.parents.try_emplace(parentTxid, &parent).second)
+            ++child.in_degree; // increment "in_degree" of child txn
+    };
+
+    // link parents and children (to create DAG, needed by Kahn's algorithm)
+    for (auto & [txid, entry] : allTxns) {
+        for (const auto &in : entry.tx->vin) {
+            const auto &parentTxid = in.prevout.GetTxId();
+            if (auto it = allTxns.find(parentTxid); it != allTxns.end()) {
+                // has a parent in `allTxns`, link it
+                linkParentAndChild(parentTxid, it->second, txid, entry);
+            }
         }
+    }
 
-        // Insert the transaction into the pool.
-        addTransaction(tx);
+    // Do Kahn's algorithm
+    std::vector<const Entry *> sorted; // ordered from parents -> children
+    sorted.reserve(vtx.size());
 
-        // Fill in the set of parents.
-        std::set<TxId> parents;
-        for (const CTxIn &in : tx->vin) {
-            parents.insert(in.prevout.GetTxId());
+    // 1. Add all nodes with in-degree 0 to a queue (these are txns with no in-block or in-pool ancestors)
+    std::deque<Entry *> queue;
+    for (auto & [txid, entry] : allTxns) {
+        assert(entry.in_degree == entry.parents.size()); // initially "in_degree" should match parent size
+        if (entry.in_degree == 0) {
+            queue.push_back(&entry);
         }
+    }
 
-        // In order to make sure we keep things in topological order, we check
-        // if we already know of the parent of the current transaction. If so,
-        // we remove them from the set and then add them back.
-        while (parents.size() > 0) {
-            std::set<TxId> worklist(std::move(parents));
-            parents.clear();
+    // 2. Remove nodes from queue, decrement all of their children's in-degrees, add children with in-degree 0 to `sorted`
+    while (!queue.empty()) {
+        auto entry = queue.front();
+        queue.pop_front();
+        sorted.push_back(entry);
+        for (const auto & [childTxid, child] : entry->children) {
+            if (--child->in_degree == 0) {
+                // seen all parents, add to queue
+                queue.push_back(child);
+            }
+        }
+    }
 
-            for (const TxId &txid : worklist) {
-                // If we do not have that txid in the set, nothing needs to be
-                // done.
-                auto pit = queuedTx.find(txid);
-                if (pit == queuedTx.end()) {
-                    continue;
-                }
+    // 3. Reverse insert `sorted` into `queuedTx` (which wants child -> parent ordering)
+    for (const auto &entry : reverse_iterate(sorted)) {
+        addTransaction(entry->tx);
+    }
 
-                // We have parent in our set, we reinsert them at the right
-                // position.
-                const CTransactionRef ptx = *pit;
-                queuedTx.erase(pit);
-                queuedTx.insert(ptx);
-
-                // And we make sure ancestors are covered.
-                for (const CTxIn &in : ptx->vin) {
-                    parents.insert(in.prevout.GetTxId());
+    // Sanity check (unit tests only)
+    if (checkSanity) {
+        assert(allTxns.size() == queuedTx.size()); // allTxns and queuedTx should contain the same txns
+        size_t expectedUsage = 0;
+        for (const auto & [txid, entry] : allTxns) {
+            assert(entry.in_degree == 0); // if this is ever not true, we have cycles or a bug in the above code.
+            assert(queuedTx.find(txid) != queuedTx.end()); // verify they are the same set
+            // tally usage
+            expectedUsage += RecursiveDynamicUsage(entry.tx);
+        }
+        // Verify cachedInnerUsage invariant is maintained
+        assert(expectedUsage == cachedInnerUsage);
+        // Verify all txns we got from the caller are now in queuedTx
+        for (const auto &tx : vtx) {
+            assert(queuedTx.find(tx->GetId()) != queuedTx.end());
+        }
+        // Verify class invariant: when reverse iterating `queuedTx`, parents must come before children
+        std::unordered_set<TxId, SaltedTxIdHasher> seen;
+        for (const auto &tx : reverse_iterate(queuedTx.get<insertion_order>())) {
+            for (const auto &in : tx->vin) {
+                const auto &parentTxid = in.prevout.GetTxId();
+                if (queuedTx.find(parentTxid) != queuedTx.end()) {
+                    // If it lives in `queuedTx`, we should have already seen its parents!
+                    if (seen.find(parentTxid) == seen.end()) {
+                        assert(!"Bug! `queuedTx` is not topologically sorted!");
+                    }
                 }
             }
+            seen.insert(tx->GetId());
         }
     }
 

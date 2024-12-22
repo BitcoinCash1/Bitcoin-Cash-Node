@@ -6,7 +6,8 @@ Bitcoin Cash Node version 28.0.1 is now available from:
 
 ## Overview
 
-This release of Bitcoin Cash Node (BCHN) is a patch release.
+This release of Bitcoin Cash Node (BCHN) is a patch release. It includes various corrections and improvements, most
+notably a performance improvement for large block processing, which should benefit non-mining and mining nodes alike.
 
 ...
 

@@ -381,7 +381,7 @@ endfunction()
 
 add_boost_test_runners_with_upgrade_activated(bitcoin test_bitcoin)
 
-target_link_libraries(test_bitcoin rpcclient server test_common)
+target_link_libraries(test_bitcoin rpcclient server test_common bench_data)
 if(TARGET bitcoinconsensus-shared)
   target_link_libraries(test_bitcoin bitcoinconsensus-shared)
 else()
