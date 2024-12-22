@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2021-2023 The Bitcoin developers
+// Copyright (c) 2021-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,15 +7,17 @@
 
 #include <policy/policy.h>
 #include <reverse_iterator.h>
+#include <random.h>
+#include <streams.h>
 #include <util/system.h>
 
+#include <bench/data.h>
 #include <test/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
 #include <cmath>
-#include <list>
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(mempool_tests, TestingSetup)
@@ -453,7 +455,7 @@ BOOST_AUTO_TEST_CASE(TestImportMempool) {
                 vtx.push_back(MakeTransactionRef(*tx));
             }
             DisconnectedBlockTransactions disconnectPool;
-            disconnectPool.addForBlock(vtx);
+            disconnectPool.addForBlock(vtx, true);
             CheckDisconnectPoolOrder(disconnectPool, correctlyOrderedIds,
                                      disconnectedTxns.size());
 
@@ -838,6 +840,54 @@ BOOST_AUTO_TEST_CASE(SanityCheckGetterAndSetter) {
     // check saturated value
     pool.setSanityCheck(1.0);
     BOOST_CHECK_EQUAL(int(pool.getSanityCheck() * 1000.0), 1000);
+}
+
+BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
+    using namespace benchmark::data;
+    const std::vector<Span<const uint8_t>> blockDatas{{Get_block413567(), Get_block556034(), Get_block877227()}};
+    std::vector<CBlock> blocks;
+    for (const auto &data : blockDatas) {
+        auto & block = blocks.emplace_back();
+        GenericVectorReader(SER_NETWORK, PROTOCOL_VERSION, data, 0) >> block;
+    }
+
+    struct AutoClearingDisconnectPool : DisconnectedBlockTransactions {
+        ~AutoClearingDisconnectPool() { clear(); /* to avoid assertion in parent class d'tor */ }
+    };
+
+    for (const auto &block : blocks) {
+        // For each block, add to DisconnectPool using addForBlock with sanity checking enabled.
+        // Sanity checking itself tests ordering internally, amongst other class invariants
+        AutoClearingDisconnectPool pool;
+        pool.addForBlock(block.vtx, /*checkSanity = */true);
+        BOOST_CHECK_EQUAL(pool.GetQueuedTx().size(), block.vtx.size());
+    }
+
+    FastRandomContext rng;
+
+    auto addInChunks = [&rng](const size_t maxChunk, const Span<const CTransactionRef> txs) {
+        AutoClearingDisconnectPool pool;
+        Span queue = txs;
+        while (!queue.empty()) {
+            const size_t chunkSize = std::clamp<size_t>(rng.randrange(maxChunk), 1, queue.size());
+            const auto chunk = queue.first(chunkSize);
+            queue = queue.subspan(chunk.size()); // pop chunk txs off
+            BOOST_CHECK(!chunk.empty());
+            // The actual deep consistency test is done by addBlock() with checkSanity=true.
+            pool.addForBlock(chunk, /* checkSanity = */true);
+        }
+        BOOST_CHECK_EQUAL(pool.GetQueuedTx().size(), txs.size());
+
+    };
+
+    // For each block, add txns from that block in random order and randomly-sized chunks (this simulates adding on top
+    // of an extant mempool repeatedly, or doing a reorg, etc).
+    for (const auto &block : blocks) {
+        auto shuffledTxs = block.vtx;
+        Shuffle(shuffledTxs.begin(), shuffledTxs.end(), rng);
+        const size_t maxChunk = std::max<size_t>(1u, shuffledTxs.size() / 4u);
+        addInChunks(maxChunk, shuffledTxs);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
