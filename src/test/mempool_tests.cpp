@@ -455,7 +455,7 @@ BOOST_AUTO_TEST_CASE(TestImportMempool) {
                 vtx.push_back(MakeTransactionRef(*tx));
             }
             DisconnectedBlockTransactions disconnectPool;
-            disconnectPool.addForBlock(vtx, true);
+            BOOST_CHECK_NO_THROW(disconnectPool.addForBlock(vtx, true));
             CheckDisconnectPoolOrder(disconnectPool, correctlyOrderedIds,
                                      disconnectedTxns.size());
 
@@ -859,7 +859,7 @@ BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
         // For each block, add to DisconnectPool using addForBlock with sanity checking enabled.
         // Sanity checking itself tests ordering internally, amongst other class invariants
         AutoClearingDisconnectPool pool;
-        pool.addForBlock(block.vtx, /*checkSanity = */true);
+        BOOST_CHECK_NO_THROW(pool.addForBlock(block.vtx, /*checkSanity = */true));
         BOOST_CHECK_EQUAL(pool.GetQueuedTx().size(), block.vtx.size());
     }
 
@@ -874,7 +874,7 @@ BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
             queue = queue.subspan(chunk.size()); // pop chunk txs off
             BOOST_CHECK(!chunk.empty());
             // The actual deep consistency test is done by addBlock() with checkSanity=true.
-            pool.addForBlock(chunk, /* checkSanity = */true);
+            BOOST_CHECK_NO_THROW(pool.addForBlock(chunk, /* checkSanity = */true));
         }
         BOOST_CHECK_EQUAL(pool.GetQueuedTx().size(), txs.size());
 

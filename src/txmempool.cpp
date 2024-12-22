@@ -23,6 +23,7 @@
 #include <reverse_iterator.h>
 #include <streams.h>
 #include <timedata.h>
+#include <util/check.h>
 #include <util/moneystr.h>
 #include <util/system.h>
 #include <util/time.h>
@@ -1168,19 +1169,19 @@ void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx,
 
     // Sanity check (unit tests only)
     if (checkSanity) {
-        assert(allTxns.size() == queuedTx.size()); // allTxns and queuedTx should contain the same txns
+        CHECK_NONFATAL(allTxns.size() == queuedTx.size()); // allTxns and queuedTx should contain the same txns
         size_t expectedUsage = 0;
         for (const auto & [txid, entry] : allTxns) {
-            assert(entry.in_degree == 0); // if this is ever not true, we have cycles or a bug in the above code.
-            assert(queuedTx.find(txid) != queuedTx.end()); // verify they are the same set
+            CHECK_NONFATAL(entry.in_degree == 0); // if this is ever not true, we have cycles or a bug in the above code.
+            CHECK_NONFATAL(queuedTx.find(txid) != queuedTx.end()); // verify they are the same set
             // tally usage
             expectedUsage += RecursiveDynamicUsage(entry.tx);
         }
         // Verify cachedInnerUsage invariant is maintained
-        assert(expectedUsage == cachedInnerUsage);
+        CHECK_NONFATAL(expectedUsage == cachedInnerUsage);
         // Verify all txns we got from the caller are now in queuedTx
         for (const auto &tx : vtx) {
-            assert(queuedTx.find(tx->GetId()) != queuedTx.end());
+            CHECK_NONFATAL(queuedTx.find(tx->GetId()) != queuedTx.end());
         }
         // Verify class invariant: when reverse iterating `queuedTx`, parents must come before children
         std::unordered_set<TxId, SaltedTxIdHasher> seen;
@@ -1190,7 +1191,7 @@ void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx,
                 if (queuedTx.find(parentTxid) != queuedTx.end()) {
                     // If it lives in `queuedTx`, we should have already seen its parents!
                     if (seen.find(parentTxid) == seen.end()) {
-                        assert(!"Bug! `queuedTx` is not topologically sorted!");
+                        CHECK_NONFATAL(!"Bug! `queuedTx` is not topologically sorted!");
                     }
                 }
             }
