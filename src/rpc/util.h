@@ -1,5 +1,5 @@
 // Copyright (c) 2017 The Bitcoin Core developers
-// Copyright (c) 2020-2021 The Bitcoin developers
+// Copyright (c) 2020-2024 The Bitcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 
 #include <script/standard.h> // For CTxDestination
 #include <univalue.h> // For UniValue::Object, UniValue::stringify
+#include <util/check.h>
 
 #include <string>
 #include <vector>
@@ -89,7 +90,7 @@ struct RPCArg {
           m_oneline_description{std::move(oneline_description)},
           m_type_str{std::move(type_str)}
     {
-        assert(type != Type::ARR && type != Type::OBJ);
+        CHECK_NONFATAL(type != Type::ARR && type != Type::OBJ);
     }
 
     RPCArg(
@@ -110,7 +111,7 @@ struct RPCArg {
           m_oneline_description{std::move(oneline_description)},
           m_type_str{std::move(type_str)}
     {
-        assert(type == Type::ARR || type == Type::OBJ);
+        CHECK_NONFATAL(type == Type::ARR || type == Type::OBJ);
     }
 
     /**
