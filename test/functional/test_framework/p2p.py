@@ -2,6 +2,7 @@
 # Copyright (c) 2010 ArtForz -- public domain half-a-node
 # Copyright (c) 2012 Jeff Garzik
 # Copyright (c) 2010-2019 The Bitcoin Core developers
+# Copyright (c) 2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test objects for interacting with a bitcoind node over the p2p protocol.
@@ -65,7 +66,11 @@ from test_framework.messages import (
     sha256,
     msg_dsproof
 )
-from test_framework.util import wait_until
+from test_framework.util import (
+    MAX_NODES,
+    p2p_port,
+    wait_until
+)
 
 logger = logging.getLogger("TestFramework.p2p")
 
@@ -134,7 +139,7 @@ class P2PConnection(asyncio.Protocol):
     def is_connected(self):
         return self._transport is not None
 
-    def peer_connect(self, dstaddr, dstport, *, net):
+    def peer_connect_helper(self, dstaddr, dstport, *, net):
         assert not self.is_connected
         self.dstaddr = dstaddr
         self.dstport = dstport
@@ -143,16 +148,22 @@ class P2PConnection(asyncio.Protocol):
         self.on_connection_send_msg_is_raw = False
         self.recvbuf = bytearray()
         self.magic_bytes = MAGIC_BYTES[net]
-        logger.debug('Connecting to Bitcoin Node: {}:{}'.format(
-            self.dstaddr, self.dstport))
+
+    def peer_connect(self, dstaddr, dstport, *, net):
+        self.peer_connect_helper(dstaddr, dstport, net=net)
 
         loop = NetworkThread.network_event_loop
-        conn_gen_unsafe = loop.create_connection(
-            lambda: self, host=self.dstaddr, port=self.dstport)
-
-        def conn_gen(): return loop.call_soon_threadsafe(
-            loop.create_task, conn_gen_unsafe)
+        logger.debug('Connecting to Bitcoin Node: {}:{}'.format(self.dstaddr, self.dstport))
+        coroutine = loop.create_connection(lambda: self, host=self.dstaddr, port=self.dstport)
+        def conn_gen(): return loop.call_soon_threadsafe(loop.create_task, coroutine)
         return conn_gen
+
+    def peer_accept_connection(self, connect_id, connect_cb=lambda: None, *, net):
+        self.peer_connect_helper('0', 0, net=net)
+
+        logger.debug('Listening for Bitcoin Node with id: {}'.format(connect_id))
+        def listener(): return NetworkThread.listen(self, connect_cb, idx=connect_id)
+        return listener
 
     def peer_disconnect(self):
         # Connection could have already been closed by other end.
@@ -330,20 +341,28 @@ class P2PInterface(P2PConnection):
 
         self.support_addrv2 = support_addrv2
 
-    def peer_connect(self, *args, services=NODE_NETWORK,
-                     send_version=True, **kwargs):
+    def peer_connect_send_version(self, services):
+        # Send a version msg
+        vt = msg_version()
+        vt.nServices = services
+        vt.addrTo.ip = self.dstaddr
+        vt.addrTo.port = self.dstport
+        vt.addrFrom.ip = "0.0.0.0"
+        vt.addrFrom.port = 0
+        # Will be sent soon after connection_made
+        self.on_connection_send_msg = vt
+
+    def peer_connect(self, *args, services=NODE_NETWORK, send_version=True, **kwargs):
         create_conn = super().peer_connect(*args, **kwargs)
 
         if send_version:
-            # Send a version msg
-            vt = msg_version()
-            vt.nServices = services
-            vt.addrTo.ip = self.dstaddr
-            vt.addrTo.port = self.dstport
-            vt.addrFrom.ip = "0.0.0.0"
-            vt.addrFrom.port = 0
-            # Will be sent soon after connection_made
-            self.on_connection_send_msg = vt
+            self.peer_connect_send_version(services)
+
+        return create_conn
+
+    def peer_accept_connection(self, *args, services=NODE_NETWORK, **kwargs):
+        create_conn = super().peer_accept_connection(*args, **kwargs)
+        self.peer_connect_send_version(services)
 
         return create_conn
 
@@ -457,6 +476,10 @@ class P2PInterface(P2PConnection):
 
         wait_until(test_function, timeout=timeout, lock=p2p_lock)
 
+    def wait_for_connect(self, timeout=60):
+        def test_function():
+            return self.is_connected
+        wait_until(test_function, timeout=timeout, lock=p2p_lock)
 
     def wait_for_disconnect(self, timeout=60):
         def test_function(): return not self.is_connected
@@ -566,6 +589,8 @@ class NetworkThread(threading.Thread):
         # created
         assert not self.network_event_loop
 
+        NetworkThread.listeners = {}
+        NetworkThread.protos = {}
         NetworkThread.network_event_loop = asyncio.new_event_loop()
 
     def run(self):
@@ -580,6 +605,49 @@ class NetworkThread(threading.Thread):
                    timeout=timeout)
         self.network_event_loop.close()
         self.join(timeout)
+        # Safe to remove event loop.
+        NetworkThread.network_event_loop = None
+
+    @classmethod
+    def listen(cls, p2p, callback, port=None, addr=None, idx=1):
+        """ Ensure a listening server is running on the given port, and run the
+        protocol specified by `p2p` on the next connection to it. Once ready
+        for connections, call `callback`."""
+
+        if port is None:
+            assert 0 < idx <= MAX_NODES
+            port = p2p_port(MAX_NODES - idx)
+        if addr is None:
+            addr = '127.0.0.1'
+
+        coroutine = cls.create_listen_server(addr, port, callback, p2p)
+        cls.network_event_loop.call_soon_threadsafe(cls.network_event_loop.create_task, coroutine)
+
+    @classmethod
+    async def create_listen_server(cls, addr, port, callback, proto):
+        def peer_protocol():
+            """Returns a function that does the protocol handling for a new
+            connection. To allow different connections to have different
+            behaviors, the protocol function is first put in the cls.protos
+            dict. When the connection is made, the function removes the
+            protocol function from that dict, and returns it so the event loop
+            can start executing it."""
+            response = cls.protos.get((addr, port))
+            cls.protos[(addr, port)] = None
+            return response
+
+        if (addr, port) not in cls.listeners:
+            # When creating a listener on a given (addr, port) we only need to
+            # do it once. If we want different behaviors for different
+            # connections, we can accomplish this by providing different
+            # `proto` functions
+
+            listener = await cls.network_event_loop.create_server(peer_protocol, addr, port)
+            logger.debug("Listening server on {}:{} started".format(addr, port))
+            cls.listeners[(addr, port)] = listener
+
+        cls.protos[(addr, port)] = proto
+        callback(addr, port)
 
 
 class P2PDataStore(P2PInterface):

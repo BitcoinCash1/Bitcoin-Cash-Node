@@ -30,7 +30,8 @@ None
 
 ## Modified functionality
 
-None
+- The `getnetworkinfo` RPC method results now include two new keys: `connections_in` and `connections_out`. These
+  correspond to the current number of active inbound and outbound peer-to-peer connections, respectively.
 
 ## Removed functionality
 

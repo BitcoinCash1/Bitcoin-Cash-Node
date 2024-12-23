@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2017-2019 The Bitcoin Core developers
+# Copyright (c) 2024 The Bitcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Class for bitcoind node under test"""
@@ -22,7 +23,7 @@ import urllib.parse
 import collections
 
 from .authproxy import JSONRPCException
-from .messages import COIN, CTransaction, FromHex
+from .messages import COIN, CTransaction, FromHex, MY_SUBVERSION
 from .util import (
     append_config,
     delete_cookie_file,
@@ -469,7 +470,7 @@ class TestNode():
         return self.calculate_fee(ctx)
 
     def add_p2p_connection(self, p2p_conn, *, wait_for_verack=True, **kwargs):
-        """Add a p2p connection to the node.
+        """Add an inbound p2p connection to the node.
 
         This method adds the p2p connection to the self.p2ps list and also
         returns the connection to the caller."""
@@ -497,6 +498,27 @@ class TestNode():
 
         return p2p_conn
 
+    def add_outbound_p2p_connection(self, p2p_conn, *, p2p_idx, **kwargs):
+        """Add an outbound p2p connection originating from the node.
+        This method adds the p2p connection to the self.p2ps list and returns
+        the connection to the caller.
+        """
+
+        def addconnection_callback(address, port):
+            self.log.debug("Connecting to {}:{}".format(address, port))
+            self.addconnection('{}:{}'.format(address, port))
+
+        p2p_conn.peer_accept_connection(connect_cb=addconnection_callback, connect_id=p2p_idx + 1,
+                                        net=self.chain, **kwargs)()
+
+        p2p_conn.wait_for_connect()
+        self.p2ps.append(p2p_conn)
+
+        p2p_conn.wait_for_verack()
+        p2p_conn.sync_with_ping()
+
+        return p2p_conn
+
     @property
     def p2p(self):
         """Return the first p2p connection
@@ -506,11 +528,16 @@ class TestNode():
         assert self.p2ps, self._node_msg("No p2p connection")
         return self.p2ps[0]
 
+    def num_test_p2p_connections(self):
+        """Return number of test framework p2p connections to the node."""
+        return len([peer for peer in self.getpeerinfo() if peer['subver'] == MY_SUBVERSION.decode("utf-8")])
+
     def disconnect_p2ps(self):
         """Close all p2p connections to the node."""
         for p in self.p2ps:
             p.peer_disconnect()
         del self.p2ps[:]
+        wait_until(lambda: self.num_test_p2p_connections() == 0)
 
 
 class TestNodeCLIAttr:
