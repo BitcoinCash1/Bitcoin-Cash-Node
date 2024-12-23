@@ -880,7 +880,6 @@ class CompactBlocksTest(BitcoinTestFramework):
         """
         node = self.nodes[0]
         assert len(self.utxos)
-        disconnect_nodes
 
         def announce_cmpct_block(node, peer, txn_count):
             utxo = self.utxos.pop(0)
