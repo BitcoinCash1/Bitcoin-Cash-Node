@@ -8,6 +8,7 @@
 #include <policy/policy.h>
 #include <reverse_iterator.h>
 #include <random.h>
+#include <serialize.h>
 #include <streams.h>
 #include <util/system.h>
 
@@ -852,6 +853,7 @@ BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
     }
 
     struct AutoClearingDisconnectPool : DisconnectedBlockTransactions {
+        using DisconnectedBlockTransactions::DisconnectedBlockTransactions;
         ~AutoClearingDisconnectPool() { clear(); /* to avoid assertion in parent class d'tor */ }
     };
 
@@ -888,6 +890,25 @@ BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
         const size_t maxChunk = std::max<size_t>(1u, shuffledTxs.size() / 4u);
         addInChunks(maxChunk, shuffledTxs);
     }
+
+    // Test dynamic memory usage limit enforcement
+    AutoClearingDisconnectPool tinyPool(100'000);
+    BOOST_CHECK_EQUAL(tinyPool.GetMaxDynamicMemoryUsage(), 100'000);
+    BOOST_CHECK(tinyPool.isEmpty());
+    const CBlock &bigBlock = blocks.at(0);
+    BOOST_REQUIRE_GT(::GetSerializeSize(bigBlock), 100'000); // sanity check that block is bigger than our limit
+    tinyPool.addForBlock(bigBlock.vtx, true); // add a block that exceeds the limit
+    BOOST_CHECK(!tinyPool.isEmpty());
+    BOOST_CHECK_LT(tinyPool.DynamicMemoryUsage(), 100'000); // check that limit was enforced
+    BOOST_CHECK_LT(tinyPool.GetQueuedTx().size(), bigBlock.vtx.size()); // enforcing of limit involved culling txns
+
+    // Test `addNoLimit` not enforcing anything
+    tinyPool.clear();
+    BOOST_CHECK(tinyPool.isEmpty());
+    tinyPool.addNoLimit(bigBlock.vtx, true); // add a block that exceeds the limit; limit should be enforced
+    BOOST_CHECK(!tinyPool.isEmpty());
+    BOOST_CHECK_GT(tinyPool.DynamicMemoryUsage(), 100'000); // check that we are beyond the limit
+    BOOST_CHECK_EQUAL(tinyPool.GetQueuedTx().size(), bigBlock.vtx.size()); // limit not enforced; no txns were culled
 }
 
 BOOST_AUTO_TEST_SUITE_END()

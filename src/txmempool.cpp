@@ -319,7 +319,7 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef> &vtx) {
     }
 
     DisconnectedBlockTransactions disconnectpool;
-    disconnectpool.addForBlock(vtx);
+    disconnectpool.addNoLimit(vtx);
 
     // iterate in topological order (parents before children)
     for (const CTransactionRef &tx : reverse_iterate(disconnectpool.GetQueuedTx().get<insertion_order>())) {
@@ -1075,11 +1075,16 @@ void CTxMemPool::SetIsLoaded(bool loaded) {
     m_is_loaded = loaded;
 }
 
-/* static */ uint64_t DisconnectedBlockTransactions::maxDynamicUsage() {
+DisconnectedBlockTransactions::DisconnectedBlockTransactions(uint64_t maxDynamicUsageBytes) {
+    // ensure no infinite looping in addForBlock, etc
+    maxDynamicUsage = std::max<uint64_t>(maxDynamicUsageBytes, DynamicMemoryUsage());
+}
+
+/* static */ uint64_t DisconnectedBlockTransactions::DefaultMaxDynamicUsage() {
     return std::max(20 * DEFAULT_CONSENSUS_BLOCK_SIZE, GetConfig().GetMaxMemPoolSize());
 }
 
-void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx, const bool checkSanity) {
+void DisconnectedBlockTransactions::addNoLimit(Span<const CTransactionRef> vtx, const bool checkSanity) {
 
     // Short-circuit out of here for trivial cases of empty vtx or blocks with only 1 coinbase
     if (vtx.empty()) {
@@ -1198,10 +1203,13 @@ void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx,
             seen.insert(tx->GetId());
         }
     }
+}
+
+void DisconnectedBlockTransactions::addForBlock(Span<const CTransactionRef> vtx, const bool checkSanityForTests) {
+    addNoLimit(vtx, checkSanityForTests);
 
     // Keep the size under control.
-    const auto maxUsage = maxDynamicUsage();
-    while (DynamicMemoryUsage() > maxUsage) {
+    while (DynamicMemoryUsage() > maxDynamicUsage) {
         // Drop the earliest entry, and remove its children from the
         // mempool.
         auto it = queuedTx.get<insertion_order>().begin();
@@ -1236,10 +1244,10 @@ void DisconnectedBlockTransactions::importMempool(CTxMemPool &pool) {
         pool.clear(/* clearDspOrphans = */ false);
     }
 
-    // Use addForBlocks to sort the transactions and then splice them in front
+    // Use addNoLimit to sort the transactions and then splice them in front
     // of queuedTx
     DisconnectedBlockTransactions orderedTxnPool;
-    orderedTxnPool.addForBlock(vtx);
+    orderedTxnPool.addNoLimit(vtx);
     cachedInnerUsage += orderedTxnPool.cachedInnerUsage;
     queuedTx.get<insertion_order>().splice(
         queuedTx.get<insertion_order>().begin(),
@@ -1247,8 +1255,7 @@ void DisconnectedBlockTransactions::importMempool(CTxMemPool &pool) {
 
     // We limit memory usage because we can't know if more blocks will be
     // disconnected
-    const auto maxUsage = maxDynamicUsage();
-    while (DynamicMemoryUsage() > maxUsage) {
+    while (DynamicMemoryUsage() > maxDynamicUsage) {
         // Drop the earliest entry which, by definition, has no children
         removeEntry(queuedTx.get<insertion_order>().begin());
     }
