@@ -48,6 +48,9 @@ static const unsigned int DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN = 100;
 /** Default for BIP61 (sending reject messages) */
 static constexpr bool DEFAULT_ENABLE_BIP61 = true;
 
+/** Maximum number of outstanding CMPCTBLOCK requests for the same block. */
+static constexpr unsigned int MAX_CMPCTBLOCKS_INFLIGHT_PER_BLOCK = 3;
+
 class PeerLogicValidation final : public CValidationInterface,
                                   public NetEventsInterface {
 private:

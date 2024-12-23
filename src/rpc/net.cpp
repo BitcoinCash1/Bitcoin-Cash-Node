@@ -108,6 +108,8 @@ static UniValue getpeerinfo(const Config &config,
                 "    \"version\": v,                   (numeric) The peer version, such as 70001\n"
                 "    \"subver\": \"/Satoshi:0.8.5/\",    (string) The string version\n"
                 "    \"inbound\": true|false,          (boolean) Inbound (true) or Outbound (false)\n"
+                "    \"bip152_hb_to\": true|false,     (boolean) Whether we selected peer as (compact blocks) high-bandwidth peer\n"
+                "    \"bip152_hb_from\": true|false,   (boolean) Whether peer selected us as (compact blocks) high-bandwidth peer\n"
                 "    \"addnode\": true|false,          (boolean) "
                 "Whether connection was due to addnode/-connect or if it was an automatic/inbound connection\n"
                 "    \"startingheight\": n,            (numeric) The starting height (block) of the peer\n"
@@ -194,6 +196,8 @@ static UniValue getpeerinfo(const Config &config,
         // characters in their ver message.
         obj.emplace_back("subver", std::move(stats.cleanSubVer));
         obj.emplace_back("inbound", stats.fInbound);
+        obj.emplace_back("bip152_hb_to", stats.m_bip152_highbandwidth_to);
+        obj.emplace_back("bip152_hb_from", stats.m_bip152_highbandwidth_from);
         obj.emplace_back("addnode", stats.m_manual_connection);
         obj.emplace_back("startingheight", stats.nStartingHeight);
         if (fStateStats) {
