@@ -69,16 +69,11 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
     # interval (= 1/2 of the inbound).
     # (but is less reliable for small values of the -txbroadcastinterval)
 
-    def skip_test_if_missing_module(self):
-        self.skip_if_no_wallet()
-
     def add_options(self, parser):
         parser.add_argument("--interval", dest="interval", type=int, default=500,
                             help="Set the average send interval in ms")
-        parser.add_argument("--samplesize", dest="samplesize", type=int, default=100,
+        parser.add_argument("--samplesize", dest="samplesize", type=int, default=50,
                             help="Set the samplesize (number of inv message delays) for testing")
-        parser.add_argument("--testoutbound", dest="testoutbound", action="store_true",
-                            help="Set whether to test outbound (along inbound) connection interval")
         parser.add_argument("--alpha", dest="alpha", type=float, default="0.001",
                             help="Set a confidence threshold for the kstest")
 
@@ -86,6 +81,7 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
         assert self.options.interval <= MAX_INV_BROADCAST_INTERVAL
         self.scale = self.options.interval / 1000
         self.num_nodes = 3
+        self.setup_clean_chain = True
         # Note that for this test, since we want to control the blocksize, we turn ABLA off (no upgrade 10).
         args = [
             ["-txbroadcastinterval={}".format(self.options.interval),
@@ -94,7 +90,7 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
             ["-txbroadcastinterval=1",
                 "-txbroadcastrate=1", "-excessiveblocksize=2000000",
                 "-blockmaxsize=2000000", "-upgrade10activationheight=2147483647"],
-            []
+            ["-persistmempool=0"],
         ]
         self.extra_args = args
 
@@ -102,44 +98,56 @@ class TxBroadcastIntervalTest(BitcoinTestFramework):
         self.setup_nodes()
         connect_nodes(self.nodes[0], self.nodes[1])
         connect_nodes(self.nodes[1], self.nodes[2])
-        # Generate enough coins on the spending nodes
-        self.generate(self.nodes[2], 20 + 100)
+        self.nodes[2].generatetoaddress(1, self.nodes[2].get_deterministic_priv_key().address)
         self.sync_all()
 
-        # Disconnect node 3 so that it doesn't broadcast the txs it creates
+        # Generate self.options.samplesize txns using "fillmempool". However, we must disconnect
+        # node 2 so that it doesn't broadcast the txs it creates for "fillmempool".
         disconnect_nodes(self.nodes[1], self.nodes[2])
+        mbytes = 0
+        while len(self.nodes[2].getrawmempool(False)) < self.options.samplesize:
+            mbytes += 1
+            self.nodes[2].fillmempool(mbytes)
+
         self.signedtxs = []
-        to = self.nodes[2].getnewaddress()
-        for i in range(self.options.samplesize):
-            txid = self.nodes[2].sendtoaddress(to, "0.00001", "comment", "comment_to", False, 2)
-            self.signedtxs.append(self.nodes[2].gettransaction(txid)['hex'])
+        for txid in self.nodes[2].getrawmempool(False)[:self.options.samplesize]:
+            self.signedtxs.append(self.nodes[2].getrawtransaction(txid, False))
+
+        assert len(self.signedtxs) == self.options.samplesize
+
+        # Now restart node 2 so that it drops its mempool (it has -persistmempool=0).
+        self.restart_node(2)
+        # Reconnect node 2 so that it synchs up all the previous coinbase TXOs for the txns we have in `self.signedtxs`
+        connect_nodes(self.nodes[2], self.nodes[0])
+        self.sync_blocks()
+        # Now keep node 2 disconnected to minimize CPU load for the remainder of the test.
+        disconnect_nodes(self.nodes[2], self.nodes[0])
 
     def run_test(self):
-        inboundReceiver, outboundReceiver = InvReceiver(), InvReceiver()
-        self.nodes[0].add_p2p_connection(inboundReceiver)
-        self.nodes[1].add_p2p_connection(outboundReceiver)
+        inbound_receiver, outbound_receiver = InvReceiver(), InvReceiver()
+        self.nodes[0].add_p2p_connection(inbound_receiver)
+        self.nodes[1].add_p2p_connection(outbound_receiver)
 
-        for signextx in self.signedtxs:
-            self.nodes[0].sendrawtransaction(signextx, True)
+        for tx in self.signedtxs:
+            self.nodes[0].sendrawtransaction(tx, True)
 
         wait_until(
-            lambda: len(inboundReceiver.invTimes) == self.options.samplesize,
+            lambda: len(inbound_receiver.invTimes) == self.options.samplesize,
             lock=p2p_lock,
             timeout=self.options.samplesize * self.options.interval / 1000 * 2)
         wait_until(
-            lambda: len(outboundReceiver.invTimes) == self.options.samplesize,
+            lambda: len(outbound_receiver.invTimes) == self.options.samplesize,
             lock=p2p_lock,
             timeout=self.options.samplesize * self.options.interval / 1000)
 
-        inboundkstestresult = stats.kstest(inboundReceiver.invDelays, stats.expon(scale=self.scale).cdf)
-        outboundkstestresult = stats.kstest(outboundReceiver.invDelays, stats.expon(scale=self.scale / 2).cdf)
+        inbound_result = stats.kstest(inbound_receiver.invDelays, stats.expon(scale=self.scale).cdf)
+        outbound_result = stats.kstest(outbound_receiver.invDelays, stats.expon(scale=self.scale / 2).cdf)
         self.log.info("kstestresults for interval {}: inbound {}, outbound {}".format(
             self.options.interval,
-            inboundkstestresult,
-            outboundkstestresult))
-        assert inboundkstestresult.pvalue > self.options.alpha, inboundReceiver.invDelays
-        if self.options.testoutbound:
-            assert outboundkstestresult.pvalue > self.options.alpha, outboundReceiver.invDelays
+            inbound_result,
+            outbound_result))
+        assert inbound_result.pvalue > self.options.alpha, (inbound_result.pvalue, inbound_receiver.invDelays)
+        assert outbound_result.pvalue > self.options.alpha, (outbound_result.pvalue, outbound_receiver.invDelays)
 
 
 if __name__ == '__main__':
