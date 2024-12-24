@@ -64,3 +64,6 @@ inline constexpr unsigned int LOCKTIME_MEDIAN_TIME_PAST = (1 << 1);
 inline constexpr uint64_t GetMaxBlockSigChecksCount(uint64_t maxBlockSize) {
     return maxBlockSize / BLOCK_MAXBYTES_MAXSIGCHECKS_RATIO;
 }
+
+/** Whether to do extra (slow) checks at app startup related to ABLA state. */
+inline constexpr bool DEFAULT_ABLA_SLOW_CHECKS = false;

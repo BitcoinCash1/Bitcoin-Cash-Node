@@ -4587,36 +4587,50 @@ static bool VerifyAblaStateForChain(const Config &config, CChain &chain) EXCLUSI
     if (!IsUpgrade10Enabled(consensus, ptip)) {
         return true;
     }
+    const bool doSlowCheck = gArgs.GetBoolArg("-check-abla", DEFAULT_ABLA_SLOW_CHECKS);
     const CBlockIndex *pbase = chain[GetUpgrade10ActivationHeight(consensus)];
     assert(pbase != nullptr);
-    LogPrintf("%s: Verifying %i block headers have correct ABLA state ...\n",
-              __func__, ptip->nHeight - pbase->nHeight + 1);
+    LogPrintf("%s: Verifying %i %s have correct ABLA state%s ...\n",
+              __func__, ptip->nHeight - pbase->nHeight + 1, doSlowCheck ? "blocks" : "block headers",
+              doSlowCheck ? " (thorough checks requested)" : "");
     const abla::Config &ablaConfig = consensus.ablaConfig;
     std::optional<abla::State> prevState;
     bool rebuilding = false;
     for (int ht = pbase->nHeight; ht <= ptip->nHeight; ++ht) {
         CBlockIndex *pcur = chain[ht];
         assert(pcur);
-        const char *err{};
         if (!rebuilding) {
-            std::optional<uint64_t> optSize;
-            const auto curAblaStateOpt = pcur->GetAblaStateOpt();
-            if (!curAblaStateOpt || !curAblaStateOpt->IsValid(ablaConfig, &err)) {
-                err = err && *err ? err : "missing";
-                rebuilding = true;
-            } else if ((optSize = ReadBlockSizeFromDisk(pcur, params)).value_or(curAblaStateOpt->GetBlockSize())
-                       != curAblaStateOpt->GetBlockSize()) {
-                err = "bad block size";
-                rebuilding = true;
-            } else if (optSize && prevState && prevState->NextBlockState(ablaConfig, *optSize) != *curAblaStateOpt) {
-                err = "bad state";
-                rebuilding = true;
-            }
-            if (!rebuilding) {
+            try {
+                // Read ABLA state from block index
+                const auto curAblaStateOpt = pcur->GetAblaStateOpt();
+
+                // Basic sanity check: must be valid
+                if (const char *err{}; !curAblaStateOpt || !curAblaStateOpt->IsValid(ablaConfig, &err)) {
+                    throw std::string{err && *err ? err : "missing"};
+                }
+
+                // `doSlowCheck` == true only:
+                // If we still have the block file (non-pruning node), read its size from disk and ensure it corresponds
+                // to what we read from the block index above. Note: ReadBlockSizeFromDisk() may return nullopt if it
+                // can't read the block file (in which case we tolerate this failure, so as to support pruning nodes
+                // here). We only error out in this branch if we successfully read the block size from disk and it
+                // disagrees with the CBlockIndex data.
+                const uint64_t curSize = curAblaStateOpt->GetBlockSize();
+                if (doSlowCheck && ReadBlockSizeFromDisk(pcur, params).value_or(curSize) != curSize) {
+                    throw std::string{"disk size vs index size mismatch"};
+                }
+
+                // Verify: prevState + curSize results in the current state
+                if (prevState && prevState->NextBlockState(ablaConfig, curSize) != *curAblaStateOpt) {
+                    throw std::string{"bad state"};
+                }
+
+                // Everything's ok, continue looping forward
                 prevState = curAblaStateOpt;
-            } else {
+            } catch (const std::string &err) {
                 LogPrintf("%s: Bad ABLA data starting at height=%d (%s), will rebuild ABLA state for %d blocks ...\n",
                           __func__, ht, err, ptip->nHeight - pcur->nHeight + 1);
+                rebuilding = true; // fall through to below `if (rebuilding)` code ...
             }
         }
         if (rebuilding) {
