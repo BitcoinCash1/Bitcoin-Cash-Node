@@ -771,6 +771,7 @@ private:
 
     indexed_disconnected_transactions queuedTx;
     uint64_t cachedInnerUsage = 0;
+    uint64_t maxDynamicUsage{};
 
     struct TxInfo {
         const int64_t time;
@@ -793,12 +794,15 @@ private:
     /// Note that the returned pointer is only valid for as long as its underlying map node is valid.
     const TxInfo *getTxInfo(const CTransactionRef &tx) const;
 
-    /// @returns the maximum number of bytes that this instance will use for DynamicMemoryUsage()
+public:
+    /// @returns the default maximum number of bytes that this instance will use for DynamicMemoryUsage()
     /// before txs are culled from this instance. Right now this is max(640MB, maxMempoolSize) and
     /// it relies on the global Config object being valid and correctly configured.
-    static uint64_t maxDynamicUsage();
+    static uint64_t DefaultMaxDynamicUsage();
 
-public:
+    /// Construct this instance, optionally specifying a custom max dynamic usage.
+    explicit DisconnectedBlockTransactions(uint64_t maxDynamicUsageBytes = DefaultMaxDynamicUsage());
+
     // It's almost certainly a logic bug if we don't clear out queuedTx before
     // destruction, as we add to it while disconnecting blocks, and then we
     // need to re-process remaining transactions to ensure mempool consistency.
@@ -819,6 +823,8 @@ public:
                cachedInnerUsage;
     }
 
+    uint64_t GetMaxDynamicMemoryUsage() const { return maxDynamicUsage; }
+
     const indexed_disconnected_transactions &GetQueuedTx() const {
         return queuedTx;
     }
@@ -831,6 +837,10 @@ public:
     // Add entries for a block while reconstructing the topological ordering so
     // they can be added back to the mempool simply.
     void addForBlock(Span<const CTransactionRef> vtx, bool checkSanityForTests = false);
+
+    // Identical to the above, but doesn't apply any dynamic memory usage limits.
+    // Use this for one-offs when using this class as a topological sorter.
+    void addNoLimit(Span<const CTransactionRef> vtx, bool checkSanityForTests = false);
 
     // Remove entries based on txid_index, and update memory usage.
     void removeForBlock(Span<const CTransactionRef> vtx) {
