@@ -9,8 +9,6 @@ Bitcoin Cash Node version 28.0.1 is now available from:
 This release of Bitcoin Cash Node (BCHN) is a patch release. It includes various corrections and improvements, most
 notably a performance improvement for large block processing, which should benefit non-mining and mining nodes alike.
 
-...
-
 ## Usage recommendations
 
 Users who are running v28.0.0 or older are encouraged to upgrade to v28.0.1.
@@ -33,8 +31,6 @@ None
 - The peer-to-peer network's block propagation logic has been improved to allow for lower-latency block propagation.
   In particular, block downloads now request the latest block from up to 3 peers simultaneously so that the node has a
   better chance of receiving the latest block as quickly as possible.
-- The `getnetworkinfo` RPC method results now include two new keys: `connections_in` and `connections_out`. These
-  correspond to the current number of active inbound and outbound peer-to-peer connections, respectively.
 - The ABLA startup checks have been simplified and reduced to be simpler and faster. This should improve Bitcoin Cash
   Node startup times (in particular if running on an HDD-based system). To enable the old more thorough ABLA checks at
   app startup, start the node with the `-check-abla` option.
@@ -55,6 +51,8 @@ None
   compact blocks high-bandwidth peer. High-bandwidth peers send new block
   announcements via a `cmpctblock` message rather than the usual inv/headers
   announcements. See BIP 152 for more details.
+- The `getnetworkinfo` RPC method results now include two new keys: `connections_in` and `connections_out`. These
+  correspond to the current number of active inbound and outbound peer-to-peer connections, respectively.
 
 ## Regressions
 
@@ -175,7 +173,7 @@ of them on our GitLab repository.
 
 ---
 
-## Changes since Bitcoin Cash Node 27.1.0
+## Changes since Bitcoin Cash Node 28.0.0
 
 ### New documents
 
@@ -189,11 +187,12 @@ None
 
 #### Security or consensus relevant fixes
 
-None
+- 5ac80029444ad7c065206903064c35f88d056a22 net: Fix potential for UB in `CNode::ReceiveMsgBytes`
+- 2b92f731ff52d61379047ec21868adc69ea15f42 mempool: Fix potential for bug in mempool removeForBlock()
 
 #### Interfaces / RPC
 
-None
+- 2aaadb60b8e31694be50b273cfc3c680dace5096 net, rpc: expose high bandwidth mode state via getpeerinfo
 
 #### Features in internal development: support for UTXO commitments
 
@@ -205,7 +204,10 @@ None
 
 #### Performance optimizations
 
-None
+- 6961e643de353b94823e834e1c7046ffe888150a net: Avoid excess CPU usage by `msghand` thread; fix "early wake up" logic
+- fa0d374801ad0001a132569bed047fdb95e19516 Improve `DisconnectedBlockTransactions::addForBlock` performance
+- ecd1392cfeeaffc87d66179e91e902daae0abffa ABLA: Improve performance of app init, turn off slower checks by default
+- ac22ffd9b05ef592cf044f8decc91cafd1191de9 [net] Parallel compact block downloads
 
 #### GUI
 
@@ -213,11 +215,11 @@ None
 
 #### Code quality
 
-None
+- 70b94b05b50dc40146587ae257d0bab3e84672d1 [net processing] Tidy up sendcmpct processing
 
 #### Documentation updates
 
-None
+- 4a8036c008c677ef4054b0b257c6a2056918eb7b Update Ubuntu and Debian build guide
 
 #### Build / general
 
@@ -237,7 +239,11 @@ None
 
 #### Tests / test framework
 
-None
+- ae96a7f02927ae0954ce5456872f63362cfbf323 Improvements to test bchn-txbroadcastinterval.py
+- 3e6cff52473acd41ea2213dc8d627375646ed6a0 [tests] Allow outbound connections in functional tests.
+- c2f4061ec7d40d2f9ab4e62dd7b56b067d090581 util: Add CHECK_NONFATAL and use it in src/rpc
+- 1d5a02e8c8de06fb57243a4260668c3ba8b890b6 Added partial backport of core header/cpp file "util/check.*"
+- 124e41bb791a6b95db810ca39ea15d386a1eacd6 Add tests for parallel compact block downloads
 
 #### Benchmarks
 
@@ -257,7 +263,9 @@ None
 
 #### Cleanup
 
-None
+- b18fb57c2eb72e628ff8270964c4b53c927efc5a [qa] Bump version to 28.0.1, rotate release notes
+- a69c5c6c667c2d1b006422ac57a0fd84f990a4e6 net: Remove extraneous/bad log line from net_processing.cpp
+- e887c38afe32abff1a8befececf41d4f16f22524 Update DisconnectedBlockTransactions::addForBlock to use CHECK_NONFATAL rather than assert()
 
 #### Continuous Integration (GitLab CI)
 
@@ -269,4 +277,10 @@ None
 
 #### Backports
 
-None
+- 3e6cff52473acd41ea2213dc8d627375646ed6a0 [tests] Allow outbound connections in functional tests.
+- c2f4061ec7d40d2f9ab4e62dd7b56b067d090581 util: Add CHECK_NONFATAL and use it in src/rpc
+- 1d5a02e8c8de06fb57243a4260668c3ba8b890b6 Added partial backport of core header/cpp file "util/check.*"
+- 2aaadb60b8e31694be50b273cfc3c680dace5096 net, rpc: expose high bandwidth mode state via getpeerinfo
+- 70b94b05b50dc40146587ae257d0bab3e84672d1 [net processing] Tidy up sendcmpct processing
+- ac22ffd9b05ef592cf044f8decc91cafd1191de9 [net] Parallel compact block downloads
+- 124e41bb791a6b95db810ca39ea15d386a1eacd6 Add tests for parallel compact block downloads
