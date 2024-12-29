@@ -905,7 +905,7 @@ BOOST_AUTO_TEST_CASE(DisconnectPoolAddForBlock) {
     // Test `addNoLimit` not enforcing anything
     tinyPool.clear();
     BOOST_CHECK(tinyPool.isEmpty());
-    tinyPool.addNoLimit(bigBlock.vtx, true); // add a block that exceeds the limit; limit should be enforced
+    tinyPool.addNoLimit(bigBlock.vtx, true); // add a block that exceeds the limit; limit should not be enforced
     BOOST_CHECK(!tinyPool.isEmpty());
     BOOST_CHECK_GT(tinyPool.DynamicMemoryUsage(), 100'000); // check that we are beyond the limit
     BOOST_CHECK_EQUAL(tinyPool.GetQueuedTx().size(), bigBlock.vtx.size()); // limit not enforced; no txns were culled
