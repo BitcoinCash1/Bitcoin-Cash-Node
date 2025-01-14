@@ -27,6 +27,7 @@ import subprocess
 import string
 from io import BytesIO
 
+from test_framework import authproxy, cashaddr, script
 from test_framework.test_framework import BitcoinTestFramework, get_datadir_path
 from test_framework.util import (
     assert_equal,
@@ -440,66 +441,182 @@ class BlockchainTest(BitcoinTestFramework):
             blockinfo['nextblockhash'],
             blockheaderinfo['nextblockhash'])
 
+        def wallet_create_new_p2pkh_and_p2sh_address_pair():
+            """Create a new p2pkh address and a p2sh wrapping it."""
+            p2pkh_addr = node.getnewaddress()
+            p2pkh_spk = node.validateaddress(p2pkh_addr)['scriptPubKey']
+            p2pkh_spk_h160 = script.hash160(bytes.fromhex(p2pkh_spk))
+            p2sh_addr = cashaddr.encode_full("bchreg", cashaddr.SCRIPT_TYPE, p2pkh_spk_h160)
+            try:
+                # Hack to add a p2sh wrapping a p2pkh
+                node.importaddress(p2pkh_spk, "", False, True)
+            except authproxy.JSONRPCException as e:
+                """Due to bugs in the node, the above throws, but before it fails,
+                as a side-effect, it *does* end up registering the redeemScript for
+                the p2sh which wraps the p2pkh. Now the node is tracking the p2sh
+                and knows how to sign for it."""
+                if 'wallet already contains' in str(e):
+                    pass
+                else:
+                    raise e  # Some other unexpected exception occurred
+            return p2pkh_addr, p2sh_addr
+
+        # Set the fee slightly higher
         fee_per_byte = 2.5
         node.settxfee(Decimal(fee_per_byte * 1e3) / Decimal(COIN))
-        txid = node.sendtoaddress(node.getnewaddress(), 51)  # Send at least 2 coins
-        assert txid in node.getrawmempool(False)
+
+        # Set up the following txn chain, given N coins in wallet:
+        #
+        #     /--> tx1: N-2 coins sent to p2sh_addr -----\
+        # ---|                                            |--> tx_child: Everything merged to 1 coin.
+        #     \--> tx2: 2 coins to sent to p2pkh_addr ---/
+        #
+        p2pkh_addr, p2sh_addr = wallet_create_new_p2pkh_and_p2sh_address_pair()
+        # We should have at least 4 coins, so all txns have >=2 inputs
+        assert_greater_than_or_equal(len(node.listunspent(0)), 4)
+        # Merge all N coins of our funds into 2 coins: one coin to p2pkh_addr and one to p2sh_addr
+        bal = node.getbalance()
+        assert_greater_than(bal, Decimal("100.0"))
+        # Send all but 2 of our unspent coins to p2sh_addr
+        txid_to_p2sh = node.sendtoaddress(p2sh_addr, bal - Decimal("100.0"), "", "", True)
+        bal_conf = node.getbalance("*", 1)
+        assert_equal(bal_conf, Decimal("100.0"))
+        assert_equal(len(node.listunspent(1)), 2)  # 2 confirmed coins are left
+        # Send remaining 2 confirmed coins to p2pkh_addr. NOTE: this relies on coin selection to work as we expect.
+        txid_to_p2pkh = node.sendtoaddress(p2pkh_addr, bal_conf, "", "", True)
+        # All of the above should have generated precisely 2 coins
+        assert_equal(len(node.listunspent(0)), 2)
+
+        bal = node.getbalance()
+        txid_child = node.sendtoaddress(node.getnewaddress(), bal, "", "", True)  # Send both coins
+        assert_equal(set(node.getrawmempool(False)), {txid_to_p2pkh, txid_to_p2sh, txid_child})
+        assert_equal(len(node.listunspent(0)), 1)  # txid_child should have merged 2 coins to 1
         blockhash, = node.generate(1)
+        # Find the index of all 3 txns above, ensure they all appear in block
+        block_txns = node.getblock(blockhash, 1)['tx']
+        assert_equal(len(block_txns), 4)  # 3 + coinbase
+        assert_equal({block_txns.index(txid_child), block_txns.index(txid_to_p2sh), block_txns.index(txid_to_p2pkh)},
+                     {1, 2, 3})
 
         def assert_fee_not_in_block(verbosity):
             block = node.getblock(blockhash, verbosity)
-            tx = block['tx'][1]
-            if isinstance(tx, str):
-                # In verbosity level 1, only the transaction hashes are written
-                pass
-            else:
-                assert isinstance(tx, dict) and 'fee' not in tx
+            for tx in block['tx'][1:]:
+                if isinstance(tx, str):
+                    # In verbosity level 1, only the transaction hashes are written
+                    pass
+                else:
+                    assert isinstance(tx, dict) and 'fee' not in tx
 
         def assert_fee_in_block(verbosity):
             block = node.getblock(blockhash, verbosity)
-            tx = block['tx'][1]
-            assert 'fee' in tx
-            assert_fee_amount(tx['fee'], tx['size'], fee_per_byte * 1000 / COIN)
+            for tx in block['tx'][1:]:
+                assert 'fee' in tx
+                assert_fee_amount(tx['fee'], tx['size'], fee_per_byte * 1000 / COIN)
 
         def assert_vin_contains_prevout(verbosity):
             block = node.getblock(blockhash, verbosity)
-            tx = block["tx"][1]
-            total_vin = Decimal("0.00000000")
-            total_vout = Decimal("0.00000000")
-            for vin in tx["vin"]:
-                assert "prevout" in vin
-                assert_equal(set(vin["prevout"].keys()), {"value", "height", "generated", "scriptPubKey"})
-                assert_equal(vin["prevout"]["generated"], True)
-                total_vin += vin["prevout"]["value"]
-            for vout in tx["vout"]:
-                total_vout += vout["value"]
-            assert_equal(total_vin, total_vout + tx["fee"])
+            for tx in block['tx'][1:]:
+                total_vin = Decimal("0.00000000")
+                total_vout = Decimal("0.00000000")
+                for vin in tx["vin"]:
+                    assert "prevout" in vin
+                    assert_equal(set(vin["prevout"].keys()), {"value", "height", "generated", "scriptPubKey"})
+                    expect_generated = tx['txid'] != txid_child
+                    assert_equal(vin["prevout"]["generated"], expect_generated)
+                    total_vin += vin["prevout"]["value"]
+                for vout in tx["vout"]:
+                    total_vout += vout["value"]
+                assert_equal(total_vin, total_vout + tx["fee"])
 
         def assert_vin_does_not_contain_prevout(verbosity):
             block = node.getblock(blockhash, verbosity)
-            tx = block["tx"][1]
-            if isinstance(tx, str):
-                # In verbosity level 1, only the transaction hashes are written
-                pass
-            else:
+            for tx in block['tx'][1:]:
+                if isinstance(tx, str):
+                    # In verbosity level 1, only the transaction hashes are written
+                    pass
+                else:
+                    for vin in tx["vin"]:
+                        assert "prevout" not in vin
+
+        def assert_scripts_contain_bytecodepattern(verbosity):
+            def check_bcp_keys(bcp, *extra_keys):
+                """Check that byteCodePattern dict has at least these 4 keys"""
+                assert_equal({'fingerprint', 'pattern', 'patternAsm', 'data', *extra_keys} - set(bcp.keys()), set())
+
+            redeem_script_count = 0
+            block = node.getblock(blockhash, verbosity)
+            for tx in block["tx"]:
                 for vin in tx["vin"]:
-                    assert "prevout" not in vin
+                    if "coinbase" in vin:
+                        assert isinstance(vin["coinbase"], str)
+                        continue
+
+                    assert "scriptSig" in vin
+                    assert "byteCodePattern" in vin["scriptSig"]
+                    check_bcp_keys(vin["scriptSig"]["byteCodePattern"])
+                    if "redeemScript" in vin["scriptSig"]:
+                        redeem_script_count += 1
+                        assert_equal({'asm', 'hex', 'byteCodePattern'} - set(vin["scriptSig"]["redeemScript"].keys()),
+                                     set())
+                        check_bcp_keys(vin["scriptSig"]["redeemScript"]["byteCodePattern"], "p2shType")
+
+                    assert "byteCodePattern" in vin["prevout"]["scriptPubKey"]
+                    check_bcp_keys(vin["prevout"]["scriptPubKey"]["byteCodePattern"])
+
+                for vout in tx["vout"]:
+                    assert "scriptPubKey" in vout
+                    assert "byteCodePattern" in vout["scriptPubKey"]
+                    check_bcp_keys(vout["scriptPubKey"]["byteCodePattern"])
+            return redeem_script_count
+
+        def assert_scripts_do_not_contain_bytecodepattern(verbosity):
+            block = node.getblock(blockhash, verbosity)
+            for tx in block["tx"]:
+                if isinstance(tx, str):
+                    continue
+                for vin in tx["vin"]:
+                    if "coinbase" in vin:
+                        assert isinstance(vin["coinbase"], str)
+                        continue
+
+                    assert "scriptSig" in vin
+                    assert "byteCodePattern" not in vin["scriptSig"]
+                    assert "redeemScript" not in vin["scriptSig"]
+                    if "prevout" in vin:
+                        assert "byteCodePattern" not in vin["prevout"]["scriptPubKey"]
+
+                for vout in tx["vout"]:
+                    assert "scriptPubKey" in vout
+                    assert "byteCodePattern" not in vout["scriptPubKey"]
+
 
         self.log.info("Test that getblock with verbosity 1 doesn't include fee")
         assert_fee_not_in_block(1)
 
-        self.log.info('Test that getblock with verbosity 2 and 3 includes expected fee')
+        self.log.info('Test that getblock with verbosity 2, 3, and 4 includes expected fee')
         assert_fee_in_block(2)
         assert_fee_in_block(3)
+        assert_fee_in_block(4)
 
         self.log.info("Test that getblock with verbosity 1 and 2 does not include prevout")
         assert_vin_does_not_contain_prevout(1)
         assert_vin_does_not_contain_prevout(2)
 
-        self.log.info("Test that getblock with verbosity 3 includes prevout")
+        self.log.info("Test that getblock with verbosity 3 and 4 includes prevout")
         assert_vin_contains_prevout(3)
+        assert_vin_contains_prevout(4)
 
-        self.log.info("Test that getblock with verbosity 2 and 3 still works with pruned Undo data")
+        self.log.info("Test that getblock with verbosity 1-3 does not include byteCodePattern for any script")
+        assert_scripts_do_not_contain_bytecodepattern(1)
+        assert_scripts_do_not_contain_bytecodepattern(2)
+        assert_scripts_do_not_contain_bytecodepattern(3)
+
+        self.log.info("Test that getblock with verbosity 4 includes byteCodePattern in all scripts")
+        rs_count = assert_scripts_contain_bytecodepattern(4)
+        self.log.info("Test that we saw at least some p2sh redeemScript entries")
+        assert_greater_than(rs_count, 0)
+
+        self.log.info("Test that getblock with verbosity 2, 3 and 4 still works with pruned Undo data")
         datadir = get_datadir_path(self.options.tmpdir, 0)
 
         self.log.info("Test getblock with invalid verbosity type returns proper error message")
@@ -513,12 +630,12 @@ class BlockchainTest(BitcoinTestFramework):
         # Move instead of deleting so we can restore chain state afterwards
         move_block_file('rev00000.dat', 'rev_wrong')
 
-        block = node.getblock(blockhash, 2)
-        assert 'fee' not in block['tx'][1]
         assert_fee_not_in_block(2)
         assert_fee_not_in_block(3)
+        assert_fee_not_in_block(4)
         assert_vin_does_not_contain_prevout(2)
         assert_vin_does_not_contain_prevout(3)
+        assert_vin_does_not_contain_prevout(4)
 
         # Restore chain state
         move_block_file('rev_wrong', 'rev00000.dat')
