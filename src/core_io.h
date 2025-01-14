@@ -29,9 +29,10 @@ namespace token { class OutputData; struct SafeAmount; }
  * Verbose level for block's transaction
  */
 enum class TxVerbosity {
-    SHOW_TXID,                //!< Only TXID for each block's transaction
-    SHOW_DETAILS,             //!< Include TXID, inputs, outputs, and other common block's transaction information
-    SHOW_DETAILS_AND_PREVOUT  //!< The same as previous option with information about prevouts if available
+    SHOW_TXID,                                      //!< Only TXID for each block's transaction
+    SHOW_DETAILS,                                   //!< Include TXID, inputs, outputs, and other common block's transaction information
+    SHOW_DETAILS_AND_PREVOUT,                       //!< The same as previous option with information about prevouts if available
+    SHOW_DETAILS_AND_PREVOUT_AND_SCRIPT_PATTERNS    //!< The same as previous option with information about script byte code patterns
 };
 
 // core_read.cpp
@@ -80,8 +81,9 @@ std::string FormatScript(const CScript &script);
 std::string EncodeHexTx(const CTransaction &tx);
 std::string SighashToStr(uint8_t sighash_type);
 UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptPubKey, bool fIncludeHex,
-                                    bool fIncludeP2SH = false);
-UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address);
+                                    bool fIncludeP2SH = false, bool include_pattern = false);
+UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address,
+                              bool include_type = true, bool include_pattern = false);
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex = true,
                           const CTxUndo* txundo = nullptr, TxVerbosity verbosity = TxVerbosity::SHOW_DETAILS);
 UniValue::Object TokenDataToUniv(const token::OutputData &token);
@@ -89,3 +91,10 @@ UniValue::Object TokenDataToUniv(const token::OutputData &token);
 /// Returns a UniValue::VSTR (string) for any token amount.  We are forced to unconditionally wrap token amounts
 /// as strings since they may exceed 9007199254740991, which is the largest safe JSON numeric value (~53 bits).
 [[nodiscard]] UniValue SafeAmountToUniv(token::SafeAmount val);
+
+/// @param[in] script - the script to parse into a bytecode pattern JSON object.
+/// @param[out] pOptLastPush - `nullptr` ok; optional vector to store the last push of `script` (if any). If there was
+///                            an error or if there are no pushes, then `*pOptLastPush` will be `std::nullopt`.
+/// @returns An object that describes the "bytecode pattern" information for any script.
+[[nodiscard]] UniValue::Object ScriptToByteCodePatternUniv(const CScript &script,
+                                                           std::optional<std::vector<uint8_t>> *pOptLastPush = nullptr);

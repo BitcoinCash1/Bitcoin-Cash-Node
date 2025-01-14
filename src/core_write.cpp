@@ -6,6 +6,7 @@
 #include <core_io.h>
 
 #include <config.h>
+#include <crypto/sha256.h>
 #include <key_io.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
@@ -18,6 +19,7 @@
 #include <util/strencodings.h>
 #include <util/system.h>
 
+#include <algorithm>
 #include <utility>
 
 UniValue ValueFromAmount(const Amount &amount) {
@@ -190,28 +192,34 @@ std::string EncodeHexTx(const CTransaction &tx) {
     return HexStr(ssTx);
 }
 
-UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address) {
+UniValue::Object ScriptToUniv(const Config &config, const CScript &script, bool include_address,
+                              bool include_type, bool include_pattern) {
     CTxDestination address;
     const uint32_t flags = STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_ENABLE_P2SH_32 | SCRIPT_ENABLE_TOKENS;
     bool extracted = include_address && ExtractDestination(script, address, flags);
 
     UniValue::Object out;
-    out.reserve(3 + extracted);
+    out.reserve(2 + include_type + extracted + include_pattern);
     out.emplace_back("asm", ScriptToAsmStr(script, false));
     out.emplace_back("hex", HexStr(script));
 
-    std::vector<std::vector<uint8_t>> solns;
-    out.emplace_back("type", GetTxnOutputType(Solver(script, solns, flags)));
+    if (include_type) {
+        std::vector<std::vector<uint8_t>> solns;
+        out.emplace_back("type", GetTxnOutputType(Solver(script, solns, flags)));
+    }
 
     if (extracted) {
         out.emplace_back("address", EncodeDestination(address, config));
+    }
+    if (include_pattern) {
+        out.emplace_back("byteCodePattern", ScriptToByteCodePatternUniv(script));
     }
 
     return out;
 }
 
 UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptPubKey, bool fIncludeHex,
-                                    bool fIncludeP2SH) {
+                                    bool fIncludeP2SH, bool include_pattern) {
     UniValue::Object out;
     out.emplace_back("asm", ScriptToAsmStr(scriptPubKey, false));
     if (fIncludeHex) {
@@ -246,17 +254,23 @@ UniValue::Object ScriptPubKeyToUniv(const Config &config, const CScript &scriptP
         out.emplace_back("p2sh_32", EncodeDestination(ScriptID(scriptPubKey, true), config));
     }
 
+    if (include_pattern) {
+        out.emplace_back("byteCodePattern", ScriptToByteCodePatternUniv(scriptPubKey));
+    }
+
     return out;
 }
 
 UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const uint256 &hashBlock, bool include_hex,
                           const CTxUndo* txundo, TxVerbosity verbosity) {
     bool include_blockhash = !hashBlock.IsNull();
+    const bool tx_is_coinbase = tx.IsCoinBase();
     // If available, use Undo data to calculate the fee. Note that txundo == nullptr
     // for coinbase transactions and for transactions where undo data is unavailable.
-    const bool have_undo = txundo != nullptr;
+    const bool have_undo = !tx_is_coinbase && txundo != nullptr;
     Amount amt_total_in = Amount::zero();
     Amount amt_total_out = Amount::zero();
+    const bool include_patterns = verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT_AND_SCRIPT_PATTERNS;
 
     UniValue::Object entry;
     entry.reserve(7 + include_blockhash + include_hex + have_undo);
@@ -271,18 +285,21 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
     for (size_t i = 0; i < tx.vin.size(); ++i) {
         const CTxIn &txin = tx.vin[i];
         UniValue::Object in;
-        const bool tx_is_coinbase = tx.IsCoinBase();
         const size_t in_rsv_sz = (tx_is_coinbase ? 2u : 4u) + have_undo;
         in.reserve(in_rsv_sz);
+        std::optional<std::vector<uint8_t>> optMaybeRedeemScript;
         if (tx_is_coinbase) {
             in.emplace_back("coinbase", HexStr(txin.scriptSig));
         } else {
             in.emplace_back("txid", txin.prevout.GetTxId().GetHex());
             in.emplace_back("vout", txin.prevout.GetN());
             UniValue::Object o;
-            o.reserve(2);
+            o.reserve(2 + include_patterns /* byteCodePattern */ + (have_undo && include_patterns) /* maybe redeemScript */);
             o.emplace_back("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.emplace_back("hex", HexStr(txin.scriptSig));
+            if (include_patterns) {
+                o.emplace_back("byteCodePattern", ScriptToByteCodePatternUniv(txin.scriptSig, &optMaybeRedeemScript));
+            }
             in.emplace_back("scriptSig", std::move(o));
         }
         if (have_undo) {
@@ -291,20 +308,49 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
 
             amt_total_in += prev_txout.nValue;
 
-            if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT) {
+            if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT || include_patterns) {
                 UniValue::Object o_script_pub_key = ScriptToUniv(config, prev_txout.scriptPubKey,
-                                                                 /*include_address=*/true);
+                                                                 /*include_address=*/true, /*include type=*/true,
+                                                                 /*include_pattern=*/include_patterns);
                 UniValue::Object p;
                 const bool has_token_data = prev_txout.tokenDataPtr;
                 p.reserve(5u + has_token_data);
                 p.emplace_back("generated", prev_coin.IsCoinBase());
                 p.emplace_back("height", prev_coin.GetHeight());
                 p.emplace_back("value", ValueFromAmount(prev_txout.nValue));
+                if (include_patterns && optMaybeRedeemScript.has_value()) {
+                    // Maybe add the redeemScript & pattern to the input's `scriptSig` JSON object as well, if the
+                    // spk was p2sh-ish; contents of `o_script_pub_key["byteCodePattern"]["pattern"]` determines this.
+                    std::string p2sh;
+                    if (const UniValue *pat; (pat = o_script_pub_key.locate("byteCodePattern"))
+                                              && (pat = pat->locate("pattern"))) {
+                        if (pat->getValStr() == "a95187") {
+                            p2sh = "p2sh20";
+                        } else if (pat && pat->getValStr() == "aa5187") {
+                            p2sh = "p2sh32";
+                        }
+                    }
+
+                    if (!p2sh.empty()) {
+                        const CScript redeem_script{optMaybeRedeemScript->begin(), optMaybeRedeemScript->end()};
+                        UniValue::Object redeemScript = ScriptToUniv(config, redeem_script,
+                                                                     /*include_address=*/false, /*include_type=*/false,
+                                                                     /*include_pattern=*/include_patterns);
+                        // place the p2sh type into byteCodePattern subobject of redeemScript
+                        if (auto *rs_pat = redeemScript.locate("byteCodePattern"); rs_pat && rs_pat->isObject()) {
+                            rs_pat->get_obj().emplace_back("p2shType", std::move(p2sh));
+                        }
+                        // place the redeemScript object and its pattern data into input's "scriptSig" object.
+                        if (auto *scriptSig = in.locate("scriptSig"); scriptSig && scriptSig->isObject()) {
+                            scriptSig->get_obj().emplace_back("redeemScript", std::move(redeemScript));
+                        }
+                    }
+                }
                 p.emplace_back("scriptPubKey", std::move(o_script_pub_key));
                 if (has_token_data) {
                     p.emplace_back("tokenData", TokenDataToUniv(*prev_txout.tokenDataPtr));
                 }
-                in.emplace_back("prevout", p);
+                in.emplace_back("prevout", std::move(p));
             }
         }
         in.emplace_back("sequence", txin.nSequence);
@@ -320,7 +366,8 @@ UniValue::Object TxToUniv(const Config &config, const CTransaction &tx, const ui
         out.reserve(3u + has_token_data);
         out.emplace_back("value", ValueFromAmount(txout.nValue));
         out.emplace_back("n", vout.size());
-        out.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, true));
+        out.emplace_back("scriptPubKey", ScriptPubKeyToUniv(config, txout.scriptPubKey, /*fIncludeHex=*/true,
+                                                            /*fIncludeP2SH=*/false, include_patterns));
         if (has_token_data) {
             out.emplace_back("tokenData", TokenDataToUniv(*txout.tokenDataPtr));
         }
@@ -381,4 +428,98 @@ UniValue SafeAmountToUniv(const token::SafeAmount val) {
     std::string numStr = uv.getValStr(); // note: to avoid UB, we must copy to temp obj first to assign it back to `uv`
     uv = std::move(numStr);
     return uv;
+}
+
+UniValue::Object ScriptToByteCodePatternUniv(const CScript &scriptIn, std::optional<std::vector<uint8_t>> *pOptLastPush) {
+    struct ByteCodePattern {
+        uint256 fingerprint; ///< single-sha256 hash of `pattern`
+        CScript pattern;
+        std::vector<std::vector<uint8_t>> data;
+        bool error = false;
+    };
+
+    auto ParseScriptToPattern = [](const CScript &script) -> ByteCodePattern  {
+        ByteCodePattern ret;
+        opcodetype opcode;
+        std::vector<uint8_t> vch;
+        CScript::const_iterator pc = script.begin();
+        size_t ccPushes = 0;
+
+        auto FlushPushes = [&ccPushes, &ret]() {
+            if (ccPushes > 0) {
+                ret.pattern << ScriptInt::fromIntUnchecked(ccPushes);
+                ccPushes = 0;
+            }
+        };
+
+        while (pc < script.end()) {
+            if (!script.GetOp(pc, opcode, vch)) {
+                ret.error = true;
+                break;
+            }
+
+            if (opcode >= OP_0 && opcode <= OP_PUSHDATA4) { // OP_0 = 0x00, OP_PUSHDATA4 = 0x4e
+                // note: OP_0 will push empty element: ""
+                ret.data.push_back(std::move(vch));
+                ++ccPushes;
+            } else if (opcode >= OP_1NEGATE && opcode <= OP_16 && opcode != OP_RESERVED) { // OP_1NEGATE = 0x4f, OP_16 = 0x60, OP_RESERVED = 0x50
+                // vch will be empty so we have to calculate resulting stack element
+                if (opcode == OP_1NEGATE) {
+                    ret.data.emplace_back(size_t{1}, uint8_t{0x81u}); // 0x81 is scriptnum encoding of -1
+                } else {
+                    ret.data.emplace_back(size_t{1}, uint8_t(opcode - 0x50u));
+                }
+                ++ccPushes;
+            } else {
+                FlushPushes();
+                ret.pattern << opcode;
+            }
+        }
+        FlushPushes();
+
+        if (ret.error) {
+            // push remainder of the script to the last data position, starting from the errored-out opcode itself.
+            CScript::const_iterator copyfrom = pc;
+            if (copyfrom > script.begin()) {
+                // go back 1, if we can, so that we may start copying from the errored-out opcode
+                --copyfrom;
+            }
+            copyfrom = std::clamp(copyfrom, script.begin(), script.end()); // ensure in range
+            ret.data.emplace_back(copyfrom, script.end());
+        }
+
+        CSHA256{}.Write(ret.pattern).Finalize(ret.fingerprint);
+
+        return ret;
+    };
+
+    ByteCodePattern bcp = ParseScriptToPattern(scriptIn);
+    UniValue::Object ret;
+    UniValue::Array a;
+
+    a.reserve(bcp.data.size());
+    for (const auto &datum : bcp.data) {
+        a.emplace_back(HexStr(datum));
+    }
+
+    ret.reserve(4 + bcp.error);
+    ret.emplace_back("fingerprint", HexStr(bcp.fingerprint));
+    ret.emplace_back("pattern", HexStr(bcp.pattern));
+    ret.emplace_back("patternAsm", ScriptToAsmStr(bcp.pattern));
+    ret.emplace_back("data", std::move(a));
+    if (bcp.error) {
+        ret.emplace_back("error", bcp.error);
+    }
+
+    // caller wants info on the last push
+    if (pOptLastPush) {
+        if (!bcp.error && !bcp.data.empty()) {
+            pOptLastPush->emplace(std::move(bcp.data.back())); // fast move
+        } else {
+            // had error or no last push, indicate this by making this be a std::nullopt
+            pOptLastPush->reset();
+        }
+    }
+
+    return ret;
 }

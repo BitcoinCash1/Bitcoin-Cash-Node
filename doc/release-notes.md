@@ -18,8 +18,12 @@ None
 
 ## Added functionality
 
-None
-
+- A new verbosity level 4 has been added to the `getblock` RPC method.
+  - This is identical to `verbosity=3`, except that additionally all input and output scripts contain an additional
+    key, `byteCodePattern` which is a JSON object that describes the script's pattern and "fingerprint". This is useful
+    for categorizing the script in question. For more information on what is inside this key's object, see the RPC help
+    for `getblock` and [this discussion on Bitcoin Cash Research](https://bitcoincashresearch.org/t/smart-contract-fingerprinting-a-method-for-pattern-recognition-and-analysis-in-bitcoin-cash/1441).
+  - A REST endpoint `/block/withpatterns/<HASH>` has been added which corresponds to `getblock` with `verbosity=4`.
 
 ## Deprecated functionality
 

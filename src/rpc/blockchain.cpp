@@ -150,6 +150,7 @@ UniValue::Object blockToJSON(const Config &config, const CBlock &block, const CB
 
     case TxVerbosity::SHOW_DETAILS:
     case TxVerbosity::SHOW_DETAILS_AND_PREVOUT:
+    case TxVerbosity::SHOW_DETAILS_AND_PREVOUT_AND_SCRIPT_PATTERNS:
         CBlockUndo blockUndo;
         const bool have_undo{WITH_LOCK(::cs_main, return !IsBlockPruned(blockindex) && UndoReadFromDisk(blockUndo, blockindex))};
 
@@ -957,7 +958,8 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
                 "\nIf verbosity is 0 or false, returns a string that is serialized, hex-encoded data for block 'hash'.\n"
                 "If verbosity is 1 or true, returns an Object with information about block <hash>.\n"
                 "If verbosity is 2, returns an Object with information about block <hash> and information about each transaction, including fee.\n"
-                "If verbosity is >=3, returns an Object with information about block <hash> and information about each transaction, including fee, and including prevout information for inputs (only for unpruned blocks in the current best chain).\n",
+                "If verbosity is 3, returns an Object with information about block <hash> and information about each transaction, including fee, and including prevout information for inputs (only for unpruned blocks in the current best chain).\n"
+                "If verbosity >= 4, returns the same information as verbosity=3, with additional \"byteCodePattern\" information for all scriptSig and scriptPubKey scripts.\n",
                 {
                     {"blockhash", RPCArg::Type::STR_HEX, /* opt */ false, /* default_val */ "", "The block hash"},
                     {"verbosity", RPCArg::Type::NUM, /* opt */ true, /* default_val */ "1", "0 for hex-encoded data, 1 for a json object, and 2 for json object with transaction data, and 3 for JSON object with transaction data including prevout information for inputs"},
@@ -1021,6 +1023,26 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             "      \"vin\" : [          (json array)\n"
             "        {                (json object)\n"
             "          ...,           Same output as verbosity = 2\n"
+            "          \"scriptSig\" : {               (json object, optional) Only for non-coinbase tx\n"
+            "            ...,                        Same output as verbosity = 2 \n"
+            "            \"byteCodePattern\" : {       (json object, optional) Only for verbosity >= 4\n"
+            "              \"fingerprint\" : \"str\",    (string) Single SHA-256 hash of script pattern\n"
+            "              \"pattern\" : \"str\",        (string) Hex-encoded script pattern\n"
+            "              \"patternAsm\" : \"str\",     (string) Script pattern asm\n"
+            "              \"data\" : [                (json array) Script data pushes\n"
+            "                \"hex\", ...              (string) Hex-encoded data push\n"
+            "              ],\n"
+            "              \"error\": true             (boolean, optional) Only if there was an error parsing the script\n"
+            "            },\n"
+            "            \"redeemScript\" : {          (json object, optional) Only for verbosity >= 4 and only for p2sh inputs\n"
+            "              \"asm\" : \"str\",            (string) The p2sh redeem script asm\n"
+            "              \"hex\" : \"str\",            (string) The p2sh redeem script hex\n"
+            "              \"byteCodePattern\" : {     (json object) Redeem script byte code pattern information\n"
+            "                ...,                    Same schema as for scriptSig.byteCodePattern above\n"
+            "                \"p2shType\" : \"str\"      (string) Either \"p2sh20\" or \"p2sh32\"\n"
+            "              }\n"
+            "            },\n"
+            "          },\n"
             "          \"prevout\" : {                 (json object, optional) (Only if undo information is available)\n"
             "            \"generated\" : true|false,   (boolean) Coinbase or not\n"
             "            \"height\" : n,               (numeric) The height of the prevout\n"
@@ -1030,6 +1052,7 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             "              \"hex\" : \"str\",            (string) The hex\n"
             "              \"type\" : \"str\",           (string) The type (one of: nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata)\n"
             "              \"address\" : \"str\"         (string, optional) The Bitcoin Cash address (only if well-defined address exists)\n"
+            "              \"byteCodePattern\" : {...} (json object) Only for verbosity >= 4; byte code pattern information\n"
             "            },\n"
             "            \"tokenData\" : {             (json object, optional) CashToken data (only if the input contained a token)\n"
             "              \"category\" : \"hex\",       (string) Token id\n"
@@ -1042,7 +1065,8 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
             "          }\n"
             "        },\n"
             "        ...\n"
-            "      ]\n"
+            "      ],\n"
+            "      \"vout\" : [...]     Same output as verbosity = 2; verbosity >= 4 has additional \"byteCodePattern\" information for all \"scriptPubKey\" scripts\n"
             "    },\n"
             "    ...\n"
             "  ],\n"
@@ -1090,8 +1114,10 @@ static UniValue getblock(const Config &config, const JSONRPCRequest &request) {
         tx_verbosity = TxVerbosity::SHOW_TXID;
     } else if (verbosity == 2) {
         tx_verbosity = TxVerbosity::SHOW_DETAILS;
-    } else {
+    } else if (verbosity == 3) {
         tx_verbosity = TxVerbosity::SHOW_DETAILS_AND_PREVOUT;
+    } else {
+        tx_verbosity = TxVerbosity::SHOW_DETAILS_AND_PREVOUT_AND_SCRIPT_PATTERNS;
     }
 
     return blockToJSON(config, block, tip, pblockindex, tx_verbosity);

@@ -274,6 +274,11 @@ static bool rest_block(const Config &config, HTTPRequest *req,
     }
 }
 
+static bool rest_block_extended_with_patterns(const std::any &, Config &config, HTTPRequest *req,
+                                              const std::string &strURIPart) {
+    return rest_block(config, req, strURIPart, TxVerbosity::SHOW_DETAILS_AND_PREVOUT_AND_SCRIPT_PATTERNS);
+}
+
 static bool rest_block_extended(const std::any& context, Config &config, HTTPRequest *req,
                                 const std::string &strURIPart) {
     return rest_block(config, req, strURIPart, TxVerbosity::SHOW_DETAILS_AND_PREVOUT);
@@ -658,6 +663,7 @@ static const struct {
 } uri_prefixes[] = {
     {"/rest/tx/", rest_tx},
     {"/rest/block/notxdetails/", rest_block_notxdetails},
+    {"/rest/block/withpatterns/", rest_block_extended_with_patterns},
     {"/rest/block/", rest_block_extended},
     {"/rest/chaininfo", rest_chaininfo},
     {"/rest/mempool/info", rest_mempool_info},

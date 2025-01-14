@@ -335,6 +335,18 @@ class RESTTest (BitcoinTestFramework):
         for tx in txs:
             assert tx in json_obj['tx']
 
+        # Check /withpatterns/ endpoint: Same as /block/ but additionally all scripts have key: "byteCodePattern"
+        json_obj = self.test_rest_request("/block/withpatterns/{}".format(newblockhash[0]))
+        for tx_obj in json_obj["tx"]:
+            for vin in tx_obj["vin"]:
+                if "coinbase" not in vin:
+                    assert "byteCodePattern" in vin["scriptSig"]
+                    assert "byteCodePattern" in vin["prevout"]["scriptPubKey"]
+                else:
+                    assert "prevout" not in vin
+            for vout in tx_obj["vout"]:
+                assert "byteCodePattern" in vout["scriptPubKey"]
+
         self.log.info("Test the /chaininfo URI")
 
         bb_hash = self.nodes[0].getbestblockhash()
