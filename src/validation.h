@@ -800,3 +800,9 @@ uint32_t GetMemPoolScriptFlags(const Consensus::Params &params, const CBlockInde
 /// @pre Either upgrade10 must *not* be activated, *or* if it is, `pindexPrev` *must* have a valid `ablaStateOpt`.
 ///      (This precondition is guaranteed if `pindexPrev` is on the active chain.)
 uint64_t GetNextBlockSizeLimit(const Config &config, const CBlockIndex *pindexPrev);
+
+/** Identifies blocks that overwrote an existing coinbase output in the UTXO set (see BIP30) */
+bool IsBIP30Repeat(const CBlockIndex &block_index);
+
+/** Identifies blocks which coinbase output was subsequently overwritten in the UTXO set (see BIP30) */
+bool IsBIP30Unspendable(const CBlockIndex &block_index);

@@ -9,6 +9,7 @@
 #include <config.h>
 #include <core_io.h>
 #include <httpserver.h>
+#include <index/coinstatsindex.h>
 #include <index/txindex.h>
 #include <key_io.h>
 #include <logging.h>
@@ -591,6 +592,10 @@ static UniValue getindexinfo(const Config &, const JSONRPCRequest &request) {
 
     if (g_txindex) {
         ExtendResult(SummaryToJSON(g_txindex->GetSummary()));
+    }
+
+    if (g_coin_stats_index) {
+        ExtendResult(SummaryToJSON(g_coin_stats_index->GetSummary()));
     }
 
     return result;

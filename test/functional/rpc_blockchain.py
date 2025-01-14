@@ -214,7 +214,7 @@ class BlockchainTest(BitcoinTestFramework):
         assert size > 6400
         assert size < 64000
         assert_equal(len(res['bestblock']), 64)
-        assert_equal(len(res['hash_serialized']), 64)
+        assert_equal(len(res['hash_serialized_3']), 64)
 
         self.log.info(
             "Test that gettxoutsetinfo() works for blockchain with just the genesis block")
@@ -228,20 +228,50 @@ class BlockchainTest(BitcoinTestFramework):
         assert_equal(res2['txouts'], 0)
         assert_equal(res2['bogosize'], 0),
         assert_equal(res2['bestblock'], node.getblockhash(0))
-        assert_equal(len(res2['hash_serialized']), 64)
+        assert_equal(len(res2['hash_serialized_3']), 64)
 
         self.log.info(
             "Test that gettxoutsetinfo() returns the same result after invalidate/reconsider block")
         node.reconsiderblock(b1hash)
 
         res3 = node.gettxoutsetinfo()
-        assert_equal(res['total_amount'], res3['total_amount'])
-        assert_equal(res['transactions'], res3['transactions'])
-        assert_equal(res['height'], res3['height'])
-        assert_equal(res['txouts'], res3['txouts'])
-        assert_equal(res['bogosize'], res3['bogosize'])
-        assert_equal(res['bestblock'], res3['bestblock'])
-        assert_equal(res['hash_serialized'], res3['hash_serialized'])
+        # The field 'disk_size' is non-deterministic and can thus not be
+        # compared between res and res3.  Everything else should be the same.
+        del res['disk_size'], res3['disk_size']
+        assert_equal(res, res3)
+
+        self.log.info("Test gettxoutsetinfo hash_type option")
+        # Adding hash_type 'hash_serialized_3', which is the default, should
+        # not change the result.
+        res4 = node.gettxoutsetinfo(hash_type='hash_serialized_3')
+        del res4['disk_size']
+        assert_equal(res, res4)
+
+        # hash_type none should not return a UTXO set hash.
+        res5 = node.gettxoutsetinfo(hash_type='none')
+        assert 'hash_serialized_3' not in res5
+
+        # hash_type muhash_testing should return a different UTXO set hash.
+        res6 = node.gettxoutsetinfo(hash_type='muhash_testing')
+        assert 'muhash_testing' in res6
+        assert res['hash_serialized_3'] != res6['muhash_testing']
+
+        # hash_type muhash_testing should return a different UTXO set hash.
+        res7 = node.gettxoutsetinfo(hash_type='ecmh')
+        assert 'ecmh' in res7
+        assert 'ecmh_pubkey' in res7
+        assert 'muhash_testing' not in res7
+        assert res['hash_serialized_3'] != res7['ecmh']
+        assert res6['muhash_testing'] != res7['ecmh']
+
+        # muhash and/or ecmh should not be returned unless requested.
+        for r in [res, res2, res3, res4, res5]:
+            assert 'muhash_testing' not in r
+            assert 'ecmh' not in r
+            assert 'ecmh_pubkey' not in r
+
+        # Unknown hash_type raises an error
+        assert_raises_rpc_error(-8, "'foo hash' is not a valid hash_type", node.gettxoutsetinfo, "foo hash")
 
     def _test_getblockheader(self):
         node = self.nodes[0]

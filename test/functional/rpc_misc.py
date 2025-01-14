@@ -70,16 +70,19 @@ class RpcMiscTest(BitcoinTestFramework):
         assert_equal(node.getindexinfo(), {})
 
         # Restart the node with indices and wait for them to sync
-        self.restart_node(0, ["-txindex"])
+        self.restart_node(0, ["-txindex", "-coinstatsindex"])
         wait_until(lambda: all(i["synced"] for i in node.getindexinfo().values()))
 
         # Returns a list of all running indices by default
         assert_equal(node.getindexinfo(),
-                     {"txindex": {"synced": True, "best_block_height": 200}})
+                     {"txindex": {"synced": True, "best_block_height": 200},
+                      "coinstatsindex": {"synced": True, "best_block_height": 200},})
 
         # Specifying an index by name returns only the status of that index
         assert_equal(node.getindexinfo("txindex"),
                      {"txindex": {"synced": True, "best_block_height": 200}})
+        assert_equal(node.getindexinfo("coinstatsindex"),
+                     {"coinstatsindex": {"synced": True, "best_block_height": 200}})
 
         # Specifying an unknown index name returns an empty result
         assert_equal(node.getindexinfo("foo"), {})
