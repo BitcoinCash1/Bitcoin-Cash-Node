@@ -5,6 +5,7 @@
 
 #include <bench/bench.h>
 #include <bloom.h>
+#include <crypto/muhash.h>
 #include <crypto/ripemd160.h>
 #include <crypto/sha1.h>
 #include <crypto/sha256.h>
@@ -99,6 +100,46 @@ static void FastRandom_1bit(benchmark::State &state) {
     }
 }
 
+static void MuHash(benchmark::State &state) {
+    MuHash3072 acc;
+    unsigned char key[32] = {0};
+    unsigned int i = 0;
+    BENCHMARK_LOOP {
+        key[0] = ++i;
+        acc *= MuHash3072(key);
+    }
+}
+
+static void MuHashMul(benchmark::State &state) {
+    MuHash3072 acc;
+    FastRandomContext rng(true);
+    MuHash3072 muhash{rng.randbytes(32)};
+    BENCHMARK_LOOP {
+        acc *= muhash;
+    }
+}
+
+static void MuHashDiv(benchmark::State &state) {
+    MuHash3072 acc;
+    FastRandomContext rng(true);
+    MuHash3072 muhash{rng.randbytes(32)};
+    for (size_t i = 0; i < state.m_num_iters; ++i) {
+        acc *= muhash;
+    }
+    BENCHMARK_LOOP {
+        acc /= muhash;
+    }
+}
+
+static void MuHashPrecompute(benchmark::State &state) {
+    MuHash3072 acc;
+    FastRandomContext rng(true);
+    std::vector<unsigned char> key{rng.randbytes(32)};
+    BENCHMARK_LOOP {
+        MuHash3072{key};
+    }
+}
+
 BENCHMARK(RIPEMD160, 440);
 BENCHMARK(SHA1, 570);
 BENCHMARK(SHA256, 340);
@@ -110,3 +151,8 @@ BENCHMARK(SipHash_32b, 40 * 1000 * 1000);
 BENCHMARK(SHA256D64_1024, 7400);
 BENCHMARK(FastRandom_32bit, 110 * 1000 * 1000);
 BENCHMARK(FastRandom_1bit, 440 * 1000 * 1000);
+
+BENCHMARK(MuHash, 30'000);
+BENCHMARK(MuHashMul, 30'000);
+BENCHMARK(MuHashDiv, 30'000);
+BENCHMARK(MuHashPrecompute, 30'000);

@@ -28,6 +28,7 @@
 #include <hash.h>
 #include <httprpc.h>
 #include <httpserver.h>
+#include <index/coinstatsindex.h>
 #include <index/txindex.h>
 #include <interfaces/chain.h>
 #include <key.h>
@@ -209,6 +210,9 @@ void Interrupt() {
     if (g_txindex) {
         g_txindex->Interrupt();
     }
+    if (g_coin_stats_index) {
+        g_coin_stats_index->Interrupt();
+    }
 }
 
 void Shutdown(NodeContext &node) {
@@ -245,6 +249,9 @@ void Shutdown(NodeContext &node) {
     }
     if (g_txindex) {
         g_txindex->Stop();
+    }
+    if (g_coin_stats_index) {
+        g_coin_stats_index->Stop();
     }
 
     StopTorControl();
@@ -619,6 +626,9 @@ void SetupServerArgs() {
                  strprintf("Maintain a full transaction index, used by the "
                            "getrawtransaction rpc call (default: %d)",
                            DEFAULT_TXINDEX),
+                 ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-coinstatsindex",
+                 strprintf("Maintain coinstats index used by the gettxoutsetinfo RPC (default: %u)", DEFAULT_COINSTATSINDEX),
                  ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     gArgs.AddArg(
         "-usecashaddr",
@@ -2673,6 +2683,10 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
     if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX)) {
         g_txindex = std::make_unique<TxIndex>(nTxIndexCache, false, fReindex);
         g_txindex->Start();
+    }
+    if (gArgs.GetBoolArg("-coinstatsindex", DEFAULT_COINSTATSINDEX)) {
+        g_coin_stats_index = std::make_unique<CoinStatsIndex>(/* cache size = */ 0, false, fReindex);
+        g_coin_stats_index->Start();
     }
 
     // Step 9: load wallet

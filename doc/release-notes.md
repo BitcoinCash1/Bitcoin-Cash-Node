@@ -18,6 +18,9 @@ None
 
 ## Added functionality
 
+- A new "coin stats" index has been added, which may be enabled with the command-line option `-coinstatsindex`
+  (default: disabled). If enabled, this index keeps track of various UTXO-set releated statistics for each block, which
+  can be queried with the `gettxoutsetinfo` RPC.
 - A new verbosity level 4 has been added to the `getblock` RPC method.
   - This is identical to `verbosity=3`, except that additionally all input and output scripts contain an additional
     key, `byteCodePattern` which is a JSON object that describes the script's pattern and "fingerprint". This is useful
@@ -31,11 +34,18 @@ None
 
 ## Modified functionality
 
-None
+- The `gettxoutsetinfo` RPC has been modified and expanded greatly. Please see the RPC help for `gettxoutsetinfo` for
+  full details but below is a summary of changes:
+  - By default it now uses a new hashing algorithm, `hash_serialized_3` which is a better and more platform-neutral
+    mechanism for hashing the current UTXO set.
+  - Support for EC Multiset Hash (ECMH) as well as Core-compatbile MuHash3072 has been added to the RPC as well.
+  - This RPC can now interoperate with the `coinstatsindex`. If enabled, the index allows `gettxoutsetinfo` to query
+    UTXO set statistics for any block in the block chain.
 
 ## Removed functionality
 
-None
+- The old hashing algorithm (`hash_serialized`) which was used by the `gettxoutsetinfo` algorithm has been removed
+  in favor of a new algorithm `hash_serialized_3` which is used by default instead.
 
 ## New RPC methods
 
@@ -43,7 +53,8 @@ None
 
 ## User interface changes
 
-None
+- By default, the `gettxoutsetinfo` now reports the UTXO set hash under the JSON object key `hash_serialized_3` rather
+  than `hash_serialized`.
 
 ## Regressions
 

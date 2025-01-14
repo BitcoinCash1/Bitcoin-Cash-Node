@@ -8,6 +8,7 @@ add_library(crypto
 	chacha20.cpp
 	hmac_sha256.cpp
 	hmac_sha512.cpp
+	muhash.cpp
 	ripemd160.cpp
 	sha1.cpp
 	sha256.cpp

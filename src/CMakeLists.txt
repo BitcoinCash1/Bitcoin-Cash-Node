@@ -550,6 +550,7 @@ add_library(server
   blockfilter.cpp
   chain.cpp
   checkpoints.cpp
+  coinstats.cpp
   config.cpp
   consensus/activation.cpp
   consensus/tokens.cpp
@@ -566,6 +567,7 @@ add_library(server
   httprpc.cpp
   httpserver.cpp
   index/base.cpp
+  index/coinstatsindex.cpp
   index/txindex.cpp
   init.cpp
   interfaces/chain.cpp

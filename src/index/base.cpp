@@ -208,8 +208,8 @@ void BaseIndex::BlockConnected(
     if (WriteBlock(*block, pindex)) {
         m_best_block_index = pindex;
     } else {
-        FatalError("%s: Failed to write block %s to index", __func__,
-                   pindex->GetBlockHash().ToString());
+        FatalError("%s: Failed to write block %s to index '%s'", __func__,
+                   pindex->GetBlockHash().ToString(), m_name);
         return;
     }
 }

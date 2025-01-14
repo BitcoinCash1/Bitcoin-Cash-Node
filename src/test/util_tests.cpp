@@ -12,6 +12,7 @@
 #include <util/bit_cast.h>
 #include <util/defer.h>
 #include <util/moneystr.h>
+#include <util/overflow.h>
 #include <util/overloaded.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -2357,4 +2358,52 @@ BOOST_AUTO_TEST_CASE(test_overloaded_visitor) {
     BOOST_CHECK_EQUAL(which, "int64_t: 42");
 }
 
+/* Check for overflow */
+template <typename T>
+static void TestAddMulMatrixOverflow() {
+    constexpr T MAXI{std::numeric_limits<T>::max()};
+
+    // add
+    BOOST_CHECK(!CheckedAdd(T{1}, MAXI));
+    BOOST_CHECK(!CheckedAdd(MAXI, MAXI));
+
+    BOOST_CHECK_EQUAL(0, CheckedAdd(T{0}, T{0}).value());
+    BOOST_CHECK_EQUAL(MAXI, CheckedAdd(T{0}, MAXI).value());
+    BOOST_CHECK_EQUAL(MAXI, CheckedAdd(T{1}, MAXI - 1).value());
+    BOOST_CHECK_EQUAL(MAXI - 1, CheckedAdd(T{1}, MAXI - 2).value());
+
+    // mul
+    BOOST_CHECK(!CheckedMul(MAXI, T{2}));
+    BOOST_CHECK(!CheckedMul(MAXI / T{2}, T{3}));
+    BOOST_CHECK(!CheckedMul(MAXI, MAXI));
+    BOOST_CHECK_EQUAL((MAXI >> 1) << 1, CheckedMul(MAXI / 2, T{2}).value());
+}
+
+/* Check for overflow or underflow */
+template <typename T>
+static void TestAddSubMulMatrix() {
+    TestAddMulMatrixOverflow<T>();
+    constexpr T MINI{std::numeric_limits<T>::min()};
+    constexpr T MAXI{std::numeric_limits<T>::max()};
+    BOOST_CHECK(!CheckedAdd(T{-1}, MINI));
+    BOOST_CHECK(!CheckedAdd(MINI, MINI));
+
+    BOOST_CHECK_EQUAL(MINI, CheckedAdd(T{0}, MINI).value());
+    BOOST_CHECK_EQUAL(MINI, CheckedAdd(T{-1}, MINI + 1).value());
+    BOOST_CHECK_EQUAL(-1, CheckedAdd(MINI, MAXI).value());
+    BOOST_CHECK_EQUAL(MINI + 1, CheckedAdd(T{-1}, MINI + 2).value());
+
+    // sub
+    BOOST_CHECK(!CheckedSub(MINI, T{1}));
+    BOOST_CHECK(!CheckedSub(MINI + 2, 3));
+    BOOST_CHECK_EQUAL(MINI + 1, CheckedSub(MINI + 3, 2).value());
+    BOOST_CHECK_EQUAL(T{1}, CheckedSub(T{3}, T{2}).value());
+    BOOST_CHECK(!CheckedSub(MINI, MAXI));
+    BOOST_CHECK_EQUAL(1, CheckedSub(MINI + 1, MINI).value());
+}
+
+BOOST_AUTO_TEST_CASE(util_overflow) {
+    TestAddMulMatrixOverflow<unsigned>();
+    TestAddSubMulMatrix<signed>();
+}
 BOOST_AUTO_TEST_SUITE_END()

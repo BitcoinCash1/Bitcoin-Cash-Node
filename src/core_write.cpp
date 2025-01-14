@@ -20,15 +20,19 @@
 #include <util/system.h>
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 UniValue ValueFromAmount(const Amount &amount) {
-    bool sign = amount < Amount::zero();
-    Amount n_abs(sign ? -amount : amount);
-    int64_t quotient = n_abs / COIN;
-    int64_t remainder = (n_abs % COIN) / SATOSHI;
-    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
-                                              quotient, remainder));
+    const bool sign = amount < Amount::zero();
+    const int64_t i_amt = amount / SATOSHI;
+    const uint64_t u_abs = i_amt == std::numeric_limits<int64_t>::min() // handle fact that -(INT64_MIN) is UB
+                               ? static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1u // abs(INT64_MIN)
+                               : static_cast<uint64_t>(sign ? -i_amt : i_amt);
+    const uint64_t coin_sats = COIN / SATOSHI;
+    const uint64_t quotient = u_abs / coin_sats;
+    const uint64_t remainder = u_abs % coin_sats;
+    return UniValue(UniValue::VNUM, strprintf("%s%u.%08u", sign ? "-" : "", quotient, remainder));
 }
 
 std::string FormatScript(const CScript &script) {
