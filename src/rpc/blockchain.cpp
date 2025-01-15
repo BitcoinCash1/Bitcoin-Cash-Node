@@ -1250,7 +1250,7 @@ static UniValue gettxoutsetinfo(const Config &, const JSONRPCRequest &request) {
                      {"hash_or_height", RPCArg::Type::NUM, /* opt */ true, /* default */ "the current best block",
                       "The block hash or height of the target height (only available with coinstatsindex)."},
                      {"use_index", RPCArg::Type::BOOL, /* opt */ true, /* default */ "true",
-                      "Use coinstatsindex, if available."},
+                      "Use coinstatsindex (ignored when index is disabled)"},
                 }}
                 .ToString() +
                 R"""(
