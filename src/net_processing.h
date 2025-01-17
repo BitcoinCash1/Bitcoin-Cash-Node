@@ -59,7 +59,7 @@ private:
     std::shared_ptr<std::atomic_bool> deleted; ///< Used to suppress further scheduler tasks if this instance is gone.
     TxRequestTracker m_txrequest GUARDED_BY(cs_main);
 
-    bool SendRejectsAndCheckIfShouldDiscourage(CNode *pnode, bool enable_bip61)
+    bool SendRejectsAndCheckIfShouldDiscourage(const NodeRef &pnode, bool enable_bip61)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 public:
@@ -96,18 +96,16 @@ public:
      * Initialize a peer by adding it to mapNodeState and pushing a message
      * requesting its version.
      */
-    void InitializeNode(const Config &config, CNode *pnode) override;
+    void InitializeNode(const Config &config, NodeRef pnode) override;
     /**
      * Handle removal of a peer by updating various state and removing it from
      * mapNodeState.
      */
-    void FinalizeNode(const Config &config, NodeId nodeid,
-                      bool &fUpdateConnectionTime) override;
+    void FinalizeNode(const Config &config, NodeId nodeid, bool &fUpdateConnectionTime) override;
     /**
      * Process protocol messages received from a given node.
      */
-    bool ProcessMessages(const Config &config, CNode *pfrom,
-                         std::atomic<bool> &interrupt) override;
+    bool ProcessMessages(const Config &config, NodeRef pfrom, std::atomic<bool> &interrupt) override;
     /**
      * Send queued protocol messages to be sent to a give node.
      *
@@ -115,15 +113,14 @@ public:
      * @param[in]   interrupt       Interrupt condition for processing threads
      * @return                      True if there is more work to be done
      */
-    bool SendMessages(const Config &config, CNode *pto,
-                      std::atomic<bool> &interrupt) override
+    bool SendMessages(const Config &config, NodeRef pto, std::atomic<bool> &interrupt) override
         EXCLUSIVE_LOCKS_REQUIRED(pto->cs_sendProcessing);
 
     /**
      * Consider evicting an outbound peer based on the amount of time they've
      * been behind our tip.
      */
-    void ConsiderEviction(CNode *pto, int64_t time_in_seconds)
+    void ConsiderEviction(const NodeRef &pto, int64_t time_in_seconds)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     /**
      * Evict extra outbound peers. If we think our tip may be stale, connect to

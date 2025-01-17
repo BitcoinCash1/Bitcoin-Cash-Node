@@ -48,16 +48,22 @@ static void CNodeReceiveMsgBytes(benchmark::State &state) {
     const auto &rawMsgData = benchmark::data::Get_recv_messages();
     assert(!rawMsgData.empty());
     constexpr size_t chunkSize = 0x4000; // read 16KiB at a time
+    std::vector<NodeRef> precreatedNodes(state.m_num_iters);
+    for (auto & pnode : precreatedNodes) {
+        pnode = CNode::Make({}, {}, {}, {}, {}, {}, {}, {}, {});
+    }
+    assert(!precreatedNodes.empty());
 
+    size_t idx{};
     BENCHMARK_LOOP {
-        CNode node({}, {}, {}, {}, {}, {}, {}, {});
+        const auto &pnode = precreatedNodes[idx++ % precreatedNodes.size()];
         auto *cur = reinterpret_cast<const char *>(rawMsgData.data());
         auto *end = reinterpret_cast<const char *>(rawMsgData.data() + rawMsgData.size());
         while (cur < end) {
             const size_t bytesLeft = end - cur;
             const size_t nBytes = std::min(chunkSize, bytesLeft);
             bool completed;
-            const bool handled = node.ReceiveMsgBytes(config, cur, nBytes, completed);
+            const bool handled = pnode->ReceiveMsgBytes(config, cur, nBytes, completed);
             assert(handled);
             cur += nBytes;
         }

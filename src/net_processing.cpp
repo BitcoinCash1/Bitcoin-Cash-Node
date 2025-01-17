@@ -242,8 +242,8 @@ bool IsBlockRequested(const uint256& hash, BlockDownloadMap::iterator *pit = nul
 bool IsBlockRequestedFromOutbound(CConnman *connman, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     for (auto range = mapBlocksInFlight.equal_range(hash); range.first != range.second; ++range.first) {
         const auto & [nodeid, block_it] = range.first->second;
-        CNode *peer{};
-        connman->ForNode(nodeid, [&peer](CNode *n){ peer = n; return true; });
+        NodeRef peer;
+        connman->ForNode(nodeid, [&peer](const NodeRef &n){ peer = n; return true; });
         if (peer && !peer->fInbound) {
             return true;
         }
@@ -422,7 +422,7 @@ static CNodeState *State(NodeId pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     return &it->second;
 }
 
-static void UpdatePreferredDownload(CNode *node, CNodeState *state)
+static void UpdatePreferredDownload(const NodeRef &node, CNodeState *state)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     nPreferredDownload -= state->fPreferredDownload;
 
@@ -434,8 +434,7 @@ static void UpdatePreferredDownload(CNode *node, CNodeState *state)
     nPreferredDownload += state->fPreferredDownload;
 }
 
-static void PushNodeVersion(const Config &config, CNode *pnode,
-                            CConnman *connman, int64_t nTime) {
+static void PushNodeVersion(const Config &config, const NodeRef &pnode, CConnman *connman, int64_t nTime) {
     ServiceFlags nLocalNodeServices = pnode->GetLocalServices();
     uint64_t nonce = pnode->GetLocalNonce();
     int nNodeStartingHeight = pnode->GetMyStartingHeight();
@@ -636,7 +635,7 @@ static void MaybeSetPeerAsAnnouncingHeaderAndIDs(NodeId nodeid,
             return;
         }
     }
-    connman->ForNode(nodeid, [&connman](CNode *pfrom) {
+    connman->ForNode(nodeid, [&connman](NodeRef pfrom) {
         AssertLockHeld(cs_main);
         static constexpr uint64_t nCMPCTBLOCKVersion = 1;
         if (lNodesAnnouncingHeaderAndIDs.size() >= 3) {
@@ -644,7 +643,7 @@ static void MaybeSetPeerAsAnnouncingHeaderAndIDs(NodeId nodeid,
             // blocks using compact encodings.
             connman->ForNode(
                 lNodesAnnouncingHeaderAndIDs.front(),
-                [&connman](CNode *pnodeStop) {
+                [&connman](NodeRef pnodeStop) {
                     AssertLockHeld(cs_main);
                     connman->PushMessage(
                         pnodeStop, CNetMsgMaker(pnodeStop->GetSendVersion())
@@ -819,12 +818,12 @@ void internal::UpdateLastBlockAnnounceTime(NodeId node, int64_t time_in_seconds)
 
 // Returns true for outbound peers, excluding manual connections, feelers, and
 // one-shots.
-static bool IsOutboundDisconnectionCandidate(const CNode *node) {
+static bool IsOutboundDisconnectionCandidate(const NodeRef &node) {
     return !(node->fInbound || node->m_manual_connection || node->fFeeler ||
              node->fOneShot);
 }
 
-void PeerLogicValidation::InitializeNode(const Config &config, CNode *pnode) {
+void PeerLogicValidation::InitializeNode(const Config &config, NodeRef pnode) {
     CAddress addr = pnode->addr;
     std::string addrName = pnode->GetAddrName();
     NodeId nodeid = pnode->GetId();
@@ -1084,7 +1083,7 @@ void Misbehaving(NodeId pnode, int howmuch, const std::string &reason)
 }
 
 // overloaded variant of above to operate on CNode*s
-static void Misbehaving(CNode *node, int howmuch, const std::string &reason)
+static void Misbehaving(const NodeRef &node, int howmuch, const std::string &reason)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     Misbehaving(node->GetId(), howmuch, reason);
 }
@@ -1233,7 +1232,7 @@ void PeerLogicValidation::NewPoWValidBlock(
     }
 
     connman->ForEachNode([this, &pcmpctblock, pindex, &msgMaker,
-                          &hashBlock](CNode *pnode) {
+                          &hashBlock](const NodeRef &pnode) {
         AssertLockHeld(cs_main);
 
         // TODO: Avoid the repeated-serialization here
@@ -1283,7 +1282,7 @@ void PeerLogicValidation::UpdatedBlockTip(const CBlockIndex *pindexNew,
         }
         // Relay inventory, but don't relay old inventory during initial block
         // download.
-        connman->ForEachNode([nNewHeight, &vHashes](CNode *pnode) {
+        connman->ForEachNode([nNewHeight, &vHashes](const NodeRef &pnode) {
             if (nNewHeight > (pnode->nStartingHeight != -1
                                   ? pnode->nStartingHeight - 2000
                                   : 0)) {
@@ -1394,7 +1393,7 @@ static bool AlreadyHave(const CInv &inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
 
 static void RelayTransaction(const CTransaction &tx, CConnman *connman) {
     CInv inv(MSG_TX, tx.GetId());
-    connman->ForEachNode([&inv](CNode *pnode) { pnode->PushInventory(inv); });
+    connman->ForEachNode([&inv](const NodeRef &pnode) { pnode->PushInventory(inv); });
 }
 
 static void RelayAddress(const CAddress &addr, bool fReachable, const CConnman &connman) {
@@ -1410,13 +1409,13 @@ static void RelayAddress(const CAddress &addr, bool fReachable, const CConnman &
                                   .Write((GetTime() + hashAddr) / (24 * 60 * 60));
     FastRandomContext insecure_rand;
 
-    std::array<std::pair<uint64_t, CNode *>, 2> best{
+    std::array<std::pair<uint64_t, NodeRef>, 2> best{
         {{0, nullptr}, {0, nullptr}}};
     assert(nRelayNodes <= best.size());
 
-    auto sortfunc = [&best, &hasher, nRelayNodes](CNode *pnode) {
+    auto sortfunc = [&best, &hasher, nRelayNodes](const NodeRef &pnode) {
         uint64_t hashKey = CSipHasher(hasher).Write(pnode->GetId()).Finalize();
-        for (unsigned int i = 0; i < nRelayNodes; i++) {
+        for (unsigned int i = 0; i < nRelayNodes; ++i) {
             if (hashKey > best[i].first) {
                 std::copy(best.begin() + i, best.begin() + nRelayNodes - 1, best.begin() + i + 1);
                 best[i] = std::make_pair(hashKey, pnode);
@@ -1426,17 +1425,17 @@ static void RelayAddress(const CAddress &addr, bool fReachable, const CConnman &
     };
 
     auto pushfunc = [&addr, &best, nRelayNodes, &insecure_rand] {
-        for (unsigned int i = 0; i < nRelayNodes && best[i].first != 0; i++) {
-            best[i].second->PushAddress(addr, insecure_rand);
+        for (unsigned int i = 0; i < nRelayNodes && best[i].first != 0; ++i) {
+            if (best[i].second) best[i].second->PushAddress(addr, insecure_rand);
         }
     };
 
     connman.ForEachNodeThen(std::move(sortfunc), std::move(pushfunc));
 }
 
-static void ProcessGetBlockData(const Config &config, CNode *pfrom,
+static void ProcessGetBlockData(const Config &config, const NodeRef &pfrom,
                                 const CInv &inv, CConnman *connman,
-                                const std::atomic<bool> &interruptMsgProc) {
+                                const std::atomic<bool> &interruptMsgProc [[maybe_unused]]) {
     const Consensus::Params &consensusParams =
         config.GetChainParams().GetConsensus();
 
@@ -1645,8 +1644,7 @@ static void ProcessGetBlockData(const Config &config, CNode *pfrom,
  * If the send buffer is not full, at least one item is erased from
  * the peer's vRecvGetData per call to this function.
 */
-static void ProcessGetData(const Config &config, CNode *pfrom,
-                           CConnman *connman,
+static void ProcessGetData(const Config &config, const NodeRef &pfrom, CConnman *connman,
                            const std::atomic<bool> &interruptMsgProc)
     LOCKS_EXCLUDED(cs_main) {
     AssertLockNotHeld(cs_main);
@@ -1740,9 +1738,9 @@ static void ProcessGetData(const Config &config, CNode *pfrom,
     }
 }
 
-inline static void SendBlockTransactions(const CBlock &block,
-                                         const BlockTransactionsRequest &req,
-                                         CNode *pfrom, CConnman *connman) {
+static void SendBlockTransactions(const CBlock &block,
+                                  const BlockTransactionsRequest &req,
+                                  const NodeRef &pfrom, CConnman *connman) {
     BlockTransactions resp(req);
     for (size_t i = 0; i < req.indices.size(); i++) {
         if (req.indices[i] >= block.vtx.size()) {
@@ -1758,11 +1756,10 @@ inline static void SendBlockTransactions(const CBlock &block,
     LOCK(cs_main);
     const CNetMsgMaker msgMaker(pfrom->GetSendVersion());
     int nSendFlags = 0;
-    connman->PushMessage(pfrom,
-                         msgMaker.Make(nSendFlags, NetMsgType::BLOCKTXN, resp));
+    connman->PushMessage(pfrom, msgMaker.Make(nSendFlags, NetMsgType::BLOCKTXN, resp));
 }
 
-static bool ProcessHeadersMessage(const Config &config, CNode *pfrom,
+static bool ProcessHeadersMessage(const Config &config, const NodeRef &pfrom,
                                   CConnman *connman,
                                   const std::vector<CBlockHeader> &headers,
                                   bool punish_duplicate_invalid) {
@@ -2032,7 +2029,7 @@ static bool ProcessHeadersMessage(const Config &config, CNode *pfrom,
 //! Called from 3 places in this file; ensuring:
 //! - GETADDR is not sent if !fInbound as well as some other criteria are not met
 //! - GETADDR is sent precisely once after VERACK
-static void PushGetAddrOnceIfAfterVerAck(CConnman *connman, CNode *pfrom) {
+static void PushGetAddrOnceIfAfterVerAck(CConnman *connman, const NodeRef &pfrom) {
     if ( !pfrom->fInbound
          && pfrom->GetBytesSentForMsgType(NetMsgType::VERACK) > 0
          && pfrom->GetBytesSentForMsgType(NetMsgType::GETADDR) == 0)
@@ -2052,7 +2049,7 @@ static void PushGetAddrOnceIfAfterVerAck(CConnman *connman, CNode *pfrom) {
 //! - SENDADDRV2
 //! Finally, after any feature negotiation messages are sent:
 //! - VERACK is sent
-static void PushVerACK(CConnman *connman, CNode *pfrom, int nVersion = 0 /* 0 = read from pfrom */) {
+static void PushVerACK(CConnman *connman, const NodeRef &pfrom, int nVersion = 0 /* 0 = read from pfrom */) {
     const CNetMsgMaker msg_maker(INIT_PROTO_VERSION);
 
     if (nVersion == 0) nVersion = pfrom->nVersion;
@@ -2163,7 +2160,7 @@ static void AddTxAnnouncement(TxRequestTracker &txrequest, const CNode& node, co
 }
 
 // Called from PrcoessMessage(), calls ProcessNewBlock() but also does some additional node accounting.
-static void ProcessBlockFromNode(const Config &config, CNode *pfrom, const std::shared_ptr<const CBlock> &pblock,
+static void ProcessBlockFromNode(const Config &config, const NodeRef &pfrom, const std::shared_ptr<const CBlock> &pblock,
                                  bool force_processing) {
     bool new_block{false};
     ProcessNewBlock(config, pblock, force_processing, &new_block);
@@ -2180,7 +2177,7 @@ static void ProcessBlockFromNode(const Config &config, CNode *pfrom, const std::
     }
 }
 
-static bool ProcessMessage(const Config &config, CNode *pfrom,
+static bool ProcessMessage(const Config &config, const NodeRef &pfrom,
                            const std::string &msg_type, CDataStream &vRecv,
                            int64_t nTimeReceived, CConnman *connman,
                            const std::atomic<bool> &interruptMsgProc,
@@ -3944,8 +3941,7 @@ static bool ProcessMessage(const Config &config, CNode *pfrom,
     return true;
 }
 
-bool PeerLogicValidation::SendRejectsAndCheckIfShouldDiscourage(CNode *pnode,
-                                                                bool enable_bip61)
+bool PeerLogicValidation::SendRejectsAndCheckIfShouldDiscourage(const NodeRef &pnode, bool enable_bip61)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     AssertLockHeld(cs_main);
     CNodeState &state = *State(pnode->GetId());
@@ -3987,8 +3983,7 @@ bool PeerLogicValidation::SendRejectsAndCheckIfShouldDiscourage(CNode *pnode,
     return false;
 }
 
-bool PeerLogicValidation::ProcessMessages(const Config &config, CNode *pfrom,
-                                          std::atomic<bool> &interruptMsgProc) {
+bool PeerLogicValidation::ProcessMessages(const Config &config, NodeRef pfrom, std::atomic<bool> &interruptMsgProc) {
     const CChainParams &chainparams = config.GetChainParams();
     //
     // Message format
@@ -4126,11 +4121,12 @@ bool PeerLogicValidation::ProcessMessages(const Config &config, CNode *pfrom,
     return fMoreWork;
 }
 
-void PeerLogicValidation::ConsiderEviction(CNode *pto,
-                                           int64_t time_in_seconds) {
+void PeerLogicValidation::ConsiderEviction(const NodeRef &pto, int64_t time_in_seconds) {
     AssertLockHeld(cs_main);
 
-    CNodeState &state = *State(pto->GetId());
+    auto *pstate = State(pto->GetId());
+    assert(pstate != nullptr);
+    CNodeState &state = *pstate;
     const CNetMsgMaker msgMaker(pto->GetSendVersion());
 
     if (!state.m_chain_sync.m_protect &&
@@ -4225,7 +4221,7 @@ void PeerLogicValidation::EvictExtraOutboundPeers(int64_t time_in_seconds) {
     NodeId worst_peer = -1;
     int64_t oldest_block_announcement = std::numeric_limits<int64_t>::max();
 
-    connman->ForEachNode([&](CNode *pnode) {
+    connman->ForEachNode([&](const NodeRef &pnode) {
         AssertLockHeld(cs_main);
 
         // Ignore non-outbound peers, or nodes marked for disconnect already
@@ -4253,7 +4249,7 @@ void PeerLogicValidation::EvictExtraOutboundPeers(int64_t time_in_seconds) {
         return;
     }
 
-    bool disconnected = connman->ForNode(worst_peer, [&](CNode *pnode) {
+    bool disconnected = connman->ForNode(worst_peer, [&](const NodeRef &pnode) {
         AssertLockHeld(cs_main);
 
         // Only disconnect a peer that has been connected to us for some
@@ -4335,8 +4331,8 @@ public:
 };
 } // namespace
 
-bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
-                                       std::atomic<bool> &interruptMsgProc) {
+bool PeerLogicValidation::SendMessages(const Config &config, NodeRef pto,
+                                       std::atomic<bool> &interruptMsgProc [[maybe_unused]]) {
     const Consensus::Params &consensusParams =
         config.GetChainParams().GetConsensus();
 
@@ -5015,7 +5011,7 @@ bool PeerLogicValidation::SendMessages(const Config &config, CNode *pto,
 void PeerLogicValidation::TransactionDoubleSpent(const CTransactionRef &ptx, const DspId &dspId) {
     // NB: This will not be called if dsproofs are globally disabled (-doublespendproof=0).
     LogPrint(BCLog::DSPROOF, "  DSP broadcasting an INV for dspId: %s txId: %s\n", dspId.ToString(), ptx->GetId().ToString());
-    connman->ForEachNode([ptx, inv = CInv(MSG_DOUBLESPENDPROOF, dspId)](CNode *pnode) {
+    connman->ForEachNode([ptx, inv = CInv(MSG_DOUBLESPENDPROOF, dspId)](const NodeRef &pnode) {
         {
             LOCK(pnode->cs_filter);
             if (!pnode->fRelayTxes)

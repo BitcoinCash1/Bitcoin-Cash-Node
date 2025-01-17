@@ -84,7 +84,7 @@ TxId BroadcastTransaction(const Config &config, const CTransactionRef tx,
     }
 
     CInv inv(MSG_TX, txid);
-    g_connman->ForEachNode([&inv](CNode *pnode) { pnode->PushInventory(inv); });
+    g_connman->ForEachNode([&inv](const NodeRef &pnode) { pnode->PushInventory(inv); });
 
     return txid;
 }
