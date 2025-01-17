@@ -2044,7 +2044,7 @@ bool CWalletTx::RelayWalletTransaction(interfaces::Chain::Lock &locked_chain,
         if (connman) {
             CInv inv(MSG_TX, GetId());
             connman->ForEachNode(
-                [&inv](CNode *pnode) { pnode->PushInventory(inv); });
+                [&inv](const NodeRef &pnode) { pnode->PushInventory(inv); });
             return true;
         }
     }

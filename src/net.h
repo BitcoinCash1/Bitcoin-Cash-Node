@@ -126,6 +126,9 @@ struct CSerializedNetMsg {
     std::string m_type;
 };
 
+using NodeRef = std::shared_ptr<CNode>;
+using NodeCRef = std::shared_ptr<const CNode>; //! unused; maybe should be used in some places for const-correctness
+
 class NetEventsInterface;
 class CConnman {
 public:
@@ -217,45 +220,25 @@ public:
                                const char *strDest = nullptr,
                                bool fOneShot = false, bool fFeeler = false,
                                bool manual_connection = false);
-    bool CheckIncomingNonce(uint64_t nonce);
+    bool CheckIncomingNonce(uint64_t nonce) const;
 
-    bool ForNode(NodeId id, std::function<bool(CNode *pnode)> func);
+    bool ForNode(NodeId id, std::function<bool(NodeRef pnode)> func, bool fullyConnectedOnly = true) const;
 
-    void PushMessage(CNode *pnode, CSerializedNetMsg &&msg);
-
-    template <typename Callable> void ForEachNode(Callable &&func) {
-        LOCK(cs_vNodes);
-        for (auto &&node : vNodes) {
-            if (NodeFullyConnected(node)) {
-                func(node);
-            }
-        }
-    };
+    void PushMessage(const NodeRef &pnode, CSerializedNetMsg &&msg);
 
     template <typename Callable> void ForEachNode(Callable &&func) const {
-        LOCK(cs_vNodes);
-        for (auto &&node : vNodes) {
+        LOCK(cs_mNodes);
+        for (const auto & [_, node] : mNodes) {
             if (NodeFullyConnected(node)) {
                 func(node);
             }
         }
-    };
-
-    template <typename Callable, typename CallableAfter>
-    void ForEachNodeThen(Callable &&pre, CallableAfter &&post) {
-        LOCK(cs_vNodes);
-        for (auto &&node : vNodes) {
-            if (NodeFullyConnected(node)) {
-                pre(node);
-            }
-        }
-        post();
     };
 
     template <typename Callable, typename CallableAfter>
     void ForEachNodeThen(Callable &&pre, CallableAfter &&post) const {
-        LOCK(cs_vNodes);
-        for (auto &&node : vNodes) {
+        LOCK(cs_mNodes);
+        for (const auto & [_, node] : mNodes) {
             if (NodeFullyConnected(node)) {
                 pre(node);
             }
@@ -302,8 +285,8 @@ public:
      */
     bool AddConnection(const std::string& address);
 
-    size_t GetNodeCount(NumConnections num);
-    void GetNodeStats(std::vector<CNodeStats> &vstats);
+    size_t GetNodeCount(NumConnections num) const;
+    void GetNodeStats(std::vector<CNodeStats> &vstats) const;
     bool DisconnectNode(const std::string &node);
     bool DisconnectNode(const CSubNet &subnet);
     bool DisconnectNode(const CNetAddr &addr);
@@ -382,7 +365,7 @@ private:
     void AcceptConnection(const ListenSocket &hListenSocket);
     void DisconnectNodes();
     void NotifyNumConnectionsChanged();
-    void InactivityCheck(CNode *pnode);
+    void InactivityCheck(const NodeRef &pnode) const;
     bool GenerateSelectSet(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_set, std::set<SOCKET> &error_set);
     void SocketEvents(std::set<SOCKET> &recv_set, std::set<SOCKET> &send_set, std::set<SOCKET> &error_set);
     void SocketHandler();
@@ -391,22 +374,24 @@ private:
 
     uint64_t CalculateKeyedNetGroup(const CAddress &ad) const;
 
-    CNode *FindNode(const CNetAddr &ip);
-    CNode *FindNode(const CSubNet &subNet);
-    CNode *FindNode(const std::string &addrName);
-    CNode *FindNode(const CService &addr);
+    NodeRef FindNode(const CNetAddr &ip) const;
+    NodeRef FindNode(const CSubNet &subNet) const;
+    NodeRef FindNode(const std::string &addrName) const;
+    NodeRef FindNode(const CService &addr) const;
 
     bool AttemptToEvictConnection();
-    CNode *ConnectNode(CAddress addrConnect, const char *pszDest,
-                       bool fCountFailure, bool manual_connection);
+    NodeRef ConnectNode(CAddress addrConnect, const char *pszDest, bool fCountFailure, bool manual_connection);
     void AddWhitelistPermissionFlags(NetPermissionFlags &flags,
                                      const CNetAddr &addr) const;
 
-    void DeleteNode(CNode *pnode);
+    void NodeDeleter_(CNode *pnode); ///< deleter function for NodeRef std::shared_ptr. Don't call this directly.
+
+    // Returns a lambda suitable for passing to CNode::Make's first arg. Used internally.
+    inline auto MakeNodeDeleter() { return [this](CNode *p) { NodeDeleter_(p); }; }
 
     NodeId GetNewNodeId();
 
-    size_t SocketSendData(CNode *pnode) const;
+    size_t SocketSendData(const NodeRef &pnode) const;
     void DumpAddresses();
 
     // Network stats
@@ -414,7 +399,7 @@ private:
     void RecordBytesSent(uint64_t bytes);
 
     // Whether the node should be passed out in ForEach* callbacks
-    static bool NodeFullyConnected(const CNode *pnode);
+    static bool NodeFullyConnected(const NodeRef &pnode);
 
     const Config *config;
 
@@ -448,9 +433,10 @@ private:
     RecursiveMutex cs_vOneShots;
     std::vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
     RecursiveMutex cs_vAddedNodes;
-    std::vector<CNode *> vNodes GUARDED_BY(cs_vNodes);
-    std::list<CNode *> vNodesDisconnected;
-    mutable RecursiveMutex cs_vNodes;
+    using NodeMap = std::map<NodeId, NodeRef>;
+    NodeMap mNodes GUARDED_BY(cs_mNodes);
+    std::list<NodeRef> vNodesDisconnected;
+    mutable RecursiveMutex cs_mNodes;
     std::atomic<NodeId> nLastNodeId{0};
     unsigned int nPrevNodeCount{0};
 
@@ -539,13 +525,10 @@ unsigned short GetListenPort();
  */
 class NetEventsInterface {
 public:
-    virtual bool ProcessMessages(const Config &config, CNode *pnode,
-                                 std::atomic<bool> &interrupt) = 0;
-    virtual bool SendMessages(const Config &config, CNode *pnode,
-                              std::atomic<bool> &interrupt) = 0;
-    virtual void InitializeNode(const Config &config, CNode *pnode) = 0;
-    virtual void FinalizeNode(const Config &config, NodeId id,
-                              bool &update_connection_time) = 0;
+    virtual bool ProcessMessages(const Config &config, NodeRef pnode, std::atomic<bool> &interrupt) = 0;
+    virtual bool SendMessages(const Config &config, NodeRef pnode, std::atomic<bool> &interrupt) = 0;
+    virtual void InitializeNode(const Config &config, NodeRef pnode) = 0;
+    virtual void FinalizeNode(const Config &config, NodeId id, bool &update_connection_time) = 0;
 
 protected:
     /**
@@ -571,8 +554,8 @@ enum {
     LOCAL_MAX
 };
 
-bool IsPeerAddrLocalGood(CNode *pnode);
-void AdvertiseLocal(CNode *pnode);
+bool IsPeerAddrLocalGood(const NodeRef &pnode);
+void AdvertiseLocal(const NodeRef &pnode);
 
 /**
  * Mark a network as reachable or unreachable (no automatic connects to it)
@@ -706,7 +689,7 @@ public:
 };
 
 /** Information about a peer */
-class CNode {
+class CNode : public std::enable_shared_from_this<CNode> {
     friend class CConnman;
 
 public:
@@ -795,7 +778,6 @@ public:
     CSemaphoreGrant grantOutbound;
     mutable RecursiveMutex cs_filter;
     std::unique_ptr<CBloomFilter> pfilter PT_GUARDED_BY(cs_filter);
-    std::atomic<int> nRefCount{0};
 
     const uint64_t nKeyedNetGroup;
     std::atomic_bool fPauseRecv{false};
@@ -873,10 +855,21 @@ public:
 
     std::set<TxId> orphan_work_set;
 
+private:
+    // Never use this c'tor. Always use `Make()`
     CNode(NodeId id, ServiceFlags nLocalServicesIn, int nMyStartingHeightIn,
           SOCKET hSocketIn, const CAddress &addrIn, uint64_t nKeyedNetGroupIn,
           uint64_t nLocalHostNonceIn, const CAddress &addrBindIn,
           const std::string &addrNameIn = "", bool fInboundIn = false);
+
+public:
+    [[nodiscard]]
+    static NodeRef Make(std::function<void(CNode *)> deleter /* may be null to use default delete */,
+                        NodeId id, ServiceFlags nLocalServicesIn, int nMyStartingHeightIn,
+                        SOCKET hSocketIn, const CAddress &addrIn, uint64_t nKeyedNetGroupIn,
+                        uint64_t nLocalHostNonceIn, const CAddress &addrBindIn,
+                        const std::string &addrNameIn = "", bool fInboundIn = false);
+
     ~CNode();
     CNode(const CNode &) = delete;
     CNode &operator=(const CNode &) = delete;
@@ -906,11 +899,6 @@ public:
 
     int GetMyStartingHeight() const { return nMyStartingHeight; }
 
-    int GetRefCount() const {
-        assert(nRefCount >= 0);
-        return nRefCount;
-    }
-
     bool ReceiveMsgBytes(const Config &config, const char *pch, uint32_t nBytes,
                          bool &complete);
 
@@ -922,13 +910,6 @@ public:
     CService GetAddrLocal() const;
     //! May not be called more than once
     void SetAddrLocal(const CService &addrLocalIn);
-
-    CNode *AddRef() {
-        nRefCount++;
-        return this;
-    }
-
-    void Release() { nRefCount--; }
 
     void AddAddressKnown(const CAddress &_addr) {
         addrKnown.insert(_addr.GetKey());

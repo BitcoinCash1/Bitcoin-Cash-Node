@@ -71,7 +71,7 @@ static UniValue ping(const Config &config, const JSONRPCRequest &request) {
     }
 
     // Request that each node send a ping during next message processing pass
-    g_connman->ForEachNode([](CNode *pnode) { pnode->fPingQueued = true; });
+    g_connman->ForEachNode([](const NodeRef &pnode) { pnode->fPingQueued = true; });
     return UniValue();
 }
 
