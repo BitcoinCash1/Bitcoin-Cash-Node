@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2025 The Bitcoin developers
+# Copyright (c) 2017-2026 The Bitcoin developers
 
 project(bitcoind)
 
@@ -172,6 +172,26 @@ if(ENABLE_HARDENING)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     # MinGw provides its own libssp for stack smashing protection
     link_libraries(ssp)
+  endif()
+endif()
+
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+  if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    option(MACPORTS_WORKAROUNDS "Enable MacPorts-specific workarounds" ON)
+    if(${MACPORTS_WORKAROUNDS})
+      # On OSX, if using MacPorts, the NEW CMP0167 policy fails due to MacPorts
+      # bugs, so we must force OLD. See: https://trac.macports.org/ticket/71642
+      find_program(port_CMD port)
+      if(NOT ${port_CMD} MATCHES "NOTFOUND")
+        # Found the `port` command, ensure it is really macports by trying: `port version`
+        execute_process(COMMAND ${port_CMD} version OUTPUT_QUIET ERROR_QUIET RESULT_VARIABLE port_STATUS)
+        if(${port_STATUS} EQUAL 0)
+          message(STATUS "Detected MacPorts, setting find_package() Boost policy to OLD as a workaround")
+          cmake_policy(SET CMP0167 OLD)
+        endif()
+      endif()
+    endif()
   endif()
 endif()
 
