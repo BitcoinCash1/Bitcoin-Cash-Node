@@ -1,24 +1,46 @@
 /* Custom Styles */
 
-a, .md-nav__item--active > .md-nav__link {
-  color: #A31D36 !important;
+/*
+ * Brand colors (picked from logo):
+ * Red: #A31C36
+ * Orange: #F15A24
+ * Yellow: #FBB03B
+ */
+
+:root {
+  --md-primary-fg-color: #A31D36;
+  --md-accent-fg-color: #F15A24;
 }
 
-a:hover {
-  color: #80172B !important;
+.md-typeset a, .md-nav__link--active {
+  color: var(--md-primary-fg-color);
 }
 
-label:hover {
-  color: #9D9FA5 !important;
+.md-typeset a:focus, .md-nav__link--active:focus, .md-nav__link:not(.md-nav__container):focus {
+  color: var(--md-accent-fg-color);
+  font-weight: bold;
+}
+
+.md-nav__link--active {
+  font-weight: bold;
+}
+
+.md-nav__item--nested > .md-nav__link:focus {
+  color: inherit;
+  font-weight: inherit;
+}
+
+.md-nav__item--nested > .md-nav__link:hover {
+  color: var(--md-accent-fg-color);
 }
 
 .md-header {
-  background-color: #A31D36 !important;
+  background-color: var(--md-primary-fg-color) !important;
 }
 
 @media screen and (max-width: 76.1875em) {
   .md-nav--primary .md-nav__source, .md-nav--primary .md-nav__title {
-    background-color: #A31D36 !important;
+    background-color: var(--md-primary-fg-color) !important;
   }
 }
 
@@ -41,4 +63,3 @@ footer .md-ellipsis, .md-footer-nav__button {
 .md-typeset__table code {
   white-space: nowrap;
 }
-
