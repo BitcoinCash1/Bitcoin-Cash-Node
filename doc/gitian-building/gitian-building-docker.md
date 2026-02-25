@@ -1,4 +1,4 @@
-# Running Gitian with Docker
+# Gitian building with Docker
 
 This is a streamlined guide for running Gitian builds with Docker on Ubuntu,
 Debian or Mac hardware.
@@ -20,21 +20,17 @@ only need to run through this setup once so long as you retain the workspace.
 
 ### Install dependencies
 
-You'll need `git` and `curl` installed.  If on Linux, just do `sudo apt install
+You'll need `git` and `curl` installed.  If on Ubuntu for instance, just do `sudo apt install
 curl git`.
 
 ### Gitian setup
 
 ```bash
-# Fetch the `gitian-build.py` script
+# Fetch the source code
 git clone https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node.git
-cp bitcoin-cash-node/contrib/gitian-build.py .
-
-# If you are on a MacOS host, you will need the MacOS-capable fork
-# of gitian-builder, if on Linux, you can skip this step.
-git clone -b macos_support_no_debian_cache https://github.com/cculianu/gitian-builder.git
 
 # Run the initial Gitian setup
+cp bitcoin-cash-node/contrib/gitian-build.py .
 ./gitian-build.py --docker --setup
 
 # If you need to build for MacOS, also fetch this archive which has been
@@ -48,9 +44,7 @@ echo "6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d MacOSX14.
 
 ## Build binaries
 
-Finally, use the following command to run the build process. Replace `satoshi`
-with your GitLab name and replace `23.1.0` with the most recent tag
-(without the "v"). Use the latest released version available.
+Finally, run the build process. Replace `23.1.0` (without the "v") with the version you want to build.
 
 ```bash
 ./gitian-build.py --docker --detach-sign --no-commit -b satoshi 23.1.0

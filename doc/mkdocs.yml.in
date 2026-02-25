@@ -179,6 +179,7 @@ nav:
       - Windows build guide: doc/build-windows.md
       - Gitian deterministic builds:
           - doc/gitian-building.md
+          - doc/gitian-building/gitian-building-docker.md
           - doc/gitian-signing.md
           - doc/gitian-building/gitian-building-create-vm-debian.md
           - doc/gitian-building/gitian-building-manual.md
