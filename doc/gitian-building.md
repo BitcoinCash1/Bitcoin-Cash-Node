@@ -54,38 +54,29 @@ Please refer to the following documents to set up the operating systems and Giti
 Note that a version of `lxc-execute` higher or equal to 2.1.1 is required.
 You can check the version with `lxc-execute --version`.
 
-## MacOS code signing
+## Gitian setup
+
+You only need to do this once:
+
+First, `cd` into the parent directory of your bitcoin-cash-node repo clone.
+
+```bash
+bitcoin-cash-node/contrib/gitian-build.py --setup
+```
 
 In order to sign builds for MacOS, you need to obtain an archive which has been
 extracted from the free SDK. **Note**: The SDK *must* include the C++ headers for OSX, which should live in the archive
 under `usr/include/c++/v1`.
 
 ```bash
-cd ~/gitian-builder
+mkdir -p gitian-builder/inputs
+(cd gitian-builder/inputs
 curl -LO https://github.com/joseluisq/macosx-sdks/releases/download/14.5/MacOSX14.5.sdk.tar.xz
-echo "6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d MacOSX14.5.sdk.tar.xz" | sha256sum -c
-# Should echo "MacOSX14.5.sdk.tar.xz: OK"
-mkdir -p inputs
-mv MacOSX14.5.sdk.tar.xz inputs
+echo "6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d MacOSX14.5.sdk.tar.xz" | sha256sum -c)
+# This should echo "MacOSX14.5.sdk.tar.xz: OK"
 ```
 
 Alternatively, you can skip the macOS build by adding `--os=lw` below.
-
-The `gitian-build.py` script will checkout different release tags, so it's best
-to copy it:
-
-```bash
-cp bitcoin-cash-node/contrib/gitian-build.py .
-```
-
-You only need to do this once:
-
-```bash
-./gitian-build.py --setup satoshi 22.2.0
-```
-
-Where `satoshi` is your GitLab name and `22.2.0` represents the most recent tag
-(without `v`) - use the latest released version available.
 
 ## Build binaries
 
@@ -97,6 +88,8 @@ To build the most recent tag:
 ```bash
 ./gitian-build.py --detach-sign --no-commit -b satoshi 22.2.0
 ```
+
+Where `22.2.0` represents the most recent tag (without `v`) - use the latest released version available.
 
 If running in a VM, to speed up the build use `-j 5 -m 5000` as the first
 arguments, where `5` is the number of CPU's you allocated to the VM plus one,
