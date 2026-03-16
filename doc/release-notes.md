@@ -27,7 +27,7 @@ None
 
 ## Modified functionality
 
-None
+- The `createwallet` RPC can now create encrypted wallets if a non-empty passphrase is specified.
 
 ## Removed functionality
 
